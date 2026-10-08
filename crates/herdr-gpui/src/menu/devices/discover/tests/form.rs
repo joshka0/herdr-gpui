@@ -254,3 +254,34 @@ fn a_filled_label_still_follows_after_searching_again(cx: &mut gpui::TestAppCont
         ("ssh://nas.local:2222".into(), "nas".into())
     );
 }
+
+/// Twelve Tailscale peers, more than the list shows at once.
+fn many(source: Source, sender: SyncSender<Event>) {
+    if source == Source::Tailscale {
+        for index in 0..12 {
+            let host = format!("peer{index:02}.tail1.ts.net");
+            let _ = sender.send(Event::Found(candidate(
+                Source::Tailscale,
+                &format!("peer{index:02}"),
+                &host,
+                &[host.as_str()],
+            )));
+        }
+    }
+    let _ = sender.send(Event::Done(source, Ok(())));
+}
+
+#[gpui::test]
+fn a_long_list_scrolls_inside_the_form(cx: &mut gpui::TestAppContext) {
+    let (_view, cx) = open(cx, many);
+    settle(cx);
+    let list = cx.debug_bounds("device-suggestions").unwrap();
+    let row = cx.debug_bounds("device-suggestion-0").unwrap();
+    // The list stops at four and a half rows; the rest scroll within it.
+    assert!(
+        (list.size.height - row.size.height * render::MAX_VISIBLE_ROWS).abs() < px(1.),
+        "{list:?} {row:?}"
+    );
+    let last = cx.debug_bounds("device-suggestion-11").unwrap();
+    assert!(last.top() > list.bottom());
+}

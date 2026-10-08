@@ -8,6 +8,9 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 
+/// Suggestion rows shown before the list scrolls.
+pub(super) const MAX_VISIBLE_ROWS: f32 = 4.5;
+
 impl HerdrWindow {
     pub(in crate::menu::devices) fn render_device_suggestions(
         &self,
@@ -79,18 +82,30 @@ impl HerdrWindow {
                 rgb(theme.active).into(),
             ));
         }
+        // A long list scrolls by itself rather than pushing the label and
+        // session fields out of the dialog; half a row shows there is more.
+        let row = (self.config.ui.size * 1.6 + 12.).ceil();
+        let mut list = div()
+            .id("device-suggestions")
+            .debug_selector(|| "device-suggestions".into())
+            .flex_none()
+            .flex()
+            .flex_col()
+            .max_h(px(row * MAX_VISIBLE_ROWS))
+            .overflow_y_scroll();
         for (index, suggestion) in visible.into_iter().enumerate() {
             let target = suggestion.target.clone();
             let name = suggestion.name.clone();
-            view = view.child(
+            list = list.child(
                 div()
                     .id(("device-suggestion", index))
                     .debug_selector(move || format!("device-suggestion-{index}"))
+                    .flex_none()
+                    .h(px(row))
                     .flex()
                     .items_center()
                     .gap(px(8.))
                     .px(px(8.))
-                    .py(px(6.))
                     .rounded(px(crate::config::corners::CONTROL))
                     .cursor_pointer()
                     .hover(|s| s.bg(rgb(theme.active)))
@@ -120,6 +135,7 @@ impl HerdrWindow {
                     })),
             );
         }
+        view = view.child(list);
         for (source, error) in &discovery.failures {
             view = view.child(
                 div()
