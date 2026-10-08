@@ -15,7 +15,7 @@ fn steps_read_as_short_status_words() {
 
 #[test]
 fn every_provider_names_itself_and_its_machines() {
-    for provider in CloudProvider::ALL {
+    for &provider in CloudProvider::ALL {
         assert!(!name(provider).is_empty());
         assert!(!noun(provider).is_empty());
         assert!(!provider.key().contains(':'), "keys prefix endpoint IDs");

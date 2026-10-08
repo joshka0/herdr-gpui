@@ -30,19 +30,28 @@ fn config_root(var: &impl Fn(&str) -> Option<OsString>) -> PathBuf {
 }
 
 /// A provider that creates machines used as endpoints. Closed: supporting
-/// another provider adds a variant, and every match that cares says so.
+/// another provider adds a variant behind its own feature, and every match
+/// that cares says so.
+#[cfg(feature = "cloud")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CloudProvider {
+    #[cfg(feature = "coder")]
     Coder,
 }
 
+#[cfg(feature = "cloud")]
 impl CloudProvider {
-    pub const ALL: [Self; 1] = [Self::Coder];
+    /// Every provider this build supports, in display order.
+    pub const ALL: &[Self] = &[
+        #[cfg(feature = "coder")]
+        Self::Coder,
+    ];
 
     /// The stable key used in saved files and endpoint IDs.
     pub fn key(self) -> &'static str {
         match self {
+            #[cfg(feature = "coder")]
             Self::Coder => "coder",
         }
     }
@@ -63,6 +72,7 @@ pub enum ConnectTarget {
     /// connector, which holds the provider's credential and builds the command
     /// that runs the bridge there. `account` names the provider account or
     /// deployment; `machine` is the provider's own name for the machine.
+    #[cfg(feature = "cloud")]
     Cloud {
         provider: CloudProvider,
         account: String,
@@ -111,18 +121,20 @@ impl ConnectTarget {
     /// machine, or inside a WSL distribution, so its paths, processes, and files are not
     /// this machine's.
     pub fn is_remote(&self) -> bool {
-        matches!(
-            self,
-            Self::Ssh { .. } | Self::Wsl { .. } | Self::Cloud { .. }
-        )
+        match self {
+            Self::Ssh { .. } | Self::Wsl { .. } => true,
+            #[cfg(feature = "cloud")]
+            Self::Cloud { .. } => true,
+            _ => false,
+        }
     }
 
     /// The session a remote target attaches to.
     pub fn remote_session(&self) -> Option<&str> {
         match self {
-            Self::Ssh { session, .. } | Self::Wsl { session, .. } | Self::Cloud { session, .. } => {
-                Some(session)
-            }
+            Self::Ssh { session, .. } | Self::Wsl { session, .. } => Some(session),
+            #[cfg(feature = "cloud")]
+            Self::Cloud { session, .. } => Some(session),
             _ => None,
         }
     }

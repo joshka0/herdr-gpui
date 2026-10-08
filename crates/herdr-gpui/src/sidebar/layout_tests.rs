@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 #[cfg(test)]
 mod agent_rows;
-#[cfg(test)]
+#[cfg(all(test, feature = "coder"))]
 mod coder_dialog;
 #[cfg(test)]
 mod configured_rows;
@@ -459,6 +459,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         system_load: Default::default(),
         checkpoints: Default::default(),
         port_forwards: Default::default(),
+        #[cfg(feature = "cloud")]
         cloud_jobs: Default::default(),
         listening_ports: Default::default(),
         tunnels: Default::default(),

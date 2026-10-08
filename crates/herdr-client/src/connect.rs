@@ -81,6 +81,7 @@ pub fn connect_with_connector<T: Into<Transport>>(
             session_socket(std::path::Path::new(""), session)?;
         }
         ConnectTarget::Wsl { distro, session } => wsl::validate(distro, session)?,
+        #[cfg(feature = "cloud")]
         ConnectTarget::Cloud { session, .. } => {
             session_socket(std::path::Path::new(""), session)?;
         }
@@ -96,6 +97,7 @@ pub fn connect_with_connector<T: Into<Transport>>(
             let transport = match target {
                 ConnectTarget::Ssh { .. } => "ssh",
                 ConnectTarget::Wsl { .. } => "wsl",
+                #[cfg(feature = "cloud")]
                 ConnectTarget::Cloud { provider, .. } => provider.key(),
                 _ => "local",
             };

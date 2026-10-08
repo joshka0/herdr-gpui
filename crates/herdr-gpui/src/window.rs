@@ -183,6 +183,7 @@ pub(crate) struct HerdrWindow {
     /// Remote ports forwarded to this machine; they end with the window.
     pub(crate) port_forwards: crate::port_forward::PortForwards,
     /// Cloud machines being added; see `cloud::Jobs`.
+    #[cfg(feature = "cloud")]
     pub(crate) cloud_jobs: crate::cloud::Jobs,
     pub(crate) listening_ports: crate::listening_ports::ListeningPorts,
     /// SSH tunnels to remote ports that listen on their host's loopback only.
@@ -754,6 +755,7 @@ impl HerdrWindow {
             system_load: Default::default(),
             checkpoints: Default::default(),
             port_forwards: Default::default(),
+            #[cfg(feature = "cloud")]
             cloud_jobs: Default::default(),
             listening_ports: Default::default(),
             tunnels: Default::default(),

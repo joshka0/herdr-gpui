@@ -32,6 +32,7 @@ impl HerdrWindow {
         }
         // Local paths mean nothing on a cloud machine, and file copies
         // there would need the provider's own transfer; refuse rather than paste dead paths.
+        #[cfg(feature = "cloud")]
         if matches!(
             self.endpoints[self.selected_endpoint].connection.target,
             herdr_client::ConnectTarget::Cloud { .. }

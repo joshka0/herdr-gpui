@@ -1,14 +1,14 @@
 //! The `[coder]` table: a Coder deployment whose workspaces become devices.
+//! A build without the `coder` feature still parses the table, so one config
+//! file serves every build, but never reads it.
+#[cfg(feature = "coder")]
 use super::{Config, LOCAL_CONFIG, write_config};
+#[cfg(feature = "coder")]
 use crate::{Error, Result};
 use serde::Deserialize;
-use std::{
-    env,
-    ffi::OsString,
-    fs,
-    io::ErrorKind,
-    path::{Path, PathBuf},
-};
+use std::path::PathBuf;
+#[cfg(feature = "coder")]
+use std::{env, ffi::OsString, fs, io::ErrorKind, path::Path};
 
 /// A self-hosted Coder deployment whose workspaces can be added as devices.
 /// Coder's OAuth2 provider requires a confidential client. Its secret may be
@@ -28,6 +28,7 @@ pub struct CoderConfig {
     pub allow_plaintext_credentials: bool,
 }
 
+#[cfg(feature = "coder")]
 impl CoderConfig {
     /// The validated deployment settings, or `None` when Coder is not set up.
     /// Each `HERDR_CODER_*` variable replaces the matching key.
@@ -45,6 +46,7 @@ impl CoderConfig {
 
 /// The `[coder]` keys the Settings window edits. An empty value removes its
 /// key; the client secret and the plaintext opt-in are never written here.
+#[cfg(feature = "coder")]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct CoderFields {
     pub(crate) url: String,
@@ -55,6 +57,7 @@ pub(crate) struct CoderFields {
     pub(crate) cli: String,
 }
 
+#[cfg(feature = "coder")]
 impl CoderFields {
     pub(crate) fn from_config(config: &CoderConfig) -> Self {
         let text = |value: &Option<String>| value.clone().unwrap_or_default();
@@ -103,6 +106,7 @@ impl CoderFields {
     }
 }
 
+#[cfg(feature = "coder")]
 impl Config {
     /// Write the `[coder]` keys Settings edits to the local override file.
     pub(crate) fn save_coder(fields: &CoderFields, existing: &CoderConfig) -> Result<()> {
@@ -145,5 +149,5 @@ impl Config {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "coder"))]
 mod tests;

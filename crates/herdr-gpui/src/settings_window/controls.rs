@@ -402,7 +402,9 @@ impl SettingsWindow {
             Section::Sound => self.render_sound_controls(cx),
             Section::Notifications => self.render_notification_controls(cx),
             Section::General => self.render_general_controls(cx),
-            Section::Appearance | Section::Integrations | Section::CloudDevices => div(),
+            Section::Appearance | Section::Integrations => div(),
+            #[cfg(feature = "cloud")]
+            Section::CloudDevices => div(),
         };
         div()
             .flex()

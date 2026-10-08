@@ -19,6 +19,7 @@ mod theme;
 pub(crate) mod watch;
 
 pub use coder::CoderConfig;
+#[cfg(feature = "coder")]
 pub(crate) use coder::CoderFields;
 use files::write_config;
 pub(crate) use fonts::FontFace;
@@ -613,6 +614,7 @@ impl Config {
         config.github = settings.github;
         // Resolve without the environment so a bad file is reported at load,
         // while a later environment override still applies when signing in.
+        #[cfg(feature = "coder")]
         settings.coder.settings_with(|_| None)?;
         config.coder = settings.coder;
         config.features = settings.features;

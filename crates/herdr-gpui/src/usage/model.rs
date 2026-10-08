@@ -29,6 +29,7 @@ impl Host {
         match target {
             ConnectTarget::Ssh { target, .. } => Some(Self::Ssh(target.clone())),
             ConnectTarget::Wsl { distro, .. } => Some(Self::Wsl(distro.clone())),
+            #[cfg(feature = "cloud")]
             ConnectTarget::Cloud { .. } => None,
             ConnectTarget::Local | ConnectTarget::Session { .. } | ConnectTarget::Socket(_) => {
                 Some(Self::Local)

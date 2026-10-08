@@ -2,6 +2,7 @@
 //! to one device or opens the Add Device dialog. Device scope is presentation
 //! state; connection ownership stays in `endpoint`.
 mod add_device;
+#[cfg(feature = "coder")]
 pub(super) mod coder;
 pub(crate) use add_device::enter;
 mod discover;
@@ -52,6 +53,7 @@ impl Render for SettingsHint {
     }
 }
 
+#[cfg(feature = "cloud")]
 fn capitalized(word: &str) -> String {
     let mut chars = word.chars();
     chars
@@ -62,13 +64,55 @@ fn capitalized(word: &str) -> String {
 
 impl HerdrWindow {
     /// The cloud providers set up in the config, in picker order.
+    #[cfg(feature = "cloud")]
     fn cloud_providers(&self) -> Vec<crate::cloud::CloudProvider> {
         crate::cloud::CloudProvider::ALL
-            .into_iter()
+            .iter()
+            .copied()
             .filter(|provider| match provider {
+                #[cfg(feature = "coder")]
                 crate::cloud::CloudProvider::Coder => self.coder_configured(),
             })
             .collect()
+    }
+
+    /// How many rows the picker offers to add a cloud provider's machine.
+    fn cloud_provider_rows(&self) -> usize {
+        #[cfg(feature = "cloud")]
+        return self.cloud_providers().len();
+        #[cfg(not(feature = "cloud"))]
+        0
+    }
+
+    /// Whether the open page is a cloud provider's add dialog.
+    pub(in crate::menu) fn cloud_dialog_open(&self) -> bool {
+        #[cfg(feature = "coder")]
+        if self.menu.page == Some(Page::AddCoder) {
+            return true;
+        }
+        false
+    }
+
+    /// The open cloud provider's add dialog, if one is open.
+    pub(in crate::menu) fn render_cloud_dialog(
+        &self,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        #[cfg(feature = "coder")]
+        if self.menu.page == Some(Page::AddCoder) {
+            return Some(self.render_add_coder(cx).into_any_element());
+        }
+        #[cfg(not(feature = "coder"))]
+        let _ = cx;
+        None
+    }
+
+    /// How many cloud machines are still being added.
+    fn cloud_jobs_pending(&self) -> usize {
+        #[cfg(feature = "cloud")]
+        return self.cloud_jobs.len();
+        #[cfg(not(feature = "cloud"))]
+        0
     }
 
     pub(crate) fn device_visible(&self, id: &str) -> bool {
@@ -159,7 +203,7 @@ impl HerdrWindow {
                             )
                             // How many Coder workspaces are still being added,
                             // on the icon's corner so the label keeps its room.
-                            .when(!self.cloud_jobs.is_empty(), |icon| {
+                            .when(self.cloud_jobs_pending() > 0, |icon| {
                                 icon.child(
                                     div()
                                         .debug_selector(|| "device-footer-adding".into())
@@ -176,7 +220,7 @@ impl HerdrWindow {
                                         .text_size(px(9.))
                                         .bg(colors::accent(&self.theme))
                                         .text_color(rgb(self.theme.background))
-                                        .child(self.cloud_jobs.len().to_string()),
+                                        .child(self.cloud_jobs_pending().to_string()),
                                 )
                             }),
                     )
@@ -313,6 +357,7 @@ impl HerdrWindow {
         rows.extend(self.endpoints.iter().map(|endpoint| {
             let detail = match &endpoint.connection.target {
                 ConnectTarget::Ssh { target, session } => format!("{target} · {session}"),
+                #[cfg(feature = "cloud")]
                 ConnectTarget::Cloud {
                     provider,
                     machine,
@@ -343,6 +388,7 @@ impl HerdrWindow {
             false,
             self.device_setup_unavailable().is_none(),
         ));
+        #[cfg(feature = "cloud")]
         for provider in self.cloud_providers() {
             let (name, noun) = (crate::cloud::name(provider), crate::cloud::noun(provider));
             rows.push((
@@ -473,6 +519,17 @@ impl HerdrWindow {
         }
         // Workspaces still being added: progress only, not selectable rows,
         // so keyboard navigation keeps its indices.
+        #[cfg(feature = "cloud")]
+        {
+            view = self.cloud_job_rows(view);
+        }
+        view
+    }
+
+    /// Machines still being added: progress only, not selectable rows, so
+    /// keyboard navigation keeps its indices.
+    #[cfg(feature = "cloud")]
+    fn cloud_job_rows(&self, mut view: Stateful<Div>) -> Stateful<Div> {
         if !self.cloud_jobs.is_empty() {
             view = view.child(
                 div()
@@ -521,13 +578,17 @@ impl HerdrWindow {
 
     fn choose_device(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(offset) = index.checked_sub(self.endpoints.len() + 2) {
+            #[cfg(feature = "cloud")]
             if self.device_setup_unavailable().is_none()
                 && let Some(provider) = self.cloud_providers().into_iter().nth(offset)
             {
                 match provider {
+                    #[cfg(feature = "coder")]
                     crate::cloud::CloudProvider::Coder => self.open_coder_setup(window, cx),
                 }
             }
+            #[cfg(not(feature = "cloud"))]
+            let _ = offset;
             return;
         }
         if index == self.endpoints.len() + 1 {
@@ -579,7 +640,7 @@ impl HerdrWindow {
             }
         } else {
             let key = event.keystroke.key.as_str();
-            let count = self.endpoints.len() + 2 + self.cloud_providers().len();
+            let count = self.endpoints.len() + 2 + self.cloud_provider_rows();
             match key {
                 "up" | "down" => {
                     let index = self.menu.selected.unwrap_or(0).min(count - 1);

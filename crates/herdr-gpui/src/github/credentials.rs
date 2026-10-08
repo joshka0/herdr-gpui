@@ -35,7 +35,7 @@ pub(super) fn read(_path: &Path, _name: &CStr) -> Result<Option<SecretString>> {
     Ok(None)
 }
 
-#[cfg(not(unix))]
+#[cfg(all(not(unix), feature = "cloud"))]
 pub(super) fn read_checked(
     _path: &Path,
     _name: &CStr,
@@ -44,7 +44,7 @@ pub(super) fn read_checked(
     Ok(None)
 }
 
-#[cfg(not(unix))]
+#[cfg(all(not(unix), feature = "cloud"))]
 pub(super) fn store_checked(
     path: &Path,
     name: &CStr,
@@ -156,7 +156,7 @@ pub(super) fn store(
 }
 
 /// `store` for a record another feature owns; `validate` must bound its size.
-#[cfg(unix)]
+#[cfg(all(unix, any(test, feature = "cloud")))]
 pub(super) fn store_checked(
     path: &Path,
     name: &CStr,

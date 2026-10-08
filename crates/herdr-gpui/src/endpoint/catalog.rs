@@ -30,6 +30,7 @@ pub(super) struct CatalogUpdate {
     /// The endpoint ID the stored selection names, read only at startup.
     selection: Option<Option<String>>,
     /// The GUI's saved cloud devices, or `None` when that list could not be read.
+    #[cfg(feature = "cloud")]
     pub(super) cloud: Option<Vec<crate::cloud::SavedDevice>>,
 }
 
@@ -51,6 +52,7 @@ impl CatalogUpdate {
 /// selection, which cannot name one and so says Local whenever it was chosen.
 /// The GUI's saved cloud devices; `None` when they cannot be read, so the
 /// current cloud endpoints are kept rather than dropped.
+#[cfg(feature = "cloud")]
 fn cloud_devices() -> Option<Vec<crate::cloud::SavedDevice>> {
     crate::cloud::load()
         .inspect_err(|error| {
@@ -71,6 +73,7 @@ fn load(development: bool, startup: bool) -> Result<CatalogUpdate> {
             hosts: herdr_client::load_saved_hosts(development)?,
             wsl: wsl.hosts,
             selection: None,
+            #[cfg(feature = "cloud")]
             cloud: cloud_devices(),
         });
     }
@@ -83,6 +86,7 @@ fn load(development: bool, startup: bool) -> Result<CatalogUpdate> {
         hosts,
         wsl: wsl.hosts,
         selection: Some(selection),
+        #[cfg(feature = "cloud")]
         cloud: cloud_devices(),
     })
 }
@@ -218,7 +222,10 @@ impl HerdrWindow {
         wsl: Vec<WslHost>,
         cx: &mut Context<Self>,
     ) {
+        #[cfg(feature = "cloud")]
         self.reconcile_devices(hosts, wsl, None, cx);
+        #[cfg(not(feature = "cloud"))]
+        self.reconcile_devices(hosts, wsl, cx);
     }
 
     /// Replace the remote endpoints with every saved device. `None` keeps the
@@ -228,10 +235,12 @@ impl HerdrWindow {
         &mut self,
         hosts: Vec<SavedHost>,
         wsl: Vec<WslHost>,
-        cloud: Option<Vec<crate::cloud::SavedDevice>>,
+        #[cfg(feature = "cloud")] cloud: Option<Vec<crate::cloud::SavedDevice>>,
         cx: &mut Context<Self>,
     ) {
+        #[cfg_attr(not(feature = "cloud"), allow(unused_mut))]
         let mut devices = devices(hosts, wsl);
+        #[cfg(feature = "cloud")]
         match cloud {
             Some(cloud) => devices.extend(cloud.into_iter().map(|saved| Device {
                 id: saved.endpoint_id(),

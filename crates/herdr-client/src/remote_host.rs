@@ -58,7 +58,9 @@ impl ConnectTarget {
             Self::Wsl { distro, .. } => Some(RemoteHost::Wsl(distro.clone())),
             // A cloud machine is reached only through its provider's command,
             // which the host scripts that list and delete sessions do not use.
-            Self::Cloud { .. } | Self::Local | Self::Session { .. } | Self::Socket(_) => None,
+            #[cfg(feature = "cloud")]
+            Self::Cloud { .. } => None,
+            Self::Local | Self::Session { .. } | Self::Socket(_) => None,
         }
     }
 }

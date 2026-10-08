@@ -439,9 +439,8 @@ impl HerdrWindow {
                         | Page::AddWsl
                         | Page::Usage(_)
                         | Page::RenameDevice
-                        | Page::AddCoder
                         | Page::ForwardPort
-                ),
+                ) && !self.cloud_dialog_open(),
                 |panel| {
                     // Dialogs draw their own full-bleed header and footer rules,
                     // so the panel's own inset would cut those rules short.
@@ -492,8 +491,7 @@ impl HerdrWindow {
                         | Page::AddWsl
                         | Page::RenameDevice
                         | Page::ForwardPort
-                        | Page::AddCoder
-                ),
+                ) || self.cloud_dialog_open(),
                 |panel| panel.flex().flex_col().overflow_hidden().shadow_lg(),
             )
             .when(page == Page::About, |panel| {
@@ -558,8 +556,8 @@ impl HerdrWindow {
             panel = panel.child(self.render_usage_panel(provider, cx));
         } else if page == Page::AddDevice {
             panel = panel.child(self.render_add_device(cx));
-        } else if page == Page::AddCoder {
-            panel = panel.child(self.render_add_coder(cx));
+        } else if let Some(dialog) = self.render_cloud_dialog(cx) {
+            panel = panel.child(dialog);
         } else if page == Page::AddWsl {
             panel = panel.child(self.render_add_wsl(cx));
         } else if page == Page::RemoveWsl {

@@ -104,9 +104,9 @@ pub(crate) fn read(
         ConnectTarget::Local | ConnectTarget::Session { .. } | ConnectTarget::Socket(_) => {
             read_local(&Path::new(checkout).join(PATH))?
         }
-        ConnectTarget::Wsl { .. } | ConnectTarget::Cloud { .. } => {
-            return Err(crate::Error::WorktreeScriptsUnsupportedHost);
-        }
+        ConnectTarget::Wsl { .. } => return Err(crate::Error::WorktreeScriptsUnsupportedHost),
+        #[cfg(feature = "cloud")]
+        ConnectTarget::Cloud { .. } => return Err(crate::Error::WorktreeScriptsUnsupportedHost),
     };
     bytes.as_deref().map(Config::parse).transpose()
 }

@@ -17,8 +17,11 @@ pub(crate) use {
     auth::Auth,
     device::{Profile, VERIFY_URL},
     http::{graphql, mutation},
-    store::{Account, Entry, Note, Store, read_entry, save_entry},
+    store::{Account, Note, Store},
 };
+// Cloud providers keep their own secrets in the same store.
+#[cfg(feature = "cloud")]
+pub(crate) use store::{Entry, read_entry, save_entry};
 
 use crate::Result;
 use device::{Device, Reply, SETUP_MESSAGE, profile, token_reply};

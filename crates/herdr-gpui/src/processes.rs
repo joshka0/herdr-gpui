@@ -66,10 +66,11 @@ impl Daemon {
         match target {
             ConnectTarget::Local => Some(Self::Default),
             ConnectTarget::Session { name, .. } => Some(Self::Session(name.clone())),
-            ConnectTarget::Ssh { .. }
-            | ConnectTarget::Wsl { .. }
-            | ConnectTarget::Cloud { .. }
-            | ConnectTarget::Socket(_) => None,
+            ConnectTarget::Ssh { .. } | ConnectTarget::Wsl { .. } | ConnectTarget::Socket(_) => {
+                None
+            }
+            #[cfg(feature = "cloud")]
+            ConnectTarget::Cloud { .. } => None,
         }
     }
 

@@ -332,8 +332,10 @@ pub enum Error {
     GitHubTokenType,
     #[error("GitHub {0} worker stopped.")]
     GitHubWorker(&'static str),
+    #[cfg(feature = "coder")]
     #[error(transparent)]
     Coder(#[from] crate::coder::Error),
+    #[cfg(feature = "cloud")]
     #[error(transparent)]
     Cloud(#[from] crate::cloud::Error),
     #[error("{0}")]

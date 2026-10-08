@@ -329,6 +329,11 @@ before expiry and on rejection. File drops are refused on Coder panes, and
 restoring the last selected device at startup covers SSH devices only. Coder
 devices are unavailable on Windows.
 
+Each provider is a Cargo feature of `herdr-gpui`, on by default: `coder` for
+Coder. A build with `--no-default-features` has no Cloud Devices section and no
+provider rows in the device picker; it still accepts a `[coder]` table, so one
+config file serves every build, but never reads it.
+
 Switching revokes the old host's focus before releasing its surface, then resizes
 and activates the selected host. Input waits for the activation acknowledgement
 and a coherent surface at the current viewport size. Handoffs time out after five

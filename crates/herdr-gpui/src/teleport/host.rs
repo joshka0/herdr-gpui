@@ -54,9 +54,9 @@ impl Host {
             }),
             // WSL distributions and cloud machines are reached through their
             // own bridge commands, which Teleport's scripts do not run over.
-            ConnectTarget::Socket(_) | ConnectTarget::Wsl { .. } | ConnectTarget::Cloud { .. } => {
-                Err(Error::UnsupportedHost)
-            }
+            ConnectTarget::Socket(_) | ConnectTarget::Wsl { .. } => Err(Error::UnsupportedHost),
+            #[cfg(feature = "cloud")]
+            ConnectTarget::Cloud { .. } => Err(Error::UnsupportedHost),
         }
     }
 

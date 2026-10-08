@@ -19,6 +19,7 @@ pub(crate) enum Page {
     ForwardPort,
     RemoveDevice,
     /// Sign in to Coder and add one of its workspaces as a device.
+    #[cfg(feature = "coder")]
     AddCoder,
     /// Picking a WSL distribution to save as a device.
     AddWsl,

@@ -157,6 +157,7 @@ impl ConnectionBridge {
         let startup_inbox = self.inbox.clone();
         let result =
             connect_with_connector(target, options, surface_active, move |target, stop| {
+                #[cfg(feature = "cloud")]
                 if matches!(target, ConnectTarget::Cloud { .. }) {
                     return crate::cloud::connect(target, stop);
                 }

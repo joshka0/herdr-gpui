@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 use crate::endpoint::tests::host;
+#[cfg(feature = "coder")]
 use std::sync::Arc;
 
 #[test]
@@ -51,6 +52,7 @@ fn desired_selection_is_client_local_and_catalog_changes_cancel_stale_restore() 
         hosts: vec![host("a", enabled)],
         wsl: Vec::new(),
         selection,
+        #[cfg(feature = "cloud")]
         cloud: None,
     };
     let mut first = Catalog::new(&ConnectTarget::Local);
@@ -80,11 +82,13 @@ fn desired_selection_is_client_local_and_catalog_changes_cancel_stale_restore() 
         hosts: vec![],
         wsl: Vec::new(),
         selection: None,
+        #[cfg(feature = "cloud")]
         cloud: None,
     });
     assert_eq!(second.desired, None);
 }
 
+#[cfg(feature = "coder")]
 #[gpui::test]
 fn cloud_devices_follow_ssh_hosts_and_survive_an_unreadable_list(cx: &mut gpui::TestAppContext) {
     let workspace = |id: &str, enabled| crate::cloud::SavedDevice {

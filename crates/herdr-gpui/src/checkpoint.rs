@@ -57,7 +57,9 @@ pub(crate) fn host_for(target: &ConnectTarget, live: &crate::LiveState) -> Optio
         }
         // A cloud machine is reached only through its provider's command, which host
         // scripts do not run over.
-        ConnectTarget::Socket(_) | ConnectTarget::Cloud { .. } => None,
+        ConnectTarget::Socket(_) => None,
+        #[cfg(feature = "cloud")]
+        ConnectTarget::Cloud { .. } => None,
     }
 }
 

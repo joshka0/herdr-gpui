@@ -69,8 +69,9 @@ fn target_session(target: &ConnectTarget) -> String {
     match target {
         ConnectTarget::Ssh { session, .. }
         | ConnectTarget::Wsl { session, .. }
-        | ConnectTarget::Cloud { session, .. }
         | ConnectTarget::Session { name: session, .. } => session.clone(),
+        #[cfg(feature = "cloud")]
+        ConnectTarget::Cloud { session, .. } => session.clone(),
         ConnectTarget::Socket(path) => path.display().to_string(),
         ConnectTarget::Local => "default".to_owned(),
     }

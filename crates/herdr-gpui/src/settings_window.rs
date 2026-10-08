@@ -1,4 +1,5 @@
 //! Independent native preferences window. Disk work never owns a window or a socket.
+#[cfg(feature = "cloud")]
 mod cloud_devices;
 mod controls;
 mod layouts;
@@ -50,18 +51,20 @@ pub(super) enum Section {
     Sound,
     Notifications,
     Integrations,
+    #[cfg(feature = "cloud")]
     CloudDevices,
     General,
 }
 
 impl Section {
-    const ALL: [Self; 8] = [
+    const ALL: &[Self] = &[
         Self::Appearance,
         Self::Fonts,
         Self::Indicators,
         Self::Sound,
         Self::Notifications,
         Self::Integrations,
+        #[cfg(feature = "cloud")]
         Self::CloudDevices,
         Self::General,
     ];
@@ -74,6 +77,7 @@ impl Section {
             Self::Sound => "Sound",
             Self::Notifications => "Notifications",
             Self::Integrations => "Integrations",
+            #[cfg(feature = "cloud")]
             Self::CloudDevices => "Cloud Devices",
             Self::General => "General",
         }
@@ -87,6 +91,7 @@ impl Section {
             Self::Sound => "icons/chart.svg",
             Self::Notifications => "icons/bell.svg",
             Self::Integrations => "icons/agent-generic.svg",
+            #[cfg(feature = "cloud")]
             Self::CloudDevices => "icons/globe.svg",
             Self::General => "icons/settings.svg",
         }
@@ -100,6 +105,7 @@ impl Section {
             Self::Sound => "A little signal when something needs you.",
             Self::Notifications => "Stay informed without losing your place.",
             Self::Integrations => "Connect the agents you work with.",
+            #[cfg(feature = "cloud")]
             Self::CloudDevices => {
                 "Create machines from your cloud accounts and use them as devices."
             }
@@ -223,6 +229,7 @@ struct SettingsWindow {
     layout_io: Option<layouts::LayoutIo>,
     remote_history: remote_history::RemoteHistory,
     /// The Coder card, built when Cloud Devices is first shown.
+    #[cfg(feature = "coder")]
     coder_card: Option<cloud_devices::CoderCard>,
     theme_loading: bool,
     theme_waiting: bool,
@@ -306,6 +313,7 @@ impl SettingsWindow {
             #[cfg(test)]
             layout_io: None,
             remote_history: Default::default(),
+            #[cfg(feature = "coder")]
             coder_card: None,
             theme_loading: false,
             theme_waiting: false,
@@ -534,6 +542,7 @@ impl SettingsWindow {
         if section == Section::General {
             self.sync_remote_history(false, cx);
         }
+        #[cfg(feature = "cloud")]
         if section == Section::CloudDevices {
             self.open_cloud_devices(cx);
         }
@@ -597,7 +606,8 @@ impl SettingsWindow {
             )
             .children(
                 Section::ALL
-                    .into_iter()
+                    .iter()
+                    .copied()
                     .enumerate()
                     .map(|(index, section)| {
                         let selected = self.section == section;
@@ -644,6 +654,7 @@ impl Render for SettingsWindow {
         let content = match self.section {
             Section::Appearance => self.render_appearance(window, cx),
             Section::Integrations => self.render_integration_controls(cx),
+            #[cfg(feature = "cloud")]
             Section::CloudDevices => self.render_cloud_devices(cx),
             _ => self.render_controls(window, cx),
         };
@@ -739,12 +750,15 @@ impl Render for SettingsWindow {
                                     }
                                 })
                                 .unwrap_or_else(|| {
-                                    if self.section == Section::Appearance {
-                                        "Themes and layouts change live; saved on Settings close or app quit."
-                                    } else if self.section == Section::CloudDevices {
-                                        "Account fields save with Save; sign-in and removal apply at once."
-                                    } else {
-                                        "Changes are saved automatically."
+                                    match self.section {
+                                        Section::Appearance => {
+                                            "Themes and layouts change live; saved on Settings close or app quit."
+                                        }
+                                        #[cfg(feature = "cloud")]
+                                        Section::CloudDevices => {
+                                            "Account fields save with Save; sign-in and removal apply at once."
+                                        }
+                                        _ => "Changes are saved automatically.",
                                     }
                                     .into()
                                 }),
