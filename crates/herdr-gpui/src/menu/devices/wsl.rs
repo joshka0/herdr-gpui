@@ -259,13 +259,14 @@ impl HerdrWindow {
                             .py(px(6.))
                             .rounded(px(crate::config::corners::CONTROL))
                             .flex()
+                            .items_center()
                             .gap(px(8.))
                             .when(checked, |row| row.bg(rgb(theme.active)))
                             .when(added, |row| row.text_color(rgb(theme.muted)))
                             .when(!added, |row| {
                                 row.cursor_pointer().hover(|s| s.bg(rgb(theme.active)))
                             })
-                            .child(if checked { "●" } else { "○" })
+                            .child(crate::toggles::radio(theme, self.config.ui.size + 2., checked))
                             .child(div().flex_1().truncate().child(distro.clone()))
                             .when(added, |row| row.child("Added"))
                             .on_click(cx.listener(move |this, _, _, cx| {
