@@ -13,6 +13,37 @@ use crate::{
 use gpui::{prelude::*, *};
 
 impl HerdrWindow {
+    /// A page, filling the space it is given. It also records where the
+    /// page draws, so a menu hides only the pages it covers; and, while one
+    /// does, it shows the page's picture in its place.
+    pub(in crate::browser) fn page_area(&self, id: TabId, page: impl IntoElement) -> Div {
+        let area = div().flex_1().min_h_0().relative().child(page);
+        #[cfg(any(target_os = "macos", windows))]
+        let area = {
+            let (picture, bounds) = (self.frozen_picture(id), self.browser.page_bounds.clone());
+            area.child(
+                canvas(
+                    move |area, _, _| {
+                        bounds.borrow_mut().insert(id, area);
+                    },
+                    |_, _, _, _| {},
+                )
+                .absolute()
+                .inset_0(),
+            )
+            .children(picture.map(|picture| {
+                img(picture)
+                    .debug_selector(|| "page-picture".into())
+                    .absolute()
+                    .inset_0()
+                    .size_full()
+            }))
+        };
+        #[cfg(not(any(target_os = "macos", windows)))]
+        let _ = id;
+        area
+    }
+
     /// The workspace's browser tabs, after its Herdr tabs in a group's strip.
     pub(crate) fn browser_tab_entries(
         &self,
@@ -323,39 +354,8 @@ impl HerdrWindow {
                     }
                 },
             ));
-        #[cfg(any(target_os = "macos", windows))]
-        let (picture, bounds) = (self.frozen_picture(id), self.browser.page_bounds.clone());
         let content = match (page, &failure) {
-            (Some(page), None) => div()
-                .flex_1()
-                .min_h_0()
-                .relative()
-                .child(page)
-                // Where the page draws, so a menu hides only the pages it
-                // covers; and, while one does, the page's picture in its place.
-                .map(|content| {
-                    #[cfg(any(target_os = "macos", windows))]
-                    let content = content
-                        .child(
-                            canvas(
-                                move |area, _, _| {
-                                    bounds.borrow_mut().insert(id, area);
-                                },
-                                |_, _, _, _| {},
-                            )
-                            .absolute()
-                            .inset_0(),
-                        )
-                        .children(picture.map(|picture| {
-                            img(picture)
-                                .debug_selector(|| "page-picture".into())
-                                .absolute()
-                                .inset_0()
-                                .size_full()
-                        }));
-                    content
-                })
-                .into_any_element(),
+            (Some(page), None) => self.page_area(id, page).into_any_element(),
             _ => div()
                 .flex_1()
                 .min_h_0()
