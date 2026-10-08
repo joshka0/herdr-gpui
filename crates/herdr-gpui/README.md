@@ -72,7 +72,8 @@ the last open main window. Fullscreen windows restore to their normal rectangle.
 Each window reopens on the display it was on; if that display is disconnected,
 it opens on the primary display, resized and moved to fit. Logs windows
 are not restored. Geometry is stored in `window-state.json` under
-`$XDG_STATE_HOME/herdr/gpui`, or `~/.local/state/herdr/gpui` by default. Native
+`$XDG_STATE_HOME/herdr/gpui`, or `~/.local/state/herdr/gpui` by default
+(`%LOCALAPPDATA%\herdr\gpui` on Windows). Native
 test modes skip this state. Up to 64 main windows are restored.
 
 The Rust GitHub updater verifies signed archive manifests and presents a shared
@@ -1730,14 +1731,28 @@ attention can keep the badge visible. This QA setting is not saved.
 
 The client's own logs are written to
 `$XDG_STATE_HOME/herdr/gpui/logs/herdr-gpui.jsonl` (falling back to
-`~/.local/state`), one JSON record per line, readable only by you on Unix. Past
+`~/.local/state` on Unix or `%LOCALAPPDATA%` on Windows), one JSON record per
+line, readable only by you on Unix. If `LOCALAPPDATA` is missing, Windows uses
+`%USERPROFILE%\AppData\Local` before trying the Unix `HOME` fallback. Past
 16 MiB the file is rotated to `herdr-gpui.1.jsonl`, replacing the previous one,
 so at most two files are kept. Logs are not held in memory: **Window > Logs**
 reads the newest 5,000 records of the file while it is open, including earlier
 runs, and filters, copies, or exports them. Nothing is uploaded. Logging never
 waits on the disk; lines that cannot be queued or written are counted as dropped
-in the window's status bar. Without `XDG_STATE_HOME` or `HOME` (as on a default
-Windows setup) nothing is saved and the window says so.
+in the window's status bar. If none of these state-directory variables is
+available, nothing is saved and the window says so.
+
+Local Windows connections are supported through the daemon's named pipe; pass
+the binary client socket path to `--socket`, not the JSON API socket. No debug
+build or `RUST_LOG` setting is needed: client debug records are captured in
+release builds too. For a connection failure, inspect `operation`, `kind`, and
+`raw_os_error` in the log: `pipe_name` is name conversion, `pipe_connect` is the
+pipe library's open/wait operation, and `pipe_peek` is `PeekNamedPipe` after
+connection. Config failures distinguish `config_lock_open` from
+`config_lock_acquire`. These operation records omit paths and retain native
+error codes (for example, `5` for Windows access denied). A successful plain
+pipe client alone does not establish why the GUI was denied; include these
+records when reporting the failure.
 
 ## Supported
 
