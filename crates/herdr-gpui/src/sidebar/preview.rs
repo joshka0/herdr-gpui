@@ -182,6 +182,7 @@ impl Preview {
                             }),
                             dirty: false,
                             teleported: false,
+                            noted: false,
                         }),
                         removing: false,
                         status: workspace.agent_status,

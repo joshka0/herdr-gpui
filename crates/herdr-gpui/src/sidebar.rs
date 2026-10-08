@@ -8,6 +8,7 @@ mod hover;
 mod layout;
 mod layouts;
 mod metrics;
+mod note_line;
 mod order;
 pub(crate) mod preview;
 mod rail;

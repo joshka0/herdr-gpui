@@ -1,5 +1,5 @@
-//! The trailing badges a row reserves room for: its pull request, dirty and
-//! teleported marks, and the upstream drift counts.
+//! The trailing badges a row reserves room for: its pull request, dirty,
+//! note, and teleported marks, and the upstream drift counts.
 
 use super::label_text;
 use crate::{
@@ -15,6 +15,10 @@ pub(in crate::sidebar) struct RowBadge {
     pub(in crate::sidebar) dirty: bool,
     /// The work moved to another host; this checkout stays behind.
     pub(in crate::sidebar) teleported: bool,
+    /// The user keeps a note on this checkout. Card layouts leave it to the
+    /// note's own line under the row, which leads with the same icon, rather
+    /// than squeeze their pull request number out of a narrow card.
+    pub(in crate::sidebar) noted: bool,
 }
 
 impl RowBadge {
@@ -22,17 +26,19 @@ impl RowBadge {
         1 + usize::from(self.pr.is_some() && layout.pr_counts())
     }
 
-    /// Nothing to draw is nothing to reserve, so a row with neither keeps its
+    /// Nothing to draw is nothing to reserve, so a row with none keeps its
     /// full label width.
     pub(in crate::sidebar) fn new(
         pr: Option<PrBadge>,
         dirty: bool,
         teleported: bool,
+        noted: bool,
     ) -> Option<Self> {
-        (pr.is_some() || dirty || teleported).then_some(Self {
+        (pr.is_some() || dirty || teleported || noted).then_some(Self {
             pr,
             dirty,
             teleported,
+            noted,
         })
     }
 
@@ -40,7 +46,11 @@ impl RowBadge {
         let pr = self.pr.as_ref().map_or(0., |pr| pr.width(font, layout));
         // Reserve the icon and the gap before the PR number, even at small fonts.
         let mark = line_height(font).min(18.) + glyph_width(font);
-        pr + mark * f32::from(u8::from(self.dirty) + u8::from(self.teleported))
+        let marks = [self.dirty, self.teleported, self.noted]
+            .into_iter()
+            .filter(|mark| *mark)
+            .count();
+        pr + mark * marks as f32
     }
 
     /// The badge column at a row's trailing edge, `width` wide: the marks and
@@ -57,6 +67,7 @@ impl RowBadge {
             pr,
             dirty,
             teleported,
+            noted,
         } = self;
         div()
             .debug_selector(|| format!("pr-{key}"))
@@ -84,6 +95,12 @@ impl RowBadge {
                                 (line_height(font) * 0.75).round().min(15.),
                             )
                             .debug_selector(|| format!("teleported-{key}")),
+                        )
+                    })
+                    .when(noted, |line| {
+                        line.child(
+                            crate::icons::note(theme, (line_height(font) * 0.75).round().min(15.))
+                                .debug_selector(|| format!("note-{key}")),
                         )
                     })
                     .when(dirty, |line| {
