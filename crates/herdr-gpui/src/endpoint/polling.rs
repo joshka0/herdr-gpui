@@ -33,6 +33,7 @@ impl HerdrWindow {
         // can replace it; input held across a gap may only go there.
         self.flush_pending_input(cx);
         if let Some(error) = self.catalog.poll_write() {
+            crate::storage_warning::warn_storage_failure("Save host selection", &error);
             self.local_error = Some(format!("Save host selection: {error}"));
             cx.notify();
         }
@@ -43,7 +44,12 @@ impl HerdrWindow {
                     self.reconcile_catalog(update.hosts, update.wsl, cx);
                 }
                 Err(error) => {
-                    self.local_error = Some(format!("Host catalog: {error}"));
+                    let message = format!("Host catalog: {error}");
+                    // The catalog is retried every two seconds; warn once per failure.
+                    if self.local_error.as_deref() != Some(message.as_str()) {
+                        crate::storage_warning::warn_storage_failure("Host catalog", &error);
+                    }
+                    self.local_error = Some(message);
                     cx.notify();
                 }
             }
