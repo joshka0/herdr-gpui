@@ -123,37 +123,55 @@ impl Suggestion {
     }
 }
 
-/// Merge a report into the list: it joins the machine it shares a name or an
-/// address with, or becomes a new entry while there is room.
+/// Merge a report into the list. It joins every machine it shares a name or
+/// an address with, so a report that links two existing rows, such as a
+/// Bonjour host with both a LAN address and a Tailscale name, folds them into
+/// one. A report that matches nothing becomes a new entry while there is room.
 pub(super) fn merge(suggestions: &mut Vec<Suggestion>, candidate: Candidate) {
-    if let Some(existing) = suggestions
-        .iter_mut()
-        .find(|existing| candidate.keys.iter().any(|key| existing.keys.contains(key)))
-    {
-        // Only a preferred source replaces the target; a second report from
-        // the same source, such as another alias, keeps the first.
-        if candidate.source < existing.sources[0] {
-            existing.name = candidate.name;
-            existing.target = candidate.target;
-        }
-        if !existing.sources.contains(&candidate.source) {
-            existing.sources.push(candidate.source);
-            existing.sources.sort();
-        }
-        for key in candidate.keys {
-            if !existing.keys.contains(&key) && existing.keys.len() < MAX_KEYS {
-                existing.keys.push(key);
-            }
-        }
-    } else if suggestions.len() < MAX_SUGGESTIONS && !candidate.keys.is_empty() {
-        suggestions.push(Suggestion {
-            name: candidate.name,
-            target: candidate.target,
-            sources: vec![candidate.source],
-            keys: candidate.keys,
-        });
+    let matching: Vec<usize> = suggestions
+        .iter()
+        .enumerate()
+        .filter(|(_, existing)| candidate.keys.iter().any(|key| existing.keys.contains(key)))
+        .map(|(index, _)| index)
+        .collect();
+    if matching.is_empty() && (suggestions.len() >= MAX_SUGGESTIONS || candidate.keys.is_empty()) {
+        return;
     }
+    let mut merged = Suggestion {
+        name: candidate.name,
+        target: candidate.target,
+        sources: vec![candidate.source],
+        keys: candidate.keys,
+    };
+    // Removing from the back keeps the remaining indices valid.
+    for index in matching.into_iter().rev() {
+        merged = combine(suggestions.remove(index), merged);
+    }
+    suggestions.push(merged);
     suggestions.sort_by_cached_key(|suggestion| suggestion.name.to_lowercase());
+}
+
+/// One machine from an earlier row and a later report of it. Only a
+/// preferred source replaces the name and target; a second report from the
+/// same source, such as another alias, keeps the first.
+fn combine(earlier: Suggestion, later: Suggestion) -> Suggestion {
+    let (mut kept, other) = if later.sources[0] < earlier.sources[0] {
+        (later, earlier)
+    } else {
+        (earlier, later)
+    };
+    for source in other.sources {
+        if !kept.sources.contains(&source) {
+            kept.sources.push(source);
+        }
+    }
+    kept.sources.sort();
+    for key in other.keys {
+        if !kept.keys.contains(&key) && kept.keys.len() < MAX_KEYS {
+            kept.keys.push(key);
+        }
+    }
+    kept
 }
 
 /// The keys a host name or address contributes. The host itself, lowercased

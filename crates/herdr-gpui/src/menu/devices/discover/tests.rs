@@ -74,6 +74,42 @@ fn a_less_preferred_source_does_not_replace_the_target() {
 }
 
 #[test]
+fn a_report_that_links_two_rows_folds_them_into_one() {
+    let mut list = Vec::new();
+    // SSH config knows the LAN address; Tailscale knows the tailnet name.
+    merge(
+        &mut list,
+        candidate(Source::SshConfig, "lab", "lab", &["192.168.1.5"]).with_alias("lab"),
+    );
+    merge(
+        &mut list,
+        candidate(
+            Source::Tailscale,
+            "lab",
+            "lab.tail1.ts.net",
+            &["lab.tail1.ts.net", "100.64.0.5"],
+        ),
+    );
+    assert_eq!(list.len(), 2);
+    // Bonjour reports the LAN address and the machine's own host name.
+    merge(
+        &mut list,
+        candidate(
+            Source::Bonjour,
+            "lab",
+            "lab.local",
+            &["lab.local", "192.168.1.5"],
+        ),
+    );
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].target, "lab");
+    assert_eq!(list[0].sources, Source::ALL);
+    for saved in ["lab", "lab.tail1.ts.net", "100.64.0.5", "lab.local"] {
+        assert!(list[0].saved_as(saved), "{saved}");
+    }
+}
+
+#[test]
 fn ordinary_dns_names_that_share_a_first_label_stay_apart() {
     let mut list = Vec::new();
     merge(
