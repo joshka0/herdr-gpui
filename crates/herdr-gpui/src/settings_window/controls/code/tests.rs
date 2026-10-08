@@ -130,3 +130,38 @@ fn testing_the_connection_shows_what_the_server_said(cx: &mut TestAppContext) {
         assert!(cx.debug_bounds("settings-code-result").is_some());
     }
 }
+
+/// A reload, after a save or a change to the file, keeps an edit in
+/// progress, and the field follows the file again once nothing is edited.
+#[gpui::test]
+fn a_reload_keeps_an_address_edit_in_progress(cx: &mut TestAppContext) {
+    let (view, cx, _) = page(cx);
+    let reload = |view: &Entity<SettingsWindow>, cx: &mut VisualTestContext, address: &str| {
+        view.update(cx, |view, cx| {
+            view.config.code.url = Some(WebUrl::try_from(address).unwrap());
+            view.sync_code_field(cx);
+        });
+    };
+    let text = |view: &Entity<SettingsWindow>, cx: &mut VisualTestContext| {
+        view.read_with(cx, |view, cx| {
+            view.code
+                .field
+                .as_ref()
+                .unwrap()
+                .input
+                .read(cx)
+                .text()
+                .to_owned()
+        })
+    };
+
+    type_address(&view, cx, "127.0.0.1:9000/?tkn=typing");
+    reload(&view, cx, "http://127.0.0.1:8000/?tkn=file");
+    assert_eq!(text(&view, cx), "127.0.0.1:9000/?tkn=typing");
+
+    // Escape gives the edit up, and the field shows what the file holds.
+    cx.simulate_keystrokes("escape");
+    assert_eq!(text(&view, cx), "http://127.0.0.1:8000/?tkn=file");
+    reload(&view, cx, "http://127.0.0.1:8000/?tkn=changed");
+    assert_eq!(text(&view, cx), "http://127.0.0.1:8000/?tkn=changed");
+}

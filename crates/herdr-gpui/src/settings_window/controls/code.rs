@@ -35,9 +35,21 @@ impl Default for CodeSettings {
 
 struct UrlField {
     input: Entity<SearchInput>,
+    /// The text the page last put in the field. Any other text is an edit
+    /// in progress, which a reload must not replace.
+    shown: String,
     /// The text is not an address, so it was not saved.
     invalid: bool,
     _blur: Subscription,
+}
+
+impl UrlField {
+    /// Puts `text` in the field, selected, as the page's own.
+    fn show(&mut self, text: &str, cx: &mut App) {
+        self.shown = text.to_owned();
+        self.input
+            .update(cx, |input, cx| input.set_text_selected(text, cx));
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -85,6 +97,7 @@ impl SettingsWindow {
         });
         self.code.field = Some(UrlField {
             input,
+            shown: saved,
             invalid: false,
             _blur: blur,
         });
@@ -99,18 +112,19 @@ impl SettingsWindow {
         }
     }
 
-    /// Shows the saved address in the field, unless it is being edited.
+    /// Shows the saved address in the field, unless it is being edited:
+    /// a reload, after a save or a change to the file, keeps an edit that
+    /// is in progress.
     pub(in crate::settings_window) fn sync_code_field(&mut self, cx: &mut Context<Self>) {
         let saved = self.saved_code_url().to_owned();
         let Some(field) = &mut self.code.field else {
             return;
         };
-        if field.invalid || field.input.read(cx).text() == saved {
+        let editing = field.invalid || field.input.read(cx).text() != field.shown;
+        if editing || field.shown == saved {
             return;
         }
-        field
-            .input
-            .update(cx, |input, cx| input.set_text_selected(&saved, cx));
+        field.show(&saved, cx);
     }
 
     /// Saves the field's address when `save`, else puts the saved one back.
@@ -130,16 +144,9 @@ impl SettingsWindow {
             return false;
         }
         let text = input.text().trim().to_owned();
-        if !save {
+        if !save || text == saved {
             field.invalid = false;
-            field
-                .input
-                .update(cx, |input, cx| input.set_text_selected(&saved, cx));
-            cx.notify();
-            return true;
-        }
-        if text == saved {
-            field.invalid = false;
+            field.show(&saved, cx);
             cx.notify();
             return true;
         }
@@ -156,11 +163,7 @@ impl SettingsWindow {
             }
         };
         field.invalid = false;
-        if let Some(url) = &url {
-            field
-                .input
-                .update(cx, |input, cx| input.set_text_selected(url.as_str(), cx));
-        }
+        field.show(url.as_ref().map_or("", WebUrl::as_str), cx);
         self.code.test = Test::Idle;
         self.code.generation += 1;
         self.save_code_url(url, cx);
