@@ -7,8 +7,9 @@
 //! alive, keeping its state.
 //!
 //! A page that cannot load says nothing back through the web view, so the
-//! window first asks the server whether it is there, and creates pages only
-//! once it has answered lately. Until then the panel says why it is empty.
+//! window first asks the server whether it is there, and creates each page
+//! only after an answer of its own. Until then the panel says why it is
+//! empty.
 #[cfg(any(target_os = "macos", windows))]
 use super::{Location, TabId, store::Place};
 use super::{Scope, Store, WebUrl, view::store};
@@ -127,12 +128,17 @@ impl HerdrWindow {
     /// platform's web content processes, so this runs from input and ticks,
     /// never from render. `report` says why a tab could not open.
     fn open_code_page(&mut self, report: bool, window: &mut Window, cx: &mut Context<Self>) {
-        if !super::EMBEDDED || !self.shown_code() {
+        if !super::EMBEDDED {
             return;
         }
-        let (Some((scope, workspace)), Some(url)) =
-            (self.browser_key(), self.config.code.url.clone())
-        else {
+        let Some(url) = self.config.code.url.clone() else {
+            self.forget_code_address(cx);
+            return;
+        };
+        if !self.shown_code() {
+            return;
+        }
+        let Some((scope, workspace)) = self.browser_key() else {
             return;
         };
         self.follow_code_address(&url, cx);
@@ -167,6 +173,9 @@ impl HerdrWindow {
                 tracing::warn!(%error, "Cannot create the VS Code page");
                 self.browser.failed.insert(id, error.to_string().into());
             }
+            // An answer serves one page: the next one asks again, in case
+            // the server has stopped since.
+            self.browser.code_server.state = Reach::Unknown;
             cx.notify();
         }
     }
@@ -205,6 +214,21 @@ impl HerdrWindow {
             #[cfg(any(target_os = "macos", windows))]
             self.close_code_pages(cx);
         }
+    }
+
+    /// Forgets the server once its address is removed, closing the pages
+    /// still showing it, so the panel asks for an address instead.
+    fn forget_code_address(&mut self, cx: &App) {
+        let server = &mut self.browser.code_server;
+        if server.url.take().is_none() {
+            return;
+        }
+        server.state = Reach::Unknown;
+        server.generation += 1;
+        #[cfg(any(target_os = "macos", windows))]
+        self.close_code_pages(cx);
+        #[cfg(not(any(target_os = "macos", windows)))]
+        let _ = cx;
     }
 
     /// Whether the server at `url` has answered lately, asking it when

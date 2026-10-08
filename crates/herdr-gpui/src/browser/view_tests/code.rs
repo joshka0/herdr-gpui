@@ -294,3 +294,70 @@ fn a_new_panel_asks_the_server_again_once_an_answer_is_old(cx: &mut gpui::TestAp
     });
     assert!(cx.debug_bounds("code-unreachable").is_some());
 }
+
+/// Creates the focused workspace's page, as a tick does once the server
+/// has answered; a headless window may record why it could not instead.
+#[cfg(any(target_os = "macos", windows))]
+fn create_page(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) -> crate::browser::TabId {
+    cx.update(|window, cx| view.update(cx, |view, cx| view.ensure_code_page(window, cx)));
+    draw(cx);
+    cx.update(|_, cx| {
+        let tab_scope = scope(&view.read(cx).endpoints[0]);
+        let workspace = view.read(cx).browser_key().unwrap().1;
+        cx.global::<Store>()
+            .code_tab(&tab_scope, &workspace)
+            .unwrap()
+            .id
+    })
+}
+
+/// An answer serves one page: once the server stops, a panel opened in
+/// another space right away asks it again and says it cannot be reached,
+/// rather than showing a page that stays blank.
+#[cfg(any(target_os = "macos", windows))]
+#[gpui::test]
+fn each_new_panel_asks_the_server_again(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = window(cx);
+    show_with(&view, cx, "http://127.0.0.1:8000/?tkn=x", answers);
+    create_page(&view, cx);
+    view.update(cx, |view, _| {
+        assert_eq!(view.browser.code_server.state, Reach::Unknown);
+        // The server stops.
+        view.browser.code_server.probe = refuses;
+    });
+    focus_workspace(&view, cx, "w1");
+    run(&view, cx, Command::ToggleCode);
+    cx.run_until_parked();
+    draw(cx);
+    view.read_with(cx, |view, _| {
+        assert!(
+            matches!(view.browser.code_server.state, Reach::Failed { .. }),
+            "{:?}",
+            view.browser.code_server.state
+        );
+    });
+    assert!(cx.debug_bounds("code-unreachable").is_some());
+}
+
+/// Removing the server's address closes the pages still showing it, so the
+/// panel asks for an address instead.
+#[cfg(any(target_os = "macos", windows))]
+#[gpui::test]
+fn removing_the_address_closes_the_panel_pages(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = window(cx);
+    show_with(&view, cx, "http://127.0.0.1:8000/?tkn=x", answers);
+    let tab = create_page(&view, cx);
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.config.code.url = None;
+            view.ensure_code_page(window, cx);
+        })
+    });
+    draw(cx);
+    view.read_with(cx, |view, _| {
+        assert!(!view.browser.pages.contains(tab));
+        assert!(!view.browser.failed.contains_key(&tab));
+        assert_eq!(view.browser.code_server.state, Reach::Unknown);
+    });
+    assert!(cx.debug_bounds("code-placeholder").is_some());
+}
