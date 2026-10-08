@@ -197,7 +197,8 @@ impl HerdrWindow {
         let Some(item) = review.item(position) else {
             return;
         };
-        let line = match item {
+        // A side-by-side pair may join two stretches: both are asked for.
+        let (file, lines) = match item {
             Item::Placeholder(file) => {
                 let pending = review
                     .loaded()
@@ -209,26 +210,30 @@ impl HerdrWindow {
                 return;
             }
             Item::Header(_) => return,
-            Item::Line { file, line } => Some((file, line)),
-            Item::Pair { file, row } => lines_of(review, file)
-                .and_then(|lines| match *lines.split().get(row)? {
-                    SplitRow::Across(_) => None,
-                    SplitRow::Sides { left, right } => left.or(right),
-                })
-                .map(|line| (file, line)),
+            Item::Line { file, line } => (file, [Some(line), None]),
+            Item::Pair { file, row } => {
+                match lines_of(review, file).and_then(|lines| lines.split().get(row).copied()) {
+                    Some(SplitRow::Sides { left, right }) => (file, [left, right]),
+                    _ => return,
+                }
+            }
         };
-        let Some((file, line)) = line else {
+        let Some(read) = lines_of(review, file) else {
             return;
         };
-        let needed = lines_of(review, file).is_some_and(|lines| {
-            lines.get(line).is_some_and(|found| {
-                matches!(found.kind, Kind::Added | Kind::Removed | Kind::Context)
-            }) && review
-                .colours
-                .line(file, lines.stretch(line).start, line)
-                .is_none()
-        });
-        if needed {
+        let needed: Vec<usize> = lines
+            .into_iter()
+            .flatten()
+            .filter(|&line| {
+                read.get(line).is_some_and(|found| {
+                    matches!(found.kind, Kind::Added | Kind::Removed | Kind::Context)
+                }) && review
+                    .colours
+                    .line(file, read.stretch(line).start, line)
+                    .is_none()
+            })
+            .collect();
+        for line in needed {
             self.want_review_colours(id, file, line, cx);
         }
     }
