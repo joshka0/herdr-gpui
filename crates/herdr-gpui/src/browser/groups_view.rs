@@ -508,9 +508,14 @@ impl HerdrWindow {
         let group = group.unwrap_or(layout.active());
         layout.choose(group, Pick::Page(id));
         #[cfg(any(target_os = "macos", windows))]
-        if let Err(error) = self.browser.pages.ensure(&tab, window, cx) {
-            tracing::warn!(%error, "Cannot create a browser page");
-            self.browser.failed = Some((id, error.to_string().into()));
+        match self.browser.pages.ensure(&tab, window, cx) {
+            Ok(()) => {
+                self.browser.failed.remove(&id);
+            }
+            Err(error) => {
+                tracing::warn!(%error, "Cannot create a browser page");
+                self.browser.failed.insert(id, error.to_string().into());
+            }
         }
         self.sync_address(group, Some(&tab), true, window, cx);
         if tab.location.is_none() {

@@ -56,8 +56,10 @@ pub(crate) struct Browser {
     pub(super) tab_scroll: super::tab_scroll::TabScroll,
     /// Groups opening from a split and folding away as they close.
     pub(super) group_motion: super::group_motion::GroupMotion,
-    /// Why a tab's page could not be created, shown in its place.
-    pub(super) failed: Option<(TabId, SharedString)>,
+    /// Why each tab's page could not be created, shown in its place. One
+    /// per tab, so a failure elsewhere never clears another's and sets it
+    /// retrying; bounded by the tabs the store keeps.
+    pub(super) failed: HashMap<TabId, SharedString>,
     /// The workspaces of the last snapshot and the boot they came from: one
     /// missing from the next snapshot of the same boot was closed.
     workspaces: Option<(Scope, String, HashSet<String>)>,
@@ -86,7 +88,7 @@ impl Browser {
             appear: Default::default(),
             tab_scroll: Default::default(),
             group_motion: Default::default(),
-            failed: None,
+            failed: HashMap::new(),
             workspaces: None,
             #[cfg(any(target_os = "macos", windows))]
             annotations: Annotations::new(cx),
@@ -159,14 +161,7 @@ impl HerdrWindow {
         }
         #[cfg(any(target_os = "macos", windows))]
         self.browser.pages.retain(|id| !gone(id));
-        if self
-            .browser
-            .failed
-            .as_ref()
-            .is_some_and(|(id, _)| gone(*id))
-        {
-            self.browser.failed = None;
-        }
+        self.browser.failed.retain(|id, _| !gone(*id));
         #[cfg(any(target_os = "macos", windows))]
         let annotated: Vec<TabId> = self
             .browser

@@ -218,12 +218,7 @@ impl HerdrWindow {
         let page = self.browser.pages.page(id).cloned();
         #[cfg(not(any(target_os = "macos", windows)))]
         let page: Option<AnyView> = None;
-        let failure = self
-            .browser
-            .failed
-            .as_ref()
-            .filter(|(failed, _)| *failed == id)
-            .map(|(_, message)| message.clone());
+        let failure = self.browser.failed.get(&id).cloned();
         let placeholder: SharedString = match (&failure, loaded) {
             (Some(message), _) => format!("Could not show this page: {message}").into(),
             (None, false) => "Type an address above and press Return.".into(),
