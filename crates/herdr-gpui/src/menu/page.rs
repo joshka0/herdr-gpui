@@ -101,6 +101,32 @@ pub(crate) enum WorkspaceMenuAction {
     Script(crate::worktree_scripts::ScriptKind),
 }
 
+impl Page {
+    /// Context menus open where the pointer asked for them, rather than
+    /// centred over a dimmed window as a dialog is.
+    pub(crate) fn pointer_anchored(self) -> bool {
+        matches!(
+            self,
+            Self::Workspace
+                | Self::Tab
+                | Self::RenameTab
+                | Self::Group
+                | Self::Pane
+                | Self::RenamePane
+                | Self::PaneProcesses
+                | Self::KillProcesses
+                | Self::Host
+                | Self::RemoveDevice
+                | Self::RemoveWsl
+                | Self::Git
+                | Self::GitCommit
+                | Self::PrReview
+                | Self::PrComment
+                | Self::PrMerge
+        )
+    }
+}
+
 impl WorkspaceMenuAction {
     /// Embedded icon for the row, so each action is recognizable before reading.
     /// The pull request section draws its own header rather than a menu row.

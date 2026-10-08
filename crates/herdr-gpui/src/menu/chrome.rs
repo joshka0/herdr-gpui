@@ -252,6 +252,18 @@ impl HerdrWindow {
         }
     }
 
+    /// Whether the open menu is a dialog that dims the window behind it,
+    /// rather than a popover beside what opened it.
+    pub(crate) fn menu_dims(&self) -> bool {
+        let Some(page) = self.menu.page else {
+            return false;
+        };
+        let session_modal = page == Page::Sessions && self.menu.session_edit.is_some();
+        let footer_anchored =
+            matches!(page, Page::Menu | Page::Devices | Page::Sessions) && !session_modal;
+        !footer_anchored && !matches!(page, Page::Usage(_)) && !page.pointer_anchored()
+    }
+
     fn render_menu_layer(&self, window: &Window, cx: &mut Context<Self>) -> Stateful<Div> {
         let page = self.menu.page.unwrap_or(Page::Menu);
         let font = &self.config.ui;
@@ -269,25 +281,7 @@ impl HerdrWindow {
         // Context menus open where the pointer asked for them. A dialog is a
         // modal decision, not a continuation of the row it came from, so it
         // centres over a dimmed window the way the Herdr TUI's dialogs do.
-        let pointer_anchored = matches!(
-            page,
-            Page::Workspace
-                | Page::Tab
-                | Page::RenameTab
-                | Page::Group
-                | Page::Pane
-                | Page::RenamePane
-                | Page::PaneProcesses
-                | Page::KillProcesses
-                | Page::Host
-                | Page::RemoveDevice
-                | Page::RemoveWsl
-                | Page::Git
-                | Page::GitCommit
-                | Page::PrReview
-                | Page::PrComment
-                | Page::PrMerge
-        );
+        let pointer_anchored = page.pointer_anchored();
         let mut panel = div()
             .id("menu-panel")
             .debug_selector(|| "menu-panel".into())
@@ -667,7 +661,7 @@ impl HerdrWindow {
         }
         // Pages sit above everything GPUI draws, so the menu says what it
         // covers: a dimmed dialog covers the window, a popover its panel.
-        let dims = !footer_anchored && !matches!(page, Page::Usage(_)) && !pointer_anchored;
+        let dims = self.menu_dims();
         let cover = self.menu.cover.clone();
         if dims {
             cover.set(super::state::Cover::All);
