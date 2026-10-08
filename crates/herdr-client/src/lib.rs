@@ -45,7 +45,7 @@ pub use catalog::{
 pub use clipboard::{ClipboardImageCancellation, ClipboardImageUpload};
 pub use compat::{MIN_HERDR_VERSION, VersionMismatch};
 pub use connect::{Transport, connect, connect_with_connector, connect_with_surface_active};
-pub use discovery::{ConnectTarget, session_socket};
+pub use discovery::{CloudProvider, ConnectTarget, session_socket};
 /// Error returned when queueing commands; also available as the crate's `Error`.
 pub use error::Error as SendError;
 pub use error::{Error, Result, StorageOperation};

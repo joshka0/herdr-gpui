@@ -11,7 +11,7 @@ fn update(wsl: &[&str], selection: Option<Option<&str>>) -> CatalogUpdate {
             })
             .collect(),
         selection: selection.map(|id| id.map(str::to_owned)),
-        workspaces: None,
+        cloud: None,
     }
 }
 

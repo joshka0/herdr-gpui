@@ -309,8 +309,10 @@ remote installation the GUI performs, and only with that approval; reconnects
 never install anything. With the switch off, a workspace without Herdr is not
 added. A workspace without `curl` must get Herdr another way.
 
-Coder devices are stored in the GUI's own `coder-workspaces.json` in its state
-directory, because Herdr's `endpoints.json` schema is SSH-only. They connect by
+Cloud devices, from every provider, are stored in the GUI's own
+`cloud-devices.json` in its state directory, because Herdr's `endpoints.json`
+schema is SSH-only. Each entry names its provider, so adding another provider
+needs no new file. They connect by
 running Herdr's remote bridge through `coder ssh`, with the deployment URL and
 access token passed only in that child's environment; Coder's tunnel
 authenticates the connection, so no SSH config or host key is involved. The

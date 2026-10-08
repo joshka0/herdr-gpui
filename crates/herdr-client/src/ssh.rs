@@ -470,11 +470,7 @@ pub fn connect_command(mut command: Command, session: &str, stop: &AtomicBool) -
 }
 
 #[cfg(windows)]
-pub fn connect_command(
-    _command: Command,
-    session: &str,
-    _stop: &AtomicBool,
-) -> Result<Bridge> {
+pub fn connect_command(_command: Command, session: &str, _stop: &AtomicBool) -> Result<Bridge> {
     session_socket(Path::new(""), session)?;
     Err(Error::SshUnsupported)
 }

@@ -29,8 +29,8 @@ pub(super) struct CatalogUpdate {
     pub(super) wsl: Vec<WslHost>,
     /// The endpoint ID the stored selection names, read only at startup.
     selection: Option<Option<String>>,
-    /// The GUI's saved Coder workspaces, or `None` when that list could not be read.
-    pub(super) workspaces: Option<Vec<crate::coder::SavedWorkspace>>,
+    /// The GUI's saved cloud devices, or `None` when that list could not be read.
+    pub(super) cloud: Option<Vec<crate::cloud::SavedDevice>>,
 }
 
 impl CatalogUpdate {
@@ -49,12 +49,12 @@ impl CatalogUpdate {
 
 /// Load both catalogs. A WSL distribution chosen last wins over upstream's
 /// selection, which cannot name one and so says Local whenever it was chosen.
-/// The GUI's saved Coder workspaces; `None` when they cannot be read, so the
-/// current Coder endpoints are kept rather than dropped.
-fn coder_workspaces() -> Option<Vec<crate::coder::SavedWorkspace>> {
-    crate::coder::load_workspaces()
+/// The GUI's saved cloud devices; `None` when they cannot be read, so the
+/// current cloud endpoints are kept rather than dropped.
+fn cloud_devices() -> Option<Vec<crate::cloud::SavedDevice>> {
+    crate::cloud::load()
         .inspect_err(|error| {
-            tracing::warn!(category = "coder_catalog", %error, "Cannot read saved Coder workspaces");
+            tracing::warn!(category = "cloud_catalog", %error, "Cannot read saved cloud devices");
         })
         .ok()
 }
@@ -71,7 +71,7 @@ fn load(development: bool, startup: bool) -> Result<CatalogUpdate> {
             hosts: herdr_client::load_saved_hosts(development)?,
             wsl: wsl.hosts,
             selection: None,
-            workspaces: coder_workspaces(),
+            cloud: cloud_devices(),
         });
     }
     let (hosts, selected) = herdr_client::load_saved_host_selection(development)?;
@@ -83,7 +83,7 @@ fn load(development: bool, startup: bool) -> Result<CatalogUpdate> {
         hosts,
         wsl: wsl.hosts,
         selection: Some(selection),
-        workspaces: coder_workspaces(),
+        cloud: cloud_devices(),
     })
 }
 
@@ -209,7 +209,7 @@ impl HerdrWindow {
         }
     }
 
-    /// SSH hosts and WSL distributions only, keeping the current Coder
+    /// SSH hosts and WSL distributions only, keeping the current cloud
     /// endpoints; for fixtures.
     #[cfg(test)]
     pub(crate) fn reconcile_catalog(
@@ -222,28 +222,28 @@ impl HerdrWindow {
     }
 
     /// Replace the remote endpoints with every saved device. `None` keeps the
-    /// current Coder endpoints, so a failed read of the GUI's own list never
+    /// current cloud endpoints, so a failed read of the GUI's own list never
     /// drops their connections.
     pub(super) fn reconcile_devices(
         &mut self,
         hosts: Vec<SavedHost>,
         wsl: Vec<WslHost>,
-        workspaces: Option<Vec<crate::coder::SavedWorkspace>>,
+        cloud: Option<Vec<crate::cloud::SavedDevice>>,
         cx: &mut Context<Self>,
     ) {
         let mut devices = devices(hosts, wsl);
-        match workspaces {
-            Some(workspaces) => devices.extend(workspaces.into_iter().map(|workspace| Device {
-                id: workspace.endpoint_id(),
-                target: workspace.target(),
-                label: workspace.label,
-                enabled: workspace.enabled,
+        match cloud {
+            Some(cloud) => devices.extend(cloud.into_iter().map(|saved| Device {
+                id: saved.endpoint_id(),
+                target: saved.target(),
+                label: saved.label,
+                enabled: saved.enabled,
             })),
             None => devices.extend(
                 self.endpoints
                     .iter()
                     .filter(|endpoint| {
-                        matches!(endpoint.connection.target, ConnectTarget::Coder { .. })
+                        matches!(endpoint.connection.target, ConnectTarget::Cloud { .. })
                     })
                     .map(|endpoint| Device {
                         id: endpoint.id.clone(),

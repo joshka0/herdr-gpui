@@ -52,9 +52,9 @@ impl Host {
                 #[cfg(test)]
                 env: Vec::new(),
             }),
-            // WSL distributions and Coder workspaces are reached through their
+            // WSL distributions and cloud machines are reached through their
             // own bridge commands, which Teleport's scripts do not run over.
-            ConnectTarget::Socket(_) | ConnectTarget::Wsl { .. } | ConnectTarget::Coder { .. } => {
+            ConnectTarget::Socket(_) | ConnectTarget::Wsl { .. } | ConnectTarget::Cloud { .. } => {
                 Err(Error::UnsupportedHost)
             }
         }

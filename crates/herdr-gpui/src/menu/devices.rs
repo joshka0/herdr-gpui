@@ -6,13 +6,11 @@ pub(super) mod coder;
 pub(crate) use add_device::enter;
 mod discover;
 mod host_menu;
-mod provisions;
 mod setup;
 mod wsl;
 
 pub(super) use add_device::Setup;
 pub(crate) use host_menu::HostMenu;
-pub(crate) use provisions::Provisions;
 pub(super) use wsl::WslSetup;
 
 use super::{Page, colors};
@@ -54,7 +52,25 @@ impl Render for SettingsHint {
     }
 }
 
+fn capitalized(word: &str) -> String {
+    let mut chars = word.chars();
+    chars
+        .next()
+        .map(|first| first.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
+}
+
 impl HerdrWindow {
+    /// The cloud providers set up in the config, in picker order.
+    fn cloud_providers(&self) -> Vec<crate::cloud::CloudProvider> {
+        crate::cloud::CloudProvider::ALL
+            .into_iter()
+            .filter(|provider| match provider {
+                crate::cloud::CloudProvider::Coder => self.coder_configured(),
+            })
+            .collect()
+    }
+
     pub(crate) fn device_visible(&self, id: &str) -> bool {
         self.device_filter
             .as_deref()
@@ -143,7 +159,7 @@ impl HerdrWindow {
                             )
                             // How many Coder workspaces are still being added,
                             // on the icon's corner so the label keeps its room.
-                            .when(!self.provisions.is_empty(), |icon| {
+                            .when(!self.cloud_jobs.is_empty(), |icon| {
                                 icon.child(
                                     div()
                                         .debug_selector(|| "device-footer-adding".into())
@@ -160,7 +176,7 @@ impl HerdrWindow {
                                         .text_size(px(9.))
                                         .bg(colors::accent(&self.theme))
                                         .text_color(rgb(self.theme.background))
-                                        .child(self.provisions.len().to_string()),
+                                        .child(self.cloud_jobs.len().to_string()),
                                 )
                             }),
                     )
@@ -297,9 +313,12 @@ impl HerdrWindow {
         rows.extend(self.endpoints.iter().map(|endpoint| {
             let detail = match &endpoint.connection.target {
                 ConnectTarget::Ssh { target, session } => format!("{target} · {session}"),
-                ConnectTarget::Coder {
-                    workspace, session, ..
-                } => format!("Coder {workspace} · {session}"),
+                ConnectTarget::Cloud {
+                    provider,
+                    machine,
+                    session,
+                    ..
+                } => format!("{} {machine} · {session}", crate::cloud::name(*provider)),
                 ConnectTarget::Wsl { distro, session } => format!("WSL {distro} · {session}"),
                 ConnectTarget::Socket(path) => path.display().to_string(),
                 ConnectTarget::Session { name, .. } => format!("This device · {name}"),
@@ -324,12 +343,13 @@ impl HerdrWindow {
             false,
             self.device_setup_unavailable().is_none(),
         ));
-        if self.coder_configured() {
+        for provider in self.cloud_providers() {
+            let (name, noun) = (crate::cloud::name(provider), crate::cloud::noun(provider));
             rows.push((
-                "Add Coder Workspace…".into(),
+                format!("Add {name} {}…", capitalized(noun)),
                 self.device_setup_unavailable()
-                    .unwrap_or("Create or attach a Coder workspace")
-                    .into(),
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| format!("Create or attach a {name} {noun}")),
                 false,
                 self.device_setup_unavailable().is_none(),
             ));
@@ -453,7 +473,7 @@ impl HerdrWindow {
         }
         // Workspaces still being added: progress only, not selectable rows,
         // so keyboard navigation keeps its indices.
-        if !self.provisions.is_empty() {
+        if !self.cloud_jobs.is_empty() {
             view = view.child(
                 div()
                     .p(px(8.))
@@ -461,7 +481,7 @@ impl HerdrWindow {
                     .child("ADDING"),
             );
         }
-        for (index, provision) in self.provisions.iter().enumerate() {
+        for (index, provision) in self.cloud_jobs.iter().enumerate() {
             view = view.child(
                 div()
                     .debug_selector(move || format!("device-adding-{index}"))
@@ -480,7 +500,11 @@ impl HerdrWindow {
                                     .truncate()
                                     .text_size(px(self.config.ui.size * 0.85))
                                     .text_color(rgb(self.theme.muted))
-                                    .child(format!("Coder · {}", provision.status)),
+                                    .child(format!(
+                                        "{} · {}",
+                                        crate::cloud::name(provision.provider),
+                                        provision.status
+                                    )),
                             ),
                     )
                     .child(
@@ -496,9 +520,13 @@ impl HerdrWindow {
     }
 
     fn choose_device(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        if index == self.endpoints.len() + 2 {
-            if self.device_setup_unavailable().is_none() && self.coder_configured() {
-                self.open_coder_setup(window, cx);
+        if let Some(offset) = index.checked_sub(self.endpoints.len() + 2) {
+            if self.device_setup_unavailable().is_none()
+                && let Some(provider) = self.cloud_providers().into_iter().nth(offset)
+            {
+                match provider {
+                    crate::cloud::CloudProvider::Coder => self.open_coder_setup(window, cx),
+                }
             }
             return;
         }
@@ -551,7 +579,7 @@ impl HerdrWindow {
             }
         } else {
             let key = event.keystroke.key.as_str();
-            let count = self.endpoints.len() + 2 + usize::from(self.coder_configured());
+            let count = self.endpoints.len() + 2 + self.cloud_providers().len();
             match key {
                 "up" | "down" => {
                     let index = self.menu.selected.unwrap_or(0).min(count - 1);

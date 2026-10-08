@@ -73,6 +73,8 @@ pub enum Error {
         #[source]
         source: io::Error,
     },
+    #[error(transparent)]
+    Cloud(#[from] crate::cloud::Error),
     #[error("{0}")]
     Storage(#[source] Box<crate::Error>),
     #[error("Coder {0} worker stopped.")]

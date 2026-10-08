@@ -3,10 +3,11 @@
 //! on approval install) Herdr, and save the device. Each runs on a worker.
 
 use super::{
-    Error, Result, SavedWorkspace, Settings,
+    Error, Result, Settings,
     api::{self, Client, Preset, Progress, Template, User, Workspace},
-    catalog, connect, install, oauth, store,
+    connect, install, oauth, store,
 };
+use crate::cloud::{self, CloudProvider, SavedDevice};
 use secrecy::SecretString;
 
 pub(crate) use oauth::Pending;
@@ -91,9 +92,8 @@ pub(crate) fn sign_out(settings: &Settings) -> Result<()> {
 }
 
 pub(crate) fn account(settings: &Settings) -> Result<Account> {
-    let saved = catalog::load()?
+    let saved = saved_devices(settings)?
         .into_iter()
-        .filter(|saved| saved.deployment == settings.base)
         .map(|saved| saved.id)
         .collect();
     let tokens = tokens(settings);
@@ -187,17 +187,82 @@ pub(crate) fn save(
     ready: &Ready,
     label: &str,
     session: &str,
-) -> Result<SavedWorkspace> {
-    let workspace = SavedWorkspace {
+) -> Result<SavedDevice> {
+    let device = SavedDevice {
+        provider: CloudProvider::Coder,
         id: ready.id.clone(),
         label: label.trim().to_owned(),
-        deployment: settings.base.clone(),
-        name: ready.name.clone(),
+        account: settings.base.clone(),
+        machine: ready.name.clone(),
         session: session.to_owned(),
         enabled: true,
     };
-    catalog::save(workspace.clone())?;
-    Ok(workspace)
+    cloud::save(device.clone())?;
+    Ok(device)
+}
+
+/// This deployment's saved Coder devices.
+fn saved_devices(settings: &Settings) -> Result<Vec<SavedDevice>> {
+    Ok(cloud::load()?
+        .into_iter()
+        .filter(|saved| saved.provider == CloudProvider::Coder && saved.account == settings.base)
+        .collect())
+}
+
+/// The session every Coder device attaches to.
+const SESSION: &str = "default";
+
+/// What adding a Coder device needs from the dialog.
+pub(crate) struct AddRequest {
+    pub(crate) settings: Settings,
+    pub(crate) source: Source,
+    pub(crate) label: String,
+    /// The user approved running Herdr's installer if the workspace lacks it.
+    pub(crate) install: bool,
+}
+
+fn step(step: Step) -> cloud::Step {
+    match step {
+        Step::Creating => cloud::Step::Creating,
+        Step::Waiting(Progress::Starting) => cloud::Step::Starting,
+        Step::Waiting(Progress::Building(status)) => {
+            cloud::Step::Building(format!("{status:?}").to_lowercase())
+        }
+        Step::CheckingHerdr => cloud::Step::CheckingHerdr,
+    }
+}
+
+/// The whole job for `cloud::Jobs`: create or attach, wait, install if
+/// approved and needed, and save the device.
+pub(crate) fn add_device(
+    request: AddRequest,
+    cancelled: &dyn Fn() -> bool,
+    report: &dyn Fn(cloud::Step),
+) -> crate::Result<SavedDevice> {
+    let AddRequest {
+        settings,
+        source,
+        label,
+        install,
+    } = request;
+    let (ready, installed) = provision(&settings, source, cancelled, |s| report(step(s)))?;
+    if !installed {
+        if !install {
+            return Err(Error::Install(format!(
+                "Herdr is not installed in {}; add it and try again",
+                ready.name
+            ))
+            .into());
+        }
+        report(cloud::Step::InstallingHerdr);
+        self::install(&settings, &ready, cancelled)?;
+    }
+    let label = if label.is_empty() {
+        &ready.name
+    } else {
+        &label
+    };
+    Ok(save(&settings, &ready, label, SESSION)?)
 }
 
 /// The sign-in as Settings shows it.
@@ -220,14 +285,11 @@ pub(crate) struct Overview {
     /// Whether a client secret is saved from Settings.
     pub(crate) secret_saved: bool,
     /// This deployment's saved devices.
-    pub(crate) devices: Vec<SavedWorkspace>,
+    pub(crate) devices: Vec<SavedDevice>,
 }
 
 pub(crate) fn overview(settings: &Settings) -> Result<Overview> {
-    let devices = catalog::load()?
-        .into_iter()
-        .filter(|saved| saved.deployment == settings.base)
-        .collect();
+    let devices = saved_devices(settings)?;
     let secret_saved = store::client_secret(settings)?.is_some();
     let session = if store::signed_in(settings)? {
         match store::with_token(&tokens(settings), |token| Client::new(settings, token).me()) {
@@ -251,7 +313,7 @@ pub(crate) fn overview(settings: &Settings) -> Result<Overview> {
 
 /// Forget one saved device; its workspace is left untouched in Coder.
 pub(crate) fn forget_device(id: &str) -> Result<()> {
-    catalog::remove(id)
+    Ok(cloud::remove(CloudProvider::Coder, id)?)
 }
 
 /// Save (or with `None`, forget) the OAuth client secret typed into Settings.

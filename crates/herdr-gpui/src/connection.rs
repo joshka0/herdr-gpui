@@ -157,8 +157,8 @@ impl ConnectionBridge {
         let startup_inbox = self.inbox.clone();
         let result =
             connect_with_connector(target, options, surface_active, move |target, stop| {
-                if matches!(target, ConnectTarget::Coder { .. }) {
-                    return crate::coder::connect(target, stop);
+                if matches!(target, ConnectTarget::Cloud { .. }) {
+                    return crate::cloud::connect(target, stop);
                 }
                 let result = crate::daemon::connect(target, stop, || {
                     tracing::debug!("Connection bridge starting local daemon");

@@ -56,9 +56,9 @@ impl ConnectTarget {
         match self {
             Self::Ssh { target, .. } => Some(RemoteHost::Ssh(target.clone())),
             Self::Wsl { distro, .. } => Some(RemoteHost::Wsl(distro.clone())),
-            // A Coder workspace is reached only through `coder ssh`, which the
-            // host scripts that list and delete sessions do not run over.
-            Self::Coder { .. } | Self::Local | Self::Session { .. } | Self::Socket(_) => None,
+            // A cloud machine is reached only through its provider's command,
+            // which the host scripts that list and delete sessions do not use.
+            Self::Cloud { .. } | Self::Local | Self::Session { .. } | Self::Socket(_) => None,
         }
     }
 }

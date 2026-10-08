@@ -29,6 +29,25 @@ fn config_root(var: &impl Fn(&str) -> Option<OsString>) -> PathBuf {
         .unwrap_or_else(env::temp_dir)
 }
 
+/// A provider that creates machines used as endpoints. Closed: supporting
+/// another provider adds a variant, and every match that cares says so.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CloudProvider {
+    Coder,
+}
+
+impl CloudProvider {
+    pub const ALL: [Self; 1] = [Self::Coder];
+
+    /// The stable key used in saved files and endpoint IDs.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Coder => "coder",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum ConnectTarget {
     /// Environment overrides, then HERDR_SESSION in the release config directory.
@@ -40,12 +59,14 @@ pub enum ConnectTarget {
     Socket(PathBuf),
     /// Noninteractive SSH attachment to an installed remote Herdr (POSIX hosts).
     Ssh { target: String, session: String },
-    /// A Coder workspace, reached through `coder ssh` by the application's
-    /// connector, which holds the deployment credential. `workspace` is the
-    /// `coder ssh` target (`name` or `name.agent`).
-    Coder {
-        deployment: String,
-        workspace: String,
+    /// A machine a cloud provider created, reached through the application's
+    /// connector, which holds the provider's credential and builds the command
+    /// that runs the bridge there. `account` names the provider account or
+    /// deployment; `machine` is the provider's own name for the machine.
+    Cloud {
+        provider: CloudProvider,
+        account: String,
+        machine: String,
         session: String,
     },
     /// A WSL distribution on this Windows machine, attached through `wsl.exe`
@@ -86,20 +107,20 @@ pub fn session_socket(config_dir: &Path, name: &str) -> Result<PathBuf> {
 }
 
 impl ConnectTarget {
-    /// Whether the daemon runs on another machine, in a Coder workspace, or
-    /// inside a WSL distribution, so its paths, processes, and files are not
+    /// Whether the daemon runs on another machine, on a cloud provider's
+    /// machine, or inside a WSL distribution, so its paths, processes, and files are not
     /// this machine's.
     pub fn is_remote(&self) -> bool {
         matches!(
             self,
-            Self::Ssh { .. } | Self::Wsl { .. } | Self::Coder { .. }
+            Self::Ssh { .. } | Self::Wsl { .. } | Self::Cloud { .. }
         )
     }
 
     /// The session a remote target attaches to.
     pub fn remote_session(&self) -> Option<&str> {
         match self {
-            Self::Ssh { session, .. } | Self::Wsl { session, .. } | Self::Coder { session, .. } => {
+            Self::Ssh { session, .. } | Self::Wsl { session, .. } | Self::Cloud { session, .. } => {
                 Some(session)
             }
             _ => None,

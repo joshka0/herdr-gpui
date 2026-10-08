@@ -51,7 +51,7 @@ fn desired_selection_is_client_local_and_catalog_changes_cancel_stale_restore() 
         hosts: vec![host("a", enabled)],
         wsl: Vec::new(),
         selection,
-        workspaces: None,
+        cloud: None,
     };
     let mut first = Catalog::new(&ConnectTarget::Local);
     let mut second = Catalog::new(&ConnectTarget::Local);
@@ -80,18 +80,19 @@ fn desired_selection_is_client_local_and_catalog_changes_cancel_stale_restore() 
         hosts: vec![],
         wsl: Vec::new(),
         selection: None,
-        workspaces: None,
+        cloud: None,
     });
     assert_eq!(second.desired, None);
 }
 
 #[gpui::test]
-fn coder_workspaces_follow_ssh_hosts_and_survive_an_unreadable_list(cx: &mut gpui::TestAppContext) {
-    let workspace = |id: &str, enabled| crate::coder::SavedWorkspace {
+fn cloud_devices_follow_ssh_hosts_and_survive_an_unreadable_list(cx: &mut gpui::TestAppContext) {
+    let workspace = |id: &str, enabled| crate::cloud::SavedDevice {
+        provider: crate::cloud::CloudProvider::Coder,
         id: id.into(),
         label: format!("Coder {id}"),
-        deployment: "https://coder.example.com".into(),
-        name: format!("herdr-{id}"),
+        account: "https://coder.example.com".into(),
+        machine: format!("herdr-{id}"),
         session: "default".into(),
         enabled,
     };

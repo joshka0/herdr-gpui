@@ -16,6 +16,7 @@ mod caffeine;
 mod checkpoint;
 mod cli;
 mod close_modal;
+mod cloud;
 mod coder;
 mod config;
 mod config_diagnostic;

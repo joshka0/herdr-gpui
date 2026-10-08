@@ -92,7 +92,7 @@ impl Config {
 ///
 /// Local, named-session, and socket endpoints share this machine's files; an
 /// SSH endpoint's checkout is read with `cat` over the endpoint's SSH policy.
-/// A WSL distribution or a Coder workspace has no script host here yet, so it
+/// A WSL distribution or a cloud machine has no script host here yet, so it
 /// is refused rather than guessed at.
 pub(crate) fn read(
     target: &ConnectTarget,
@@ -104,7 +104,7 @@ pub(crate) fn read(
         ConnectTarget::Local | ConnectTarget::Session { .. } | ConnectTarget::Socket(_) => {
             read_local(&Path::new(checkout).join(PATH))?
         }
-        ConnectTarget::Wsl { .. } | ConnectTarget::Coder { .. } => {
+        ConnectTarget::Wsl { .. } | ConnectTarget::Cloud { .. } => {
             return Err(crate::Error::WorktreeScriptsUnsupportedHost);
         }
     };

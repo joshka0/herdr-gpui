@@ -57,8 +57,8 @@ enum Identity {
 }
 
 impl Daemon {
-    /// The daemon behind `target`, or `None` for a Coder workspace, whose
-    /// ports cannot be scanned without `coder ssh`.
+    /// The daemon behind `target`, or `None` for a cloud machine, whose ports
+    /// cannot be scanned without its provider's command.
     pub(crate) fn of(target: &ConnectTarget) -> Option<Self> {
         let host = Host::of(target)?;
         let identity = match target.remote_session() {

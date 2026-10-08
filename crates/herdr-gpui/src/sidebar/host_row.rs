@@ -42,7 +42,7 @@ impl HerdrWindow {
         let select_id = endpoint_id.clone();
         let menu_id = endpoint_id.clone();
         let removing = self.menu.removing_devices.contains(&endpoint.id);
-        // A Coder workspace has no host to read its load from.
+        // A cloud machine has no host to read its load from.
         let host = crate::usage::Host::of(&endpoint.connection.target);
         let load = host
             .as_ref()

@@ -4,7 +4,7 @@
 //! Runs on the connection worker; every wait observes `stop`.
 
 use super::{Error, Result, Settings, api, store};
-use herdr_client::{ConnectTarget, Transport};
+use herdr_client::Transport;
 use secrecy::{ExposeSecret, SecretString};
 use std::{
     io,
@@ -120,17 +120,15 @@ fn connect_workspace(
     herdr_client::connect_command(command, session, stop).map_err(Error::Bridge)
 }
 
-/// The connector for `ConnectTarget::Coder`. Configuration is read here, on
-/// the worker, so a deployment changed in the config file applies on retry.
-pub(crate) fn connect(target: &ConnectTarget, stop: &AtomicBool) -> io::Result<Transport> {
-    let ConnectTarget::Coder {
-        deployment,
-        workspace,
-        session,
-    } = target
-    else {
-        return Err(io::Error::other(Error::Field("Coder target")));
-    };
+/// Reach the Coder workspace `workspace` on `deployment` for `cloud::connect`.
+/// Configuration is read here, on the worker, so a deployment changed in the
+/// config file applies on retry.
+pub(crate) fn connect(
+    deployment: &str,
+    workspace: &str,
+    session: &str,
+    stop: &AtomicBool,
+) -> io::Result<Transport> {
     let result = crate::config::Config::load()
         .map_err(|error| Error::Storage(Box::new(error)))
         .and_then(|config| {
@@ -141,7 +139,7 @@ pub(crate) fn connect(target: &ConnectTarget, stop: &AtomicBool) -> io::Result<T
         })
         .and_then(|settings| {
             let settings = settings.ok_or(Error::Missing("url"))?;
-            if &settings.base != deployment {
+            if settings.base != deployment {
                 return Err(Error::Deployment);
             }
             connect_workspace(&settings, workspace, session, stop)

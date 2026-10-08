@@ -222,8 +222,8 @@ struct SettingsWindow {
     #[cfg(test)]
     layout_io: Option<layouts::LayoutIo>,
     remote_history: remote_history::RemoteHistory,
-    /// Built when Cloud Devices is first shown.
-    cloud: Option<cloud_devices::CloudDevices>,
+    /// The Coder card, built when Cloud Devices is first shown.
+    coder_card: Option<cloud_devices::CoderCard>,
     theme_loading: bool,
     theme_waiting: bool,
     theme_light: bool,
@@ -306,7 +306,7 @@ impl SettingsWindow {
             #[cfg(test)]
             layout_io: None,
             remote_history: Default::default(),
-            cloud: None,
+            coder_card: None,
             theme_loading: false,
             theme_waiting: false,
             theme_light: false,

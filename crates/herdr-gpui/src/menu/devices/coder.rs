@@ -1,16 +1,16 @@
 //! "Add Coder Workspace": sign in to the configured deployment and pick a
 //! template and preset (or an existing workspace). Creating hands the work to
-//! a window-level job (see `provisions`) and closes the dialog at once, so a
+//! a window-level job (see `cloud::Jobs`) and closes the dialog at once, so a
 //! slow build never blocks the next one. The dialog's own jobs (sign-in,
-//! listing, presets, removal) run through `coder::worker` and stop with it.
+//! listing, presets, removal) run through `cloud::worker` and stop with it.
 
-use super::{super::Page, provisions::Request};
+use super::super::Page;
 use crate::{
     HerdrWindow,
+    cloud::{CloudProvider, worker},
     coder::{
         Preset, Settings, Template, Workspace,
-        setup::{self, Account, Source},
-        worker,
+        setup::{self, Account, AddRequest, Source},
     },
     search_input::SearchInput,
 };
@@ -372,18 +372,21 @@ impl HerdrWindow {
                 )
             }
         };
-        if self.provisions.contains(&name) {
+        if self.cloud_jobs.contains(CloudProvider::Coder, &name) {
             self.menu.error = Some(format!("{name} is already being added."));
             cx.notify();
             return;
         }
-        let request = Request {
+        let request = AddRequest {
             settings: wizard.settings.clone(),
             source,
             label: wizard.label.read(cx).text().trim().to_owned(),
             install: wizard.install,
         };
-        match self.start_provision(name.clone(), request, cx) {
+        let work = move |cancelled: &dyn Fn() -> bool, report: &dyn Fn(crate::cloud::Step)| {
+            setup::add_device(request, cancelled, report)
+        };
+        match self.start_cloud_job(CloudProvider::Coder, name, work, cx) {
             // The footer's count and the picker's Adding list show progress.
             Ok(()) => self.dismiss_menu(window, cx),
             Err(error) => {

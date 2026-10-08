@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 use super::{
-    super::{Section, SettingsWindow},
-    Account, CoderConfig, CoderFields, SECRET_VARIABLE, SavedWorkspace, Session, configured_secret,
+    super::super::{Section, SettingsWindow},
+    Account, CoderConfig, CoderFields, SECRET_VARIABLE, SavedDevice, Session, configured_secret,
 };
 use gpui::{Entity, TestAppContext, VisualTestContext, px, size};
 
@@ -37,7 +37,7 @@ fn an_unconfigured_deployment_offers_its_fields_and_no_account_action(cx: &mut T
     assert!(cx.debug_bounds("cloud-coder-sign-in").is_none());
     assert!(cx.debug_bounds("cloud-coder-sign-out").is_none());
     view.read_with(cx, |view, cx| {
-        let cloud = view.cloud.as_ref().unwrap();
+        let cloud = view.coder_card.as_ref().unwrap();
         assert!(cloud.job.is_none(), "nothing to check without a deployment");
         assert_eq!(cloud.values(cx), CoderFields::default());
         assert!(cloud.secret.read(cx).text().is_empty());
@@ -49,7 +49,7 @@ fn a_signed_in_account_lists_its_devices_within_the_narrowest_window(cx: &mut Te
     let (view, cx) = open(cx);
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
-            let cloud = view.cloud.as_mut().unwrap();
+            let cloud = view.coder_card.as_mut().unwrap();
             cloud.fields[0].update(cx, |input, cx| {
                 input.set_text_selected("https://coder.example.com", cx)
             });
@@ -58,11 +58,12 @@ fn a_signed_in_account_lists_its_devices_within_the_narrowest_window(cx: &mut Te
             });
             cloud.secret_saved = true;
             cloud.devices = (0..3)
-                .map(|index| SavedWorkspace {
+                .map(|index| SavedDevice {
+                    provider: crate::cloud::CloudProvider::Coder,
                     id: format!("w{index}"),
                     label: format!("A long device label number {index} that must truncate"),
-                    deployment: "https://coder.example.com".into(),
-                    name: format!("herdr-box-{index}"),
+                    account: "https://coder.example.com".into(),
+                    machine: format!("herdr-box-{index}"),
                     session: "default".into(),
                     enabled: true,
                 })
@@ -82,7 +83,7 @@ fn a_signed_in_account_lists_its_devices_within_the_narrowest_window(cx: &mut Te
     }
     view.read_with(cx, |view, cx| {
         assert_eq!(
-            view.cloud.as_ref().unwrap().values(cx).url,
+            view.coder_card.as_ref().unwrap().values(cx).url,
             "https://coder.example.com"
         );
     });

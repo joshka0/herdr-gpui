@@ -68,7 +68,7 @@ impl Daemon {
             ConnectTarget::Session { name, .. } => Some(Self::Session(name.clone())),
             ConnectTarget::Ssh { .. }
             | ConnectTarget::Wsl { .. }
-            | ConnectTarget::Coder { .. }
+            | ConnectTarget::Cloud { .. }
             | ConnectTarget::Socket(_) => None,
         }
     }

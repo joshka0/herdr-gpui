@@ -334,6 +334,8 @@ pub enum Error {
     GitHubWorker(&'static str),
     #[error(transparent)]
     Coder(#[from] crate::coder::Error),
+    #[error(transparent)]
+    Cloud(#[from] crate::cloud::Error),
     #[error("{0}")]
     Config(#[source] config_loader::ConfigError),
     #[error("{source}")]
