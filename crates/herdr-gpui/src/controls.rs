@@ -26,6 +26,7 @@ pub enum Command {
     CloseTab,
     TabNumber(u8),
     ToggleSidebar,
+    ToggleStatusBar,
     IncreaseFontSize,
     DecreaseFontSize,
     ResetFontSize,
@@ -505,6 +506,12 @@ pub const COMMANDS: &[CommandInfo] = &[
         shortcuts: &["cmd-b"],
     },
     CommandInfo {
+        command: Command::ToggleStatusBar,
+        name: "toggle_status_bar",
+        label: "Toggle Status Bar",
+        shortcuts: &[],
+    },
+    CommandInfo {
         command: Command::IncreaseFontSize,
         name: "increase_font_size",
         label: "Increase Font Size",
@@ -741,6 +748,7 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::Find
         | Command::CopyMode
         | Command::ToggleSidebar
+        | Command::ToggleStatusBar
         | Command::IncreaseFontSize
         | Command::DecreaseFontSize
         | Command::ResetFontSize

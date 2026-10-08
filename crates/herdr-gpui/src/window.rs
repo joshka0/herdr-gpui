@@ -43,6 +43,8 @@ mod key_action_tests;
 #[cfg(all(test, feature = "integration-test"))]
 mod resize_tests;
 #[cfg(test)]
+mod status_bar_tests;
+#[cfg(test)]
 mod tests;
 
 #[cfg(feature = "integration-test")]
@@ -199,6 +201,9 @@ pub(crate) struct HerdrWindow {
     /// Herdr's `ui.sidebar_start_collapsed` still applies: no shared settings
     /// have loaded yet and the user has not toggled the sidebar since startup.
     pub(crate) sidebar_start_pending: bool,
+    /// Starts as `config.status_bar`; Toggle Status Bar flips it for the
+    /// session, and a reload that changes the setting applies it again.
+    pub(crate) status_bar_visible: bool,
     pub(crate) device_filter: Option<String>,
     pub(crate) wheel: WheelAccumulator,
     pub(crate) sidebar_width: Option<f32>,
@@ -673,6 +678,7 @@ impl HerdrWindow {
             update_preview: None,
             daemon_text: Default::default(),
             configured_terminal_size: config.terminal.size,
+            status_bar_visible: config.status_bar,
             gui_config_diagnostic: {
                 let mut diagnostic = crate::config_diagnostic::ConfigDiagnostic::default();
                 diagnostic.sync(config.diagnostic().as_deref());

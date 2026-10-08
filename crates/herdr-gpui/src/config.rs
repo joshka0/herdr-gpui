@@ -68,6 +68,8 @@ pub struct Config {
     pub show_agents: bool,
     /// CPU and memory of the selected host in the status bar.
     pub show_system_load: bool,
+    /// The bar at the window's foot; `toggle_status_bar` hides it for the session.
+    pub status_bar: bool,
     /// Snapshot a checkout's files each time one of its agents starts or
     /// finishes a turn, so they can be rolled back.
     pub agent_checkpoints: bool,
@@ -280,6 +282,7 @@ impl Default for Config {
             confirm_close_pane: true,
             show_agents: true,
             show_system_load: true,
+            status_bar: true,
             agent_checkpoints: true,
             show_listening_ports: true,
             contrast: Contrast::default(),
@@ -319,6 +322,7 @@ struct Settings {
     confirm_close_pane: Option<bool>,
     show_agents: Option<bool>,
     show_system_load: Option<bool>,
+    status_bar: Option<bool>,
     agent_checkpoints: Option<bool>,
     show_listening_ports: Option<bool>,
     contrast: Contrast,
@@ -642,6 +646,7 @@ impl Config {
         config.confirm_close_pane = settings.confirm_close_pane.unwrap_or(true);
         config.show_agents = settings.show_agents.unwrap_or(true);
         config.show_system_load = settings.show_system_load.unwrap_or(true);
+        config.status_bar = settings.status_bar.unwrap_or(true);
         config.agent_checkpoints = settings.agent_checkpoints.unwrap_or(true);
         config.show_listening_ports = settings.show_listening_ports.unwrap_or(true);
         config.contrast = settings.contrast;

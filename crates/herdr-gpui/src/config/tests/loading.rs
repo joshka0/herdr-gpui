@@ -396,3 +396,14 @@ fn refreshes_managed_config_and_loads_absolute_theme() -> anyhow::Result<()> {
     fs::remove_dir_all(directory)?;
     result
 }
+
+/// The status bar shows unless the file turns it off, as the example documents.
+#[test]
+fn status_bar_defaults_on_and_can_be_turned_off() -> anyhow::Result<()> {
+    assert!(Config::parse("")?.status_bar);
+    assert!(Config::parse("status_bar = true")?.status_bar);
+    let off = Config::parse("status_bar = false")?;
+    assert!(!off.status_bar);
+    assert!(off.unknown_keys.is_empty());
+    Ok(())
+}

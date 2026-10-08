@@ -40,6 +40,11 @@ show_agents = true
 # on its sidebar row. Connected remote hosts are read over SSH every couple of
 # seconds; false stops all sampling. Also under Settings > General.
 show_system_load = true
+# Show the status bar at the window's foot (usage, CPU and memory, ports, Theme,
+# Shortcuts, Report issue, version). Terminal > Toggle Status Bar, or a
+# `toggle_status_bar` binding below, hides it for the session; with it hidden
+# the window shows no connection indicator there.
+status_bar = true
 # Checkpoint a worktree each time one of its agents starts or finishes a turn,
 # locally or over SSH, so its files can be rolled back from the workspace
 # menu's Checkpoints. Snapshots include untracked (not ignored) files, live in
@@ -152,6 +157,7 @@ project_roots = []
 # close_tab = "cmd-shift-w"
 # focus_tab_1 = "cmd-1"   # through focus_tab_9 = "cmd-9"
 # toggle_sidebar = "cmd-b"
+# toggle_status_bar = "cmd-ctrl-b"   # unbound by default
 # increase_font_size = ["cmd-=", "cmd-+"]
 # decrease_font_size = "cmd--"
 # reset_font_size = "cmd-0"

@@ -728,7 +728,7 @@ impl Render for HerdrWindow {
                             .relative()
                             .child(content)
                             .children(self.render_notices(cx))
-                            .child(
+                            .when(self.status_bar_visible, |column| column.child(
                 div()
                     .id("connection-status")
                     .debug_selector(|| "connection-status".into())
@@ -968,7 +968,7 @@ impl Render for HerdrWindow {
                                 this.open_app_update(false, window, cx);
                             })),
                     ),
-                            ),
+                            )),
                     ),
             )
             .when(merged, |root| root.children(self.render_worktree_banner()))
