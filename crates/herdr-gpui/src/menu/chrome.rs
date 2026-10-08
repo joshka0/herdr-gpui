@@ -444,8 +444,9 @@ impl HerdrWindow {
                     // so the panel's own inset would cut those rules short.
                     // The device and session pickers scroll their own lists, so
                     // the panel around them stays put; a second scroller there
-                    // still had its padding to move through.
-                    let lists = matches!(page, Page::Devices | Page::Sessions);
+                    // still had its padding to move through. A session create or
+                    // delete form has no inner scroller and keeps the panel's.
+                    let lists = matches!(page, Page::Devices | Page::Sessions) && !session_modal;
                     panel
                         .when(!settled && !lists, |panel| panel.overflow_y_scroll())
                         .when(lists, |panel| panel.overflow_hidden())

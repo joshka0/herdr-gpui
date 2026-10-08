@@ -11,6 +11,8 @@ use crate::{
 use gpui::{Bounds, Entity, Modifiers, Pixels, TestAppContext, VisualTestContext, px, size};
 use herdr_client::{ConnectTarget, LocalSession, SessionState};
 
+mod form_scroll;
+
 /// A session as discovery reports it. The socket comes from the same path rules
 /// the window resolves, so no test hard-codes a home directory.
 fn session(name: &str, state: SessionState) -> LocalSession {
