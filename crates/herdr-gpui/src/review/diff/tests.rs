@@ -238,6 +238,66 @@ fn hidden_lines_above_a_hunk_are_found_and_shown() {
 }
 
 #[test]
+fn file_names_are_cleaned_for_display_but_kept_for_git() {
+    let mut file = FileDiff::new("evil\u{1b}[31m\u{202e}.rs".into(), Status::Untracked);
+    file.set_old_path("old\u{7}.rs".into());
+    assert_eq!(file.path, "evil[31m.rs");
+    assert_eq!(file.old_path.as_deref(), Some("old.rs"));
+    assert_eq!(file.git_path, "evil\u{1b}[31m\u{202e}.rs");
+    let request = Request::of(0, &file);
+    assert_eq!(request.git_path, file.git_path);
+}
+
+#[test]
+fn quoted_and_spaced_names_are_decoded_as_git_wrote_them() {
+    let diff = Diff::parse(concat!(
+        "diff --git \"a/tab\\there.rs\" \"b/tab\\there.rs\"\n",
+        "--- \"a/tab\\there.rs\"\n",
+        "+++ \"b/tab\\there.rs\"\n",
+        "@@ -1 +1 @@\n-a\n+b\n",
+        "diff --git a/with space.rs b/with space.rs\n",
+        "--- a/with space.rs\t\n",
+        "+++ b/with space.rs\t\n",
+        "@@ -1 +1 @@\n-a\n+b\n",
+        "diff --git \"a/caf\\303\\251 \\\"q\\\".rs\" \"b/caf\\303\\251 \\\"q\\\".rs\"\n",
+        "deleted file mode 100644\n",
+        "--- \"a/caf\\303\\251 \\\"q\\\".rs\"\n",
+        "+++ /dev/null\n",
+        "@@ -1 +0,0 @@\n-gone\n",
+    ));
+    let names: Vec<(&str, &str)> = diff
+        .files
+        .iter()
+        .map(|file| (file.git_path.as_str(), file.path.as_str()))
+        .collect();
+    assert_eq!(
+        names,
+        [
+            ("tab\there.rs", "tab    here.rs"),
+            ("with space.rs", "with space.rs"),
+            ("caf\u{e9} \"q\".rs", "caf\u{e9} \"q\".rs"),
+        ]
+    );
+    assert!(diff.files.iter().all(|file| file.lines().is_some()));
+}
+
+#[cfg(unix)]
+#[test]
+fn an_untracked_file_with_a_control_character_in_its_name_is_read() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().canonicalize().unwrap();
+    let checkout = path.to_str().unwrap().to_owned();
+    let name = "odd\u{1b}name.txt";
+    std::fs::write(path.join(name), "hello\n").unwrap();
+    let mut file = FileDiff::new(name.into(), Status::Untracked);
+    let source = load::Source::local(&checkout);
+    let read = bodies(&source, &[Request::of(0, &file)], false);
+    file.set_body(read.into_iter().next().unwrap().1);
+    assert_eq!(file.path, "oddname.txt");
+    assert_eq!(file.lines().unwrap().text(1), "hello");
+}
+
+#[test]
 fn lockfiles_are_known_by_name() {
     assert!(lockfile("Cargo.lock"));
     assert!(lockfile("web/package-lock.json"));

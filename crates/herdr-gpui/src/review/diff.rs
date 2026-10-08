@@ -220,6 +220,13 @@ fn offset(at: usize) -> u32 {
     u32::try_from(at).unwrap_or(u32::MAX)
 }
 
+/// A path as Git printed it, made safe to show and to quote.
+fn clean_path(path: &str) -> String {
+    let mut clean = String::new();
+    push_clean(&mut clean, path);
+    clean
+}
+
 /// Appends one line of untrusted text: tabs become spaces, controls and
 /// direction overrides go, and it is bounded.
 fn push_clean(buffer: &mut String, text: &str) {
@@ -334,10 +341,15 @@ pub(crate) enum Body {
 /// One changed file.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct FileDiff {
-    /// Relative to the checkout, after the change.
+    /// Relative to the checkout, after the change, cleaned for display and
+    /// for notes: a name is untrusted text.
     pub path: String,
-    /// Where a renamed file was.
+    /// Where a renamed file was, cleaned.
     pub old_path: Option<String>,
+    /// Both names as Git wrote them, only ever handed back to Git or the
+    /// file system.
+    git_path: String,
+    git_old_path: Option<String>,
     pub status: Status,
     /// Changed lines as Git counted them; `None` until known, or for a
     /// binary file.
@@ -349,16 +361,25 @@ pub(crate) struct FileDiff {
 }
 
 impl FileDiff {
+    /// A file Git named `path`.
     pub(crate) fn new(path: String, status: Status) -> Self {
         Self {
-            path,
+            path: clean_path(&path),
+            git_path: path,
             old_path: None,
+            git_old_path: None,
             status,
             added: None,
             removed: None,
             folded: false,
             body: Body::Pending,
         }
+    }
+
+    /// Where a renamed file was, as Git named it.
+    pub(crate) fn set_old_path(&mut self, old: String) {
+        self.old_path = Some(clean_path(&old));
+        self.git_old_path = Some(old);
     }
 
     pub(crate) fn lines(&self) -> Option<&Arc<Lines>> {
@@ -492,7 +513,9 @@ impl Diff {
                 .into_iter()
                 .map(|parsed| {
                     let mut file = FileDiff::new(parsed.path, parsed.status);
-                    file.old_path = parsed.old_path;
+                    if let Some(old) = parsed.old_path {
+                        file.set_old_path(old);
+                    }
                     file.set_body(parsed.body);
                     file
                 })

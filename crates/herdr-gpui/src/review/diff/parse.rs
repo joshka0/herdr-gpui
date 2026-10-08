@@ -1,9 +1,10 @@
 //! `git diff` output, made with `a/` and `b/` prefixes, as files and their
 //! numbered lines.
-use super::{Body, Kind, Lines, Status, push_clean};
+use super::{Body, Kind, Lines, Status};
 use std::sync::Arc;
 
-/// One file as the diff gave it.
+/// One file as the diff gave it. Its names are Git's, decoded but not
+/// cleaned: they match the listing's, and are cleaned where they are shown.
 #[derive(Debug)]
 pub(super) struct Parsed {
     pub path: String,
@@ -12,17 +13,71 @@ pub(super) struct Parsed {
     pub body: Body,
 }
 
-/// A path from a `---`/`+++` line or the `diff --git` header, without its
-/// `a/`/`b/` prefix or Git's quoting.
+/// A path from a `---`/`+++` line, the `diff --git` header or a rename
+/// line, without its `a/`/`b/` prefix. Git quotes a name holding a tab,
+/// newline, quote, backslash or control character, C-style, and ends an
+/// unquoted one holding a space with a tab; both are undone.
 pub(super) fn path(text: &str, prefix: &str) -> String {
     let text = text.trim_end_matches('\r');
-    let text = text
+    let name = match text
         .strip_prefix('"')
         .and_then(|text| text.strip_suffix('"'))
-        .unwrap_or(text);
-    let mut clean = String::new();
-    push_clean(&mut clean, text.strip_prefix(prefix).unwrap_or(text));
-    clean
+    {
+        Some(quoted) => unquote(quoted),
+        None => text.strip_suffix('\t').unwrap_or(text).to_owned(),
+    };
+    match name.strip_prefix(prefix) {
+        Some(rest) => rest.to_owned(),
+        None => name,
+    }
+}
+
+/// Git's C-style escapes in a quoted name: `\t`, `\n`, `\"`, `\\`, the
+/// other single-letter ones, and a byte as three octal digits.
+fn unquote(quoted: &str) -> String {
+    let mut bytes = Vec::with_capacity(quoted.len());
+    let mut rest = quoted.as_bytes();
+    while let [first, tail @ ..] = rest {
+        rest = tail;
+        if *first != b'\\' {
+            bytes.push(*first);
+            continue;
+        }
+        let [escape, tail @ ..] = rest else {
+            bytes.push(b'\\');
+            break;
+        };
+        rest = tail;
+        let byte = match escape {
+            b'a' => 0x07,
+            b'b' => 0x08,
+            b't' => b'\t',
+            b'n' => b'\n',
+            b'v' => 0x0b,
+            b'f' => 0x0c,
+            b'r' => b'\r',
+            b'0'..=b'3' => match rest {
+                [second @ b'0'..=b'7', third @ b'0'..=b'7', tail @ ..] => {
+                    rest = tail;
+                    ((escape - b'0') << 6) | ((second - b'0') << 3) | (third - b'0')
+                }
+                _ => *escape,
+            },
+            other => *other,
+        };
+        bytes.push(byte);
+    }
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+/// The new name in a `diff --git a/old b/new` header, quoted or not.
+fn header_name(header: &str) -> String {
+    let at = if header.ends_with('"') {
+        header.rfind(" \"b/")
+    } else {
+        header.rfind(" b/")
+    };
+    path(at.map_or(header, |at| &header[at + 1..]), "b/")
 }
 
 /// The starts of `@@ -a,b +c,d @@`: before and after the change.
@@ -117,12 +172,9 @@ pub(super) fn parse(text: &str) -> Vec<Parsed> {
         // `\`, so a header line can only start a new file.
         if let Some(header) = raw.strip_prefix("diff --git ") {
             files.extend(open.take().map(Open::close));
-            let name = header
-                .rfind(" b/")
-                .map_or(header, |index| &header[index + 1..]);
             open = Some(Open {
                 parsed: Parsed {
-                    path: path(name, "b/"),
+                    path: header_name(header),
                     old_path: None,
                     status: Status::Modified,
                     body: Body::Pending,

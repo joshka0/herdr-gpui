@@ -90,17 +90,19 @@ impl Loaded {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Request {
     pub file: usize,
-    pub path: String,
-    pub old_path: Option<String>,
-    pub untracked: bool,
+    /// The names as Git wrote them, for Git, the file system, and matching
+    /// the diff's own names.
+    pub(super) git_path: String,
+    git_old_path: Option<String>,
+    untracked: bool,
 }
 
 impl Request {
     pub(crate) fn of(index: usize, file: &FileDiff) -> Self {
         Self {
             file: index,
-            path: file.path.clone(),
-            old_path: file.old_path.clone(),
+            git_path: file.git_path.clone(),
+            git_old_path: file.git_old_path.clone(),
             untracked: file.status == Status::Untracked,
         }
     }
@@ -277,7 +279,9 @@ pub(crate) fn load(
                 .copied()
                 .unwrap_or(Status::Modified);
             let mut file = FileDiff::new(counted.path.clone(), status);
-            file.old_path = counted.old_path.clone();
+            if let Some(old) = counted.old_path.clone() {
+                file.set_old_path(old);
+            }
             file.added = counted.added.map(|added| added.min(u32::MAX.into()) as u32);
             file.removed = counted
                 .deleted
@@ -315,7 +319,7 @@ pub(crate) fn load(
     for file in &mut files {
         file.folded = file.status == Status::Deleted
             || lockfile(&file.path)
-            || generated.contains(file.path.as_str());
+            || generated.contains(file.git_path.as_str());
     }
     Ok(Loaded {
         source,
@@ -357,7 +361,7 @@ fn generated(checkout: &str, files: &[FileDiff]) -> HashSet<String> {
     let paths: Vec<&str> = files
         .iter()
         .take(ATTRIBUTE_FILES)
-        .map(|file| file.path.as_str())
+        .map(|file| file.git_path.as_str())
         .collect();
     for chunk in paths.chunks(ATTRIBUTE_CHUNK) {
         let mut args = vec!["check-attr", "-z", "linguist-generated", "--"];
@@ -415,7 +419,7 @@ pub(crate) fn bodies(source: &Source, requests: &[Request], asked: bool) -> Vec<
         requests.iter().partition(|request| request.untracked);
     let mut read: Vec<(usize, Body)> = fresh
         .into_iter()
-        .map(|request| (request.file, untracked(root, &request.path, asked)))
+        .map(|request| (request.file, untracked(root, &request.git_path, asked)))
         .collect();
     diff_files(source, &tracked, asked, &mut read);
     read
@@ -438,7 +442,7 @@ fn diff_files(source: &Source, files: &[&Request], asked: bool, read: &mut Vec<(
                 // A file Git printed no lines for, such as one whose only
                 // change was whitespace that is ignored, has none to show.
                 let body = parsed
-                    .remove(&file.path)
+                    .remove(&file.git_path)
                     .unwrap_or_else(|| Body::Loaded(Arc::new(Lines::default())));
                 read.push((file.file, body));
             }
@@ -485,9 +489,9 @@ fn diff_text(source: &Source, files: &[&Request], limit: usize) -> crate::Result
     }
     args.extend([source.revision.clone(), "--".into()]);
     for file in files {
-        args.push(budget::literal(&file.path));
+        args.push(budget::literal(&file.git_path));
         // A rename is only found with both its names.
-        if let Some(old) = &file.old_path {
+        if let Some(old) = &file.git_old_path {
             args.push(budget::literal(old));
         }
     }

@@ -216,3 +216,45 @@ fn a_change_of_a_hundred_thousand_lines_reads_in_batches() {
     // Every line, plus each file's hunk header.
     assert_eq!(total, 120_010);
 }
+
+/// Names Git quotes in a patch still find their lines.
+#[cfg(unix)]
+#[test]
+fn files_with_odd_names_are_read() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().canonicalize().unwrap();
+    let checkout = path.to_str().unwrap().to_owned();
+    git(&checkout, &["init", "-q", "-b", "main"]);
+    let names = [
+        "tab\there.rs",
+        "with space.rs",
+        "quote\"d.rs",
+        "back\\slash.rs",
+    ];
+    for name in names {
+        std::fs::write(path.join(name), "old\n").unwrap();
+    }
+    git(&checkout, &["add", "-A"]);
+    git(&checkout, &["commit", "-qm", "base"]);
+    for name in names {
+        std::fs::write(path.join(name), "new\n").unwrap();
+    }
+    let input = Input {
+        checkout: Some(checkout.clone()),
+        repo_key: Some(path.join(".git").to_str().unwrap().to_owned()),
+        branch: "main".into(),
+    };
+    let mut loaded = load(&input, Scope::Uncommitted, None, false).unwrap();
+    assert_eq!(loaded.diff.files.len(), names.len());
+    loaded.read_all();
+    for file in &loaded.diff.files {
+        let lines = file.lines().unwrap();
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.kind == Kind::Added && lines.text_of(line) == "new"),
+            "{}",
+            file.path
+        );
+    }
+}
