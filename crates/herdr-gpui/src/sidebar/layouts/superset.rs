@@ -86,7 +86,9 @@ fn shell(key: &str, state: RowState, indent: f32, line: Line<'_>, cx: &RowContex
 }
 
 /// The icon slot, with the status as a dot pinned to its top right corner in
-/// `dot`'s color, bold where symbols allow. `None` draws no dot.
+/// `dot`'s color, bold where symbols allow. `None` draws no dot. The dot stays
+/// inside the slot: the slot sets the line's height and the line clips, so a
+/// dot that overhangs the slot loses its top.
 fn slot(
     key: &str,
     glyph: impl IntoElement,
@@ -99,16 +101,18 @@ fn slot(
         if cx.indicators.style == crate::herdr_settings::IndicatorStyle::Symbols {
             return status_mark(status, cx.font, cx.indicators, color, bold)
                 .mt_0()
+                .debug_selector(|| format!("dot-{key}"))
                 .absolute()
-                .top(px(-2.))
-                .right(px(-2.))
+                .top_0()
+                .right_0()
                 .bg(rgb(theme.sidebar_background()));
         }
         let (diameter, filled, _) = status_style(status, theme);
         div()
+            .debug_selector(|| format!("dot-{key}"))
             .absolute()
-            .top(px(-2.))
-            .right(px(-2.))
+            .top_0()
+            .right_0()
             .size(px(diameter))
             .rounded_full()
             .border_1()
