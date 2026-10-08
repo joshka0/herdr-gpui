@@ -25,6 +25,7 @@ gpui_platform                  = { features = ["font-kit", "runtime_shaders", "w
 herdr-client.workspace         = true
 if-addrs.workspace             = true
 image                          = { features = ["bmp", "tiff"], workspace = true }
+keepawake.workspace            = true
 mdns-sd.workspace              = true
 nucleo-matcher.workspace       = true
 pbkdf2.workspace               = true

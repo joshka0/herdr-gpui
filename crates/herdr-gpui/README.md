@@ -541,6 +541,14 @@ every two seconds over its own SSH shell, kept open while the host is connected
 systems, and remote hosts from a Windows client, show it as unavailable. Set top-level `show_system_load = false`,
 or turn off **Show CPU and memory** in Settings, to hide it and stop sampling.
 
+The coffee cup in the status bar keeps this machine's display on and stops it
+from sleeping when idle, for as long as the cup is full; click it again to let
+go. It is app-wide, so every window shows the same cup. macOS holds power
+assertions (`pmset -g assertions` lists them), Windows sets the execution
+state (`powercfg /requests`), and Linux asks the session's
+`org.freedesktop.ScreenSaver` and logind (`systemd-inhibit --list`). Quitting
+or a crash lets go too. Closing a laptop lid still sleeps the machine.
+
 Workspaces that run a server show the TCP ports it listens on, as `:3000`
 chips on a line under the workspace's sidebar row and, for the focused
 workspace, in the status bar. Clicking one opens the page in a browser tab of
