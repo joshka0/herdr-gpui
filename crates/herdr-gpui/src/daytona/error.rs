@@ -39,6 +39,8 @@ pub enum Error {
     Cancelled,
     #[error("Daytona returned an SSH command this app does not understand.")]
     Gateway,
+    #[error("Daytona devices need ssh on the PATH; it could not be run.")]
+    SshMissing(#[source] io::Error),
     #[error("Could not prepare the SSH command for the Daytona gateway.")]
     GatewayFile(#[source] io::Error),
     #[error(

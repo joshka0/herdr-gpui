@@ -234,6 +234,9 @@ struct SettingsWindow {
     /// The provider whose tab Cloud Devices shows.
     #[cfg(feature = "cloud")]
     cloud_tab: crate::cloud::CloudProvider,
+    /// The main window's finished cloud jobs when the cards last read them.
+    #[cfg(feature = "cloud")]
+    cloud_jobs_seen: u64,
     #[cfg(feature = "coder")]
     coder_card: Option<cloud_devices::CoderCard>,
     #[cfg(feature = "daytona")]
@@ -322,6 +325,8 @@ impl SettingsWindow {
             remote_history: Default::default(),
             #[cfg(feature = "cloud")]
             cloud_tab: cloud_devices::first_tab(),
+            #[cfg(feature = "cloud")]
+            cloud_jobs_seen: 0,
             #[cfg(feature = "coder")]
             coder_card: None,
             #[cfg(feature = "daytona")]
@@ -360,7 +365,11 @@ impl SettingsWindow {
         }
     }
 
-    fn source_changed(&mut self, _source: Entity<HerdrWindow>, cx: &mut Context<Self>) {
+    fn source_changed(&mut self, source: Entity<HerdrWindow>, cx: &mut Context<Self>) {
+        #[cfg(feature = "cloud")]
+        self.cloud_source_changed(&source, cx);
+        #[cfg(not(feature = "cloud"))]
+        let _ = source;
         if self.section == Section::Integrations {
             cx.notify();
         }

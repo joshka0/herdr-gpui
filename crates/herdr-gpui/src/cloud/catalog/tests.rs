@@ -80,12 +80,17 @@ fn invalid_or_oversized_documents_are_rejected() {
             ..device("w")
         },
     ] {
-        assert!(write(&path, vec![bad]).is_err());
+        assert!(write(&path, vec![Entry::Known(bad)]).is_err());
     }
     for text in [
         r#"{"version":2,"devices":[]}"#,
         r#"{"version":1,"devices":[],"extra":1}"#,
-        r#"{"version":1,"devices":[{"provider":"nimbus","id":"w","label":"l","account":"a","machine":"m","session":"default","enabled":true}]}"#,
+        // A provider this build has, but an entry that is not one of its devices.
+        &format!(
+            r#"{{"version":1,"devices":[{{"provider":"{}","id":"w"}}]}}"#,
+            CloudProvider::ALL[0].key()
+        ),
+        r#"{"version":1,"devices":[{"provider":"../x","id":"w"}]}"#,
         "not json",
     ] {
         fs::write(&path, text).unwrap();
@@ -94,7 +99,27 @@ fn invalid_or_oversized_documents_are_rejected() {
     fs::write(&path, vec![b' '; LIMIT as usize + 1]).unwrap();
     assert!(read(&path).is_err());
     let many = (0..=MAX_DEVICES)
-        .map(|i| device(&format!("w{i}")))
+        .map(|i| Entry::Known(device(&format!("w{i}"))))
         .collect();
     assert!(write(&path, many).is_err());
+}
+
+#[test]
+fn another_builds_providers_are_kept_but_not_offered() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join(FILE);
+    let foreign = r#"{"provider":"nimbus","id":"n1","label":"Elsewhere","zone":"x"}"#;
+    fs::write(&path, format!(r#"{{"version":1,"devices":[{foreign}]}}"#)).unwrap();
+    assert!(read(&path).unwrap().is_empty());
+    save_in(&path, device("w1")).unwrap();
+    assert_eq!(read(&path).unwrap(), [device("w1")]);
+    remove_in(&path, CloudProvider::ALL[0], "w1").unwrap();
+    assert!(read(&path).unwrap().is_empty());
+    let text = fs::read_to_string(&path).unwrap();
+    let saved: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(
+        saved["devices"],
+        serde_json::json!([serde_json::from_str::<serde_json::Value>(foreign).unwrap()]),
+        "written back unchanged"
+    );
 }

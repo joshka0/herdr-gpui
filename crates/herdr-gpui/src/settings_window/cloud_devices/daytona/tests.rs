@@ -7,6 +7,15 @@ use crate::config::DaytonaConfig;
 use gpui::{Entity, TestAppContext, VisualTestContext, px, size};
 
 fn open(cx: &mut TestAppContext) -> (Entity<SettingsWindow>, &mut VisualTestContext) {
+    open_with_main(cx).0
+}
+
+type Opened<'a> = (
+    (Entity<SettingsWindow>, &'a mut VisualTestContext),
+    gpui::WindowHandle<crate::HerdrWindow>,
+);
+
+fn open_with_main(cx: &mut TestAppContext) -> Opened<'_> {
     let main = cx.add_window(crate::sidebar::layout_tests::fixture_window);
     let weak = cx.update(|cx| main.update(cx, |_, _, cx| cx.weak_entity()).unwrap());
     let (view, cx) = cx.add_window_view(|window, cx| {
@@ -25,7 +34,7 @@ fn open(cx: &mut TestAppContext) -> (Entity<SettingsWindow>, &mut VisualTestCont
             view.select_section(Section::CloudDevices, window, cx);
         })
     });
-    (view, cx)
+    ((view, cx), main)
 }
 
 fn draw(cx: &mut VisualTestContext) {
@@ -137,5 +146,36 @@ fn a_reloaded_config_updates_untouched_fields_and_keeps_edits(cx: &mut TestAppCo
         let values = view.daytona_card.as_ref().unwrap().values(cx);
         assert_eq!(values.api_url, "https://daytona.example.com/api");
         assert_eq!(values.target, "eu", "an unsaved edit is kept");
+    });
+}
+
+#[gpui::test]
+fn a_finished_cloud_job_refreshes_the_open_card(cx: &mut TestAppContext) {
+    let ((view, cx), main) = open_with_main(cx);
+    choose_daytona(&view, cx);
+    cx.update(|_, cx| {
+        view.update(cx, |view, _| {
+            view.daytona_card.as_mut().unwrap().account = Account::Known(Overview {
+                key: Key::Saved,
+                sandboxes: Some(Ok(5)),
+                devices: Vec::new(),
+            });
+        })
+    });
+    // The job saved a device in the main window, which then notifies.
+    cx.update(|_, cx| {
+        main.update(cx, |main, _, cx| {
+            main.cloud_jobs.finish_for_test();
+            cx.notify();
+        })
+        .unwrap();
+    });
+    cx.run_until_parked();
+    view.read_with(cx, |view, _| {
+        // Unconfigured here, so reading again resets the stale count.
+        let Account::Known(overview) = &view.daytona_card.as_ref().unwrap().account else {
+            panic!("the card read its account again");
+        };
+        assert!(overview.sandboxes.is_none());
     });
 }

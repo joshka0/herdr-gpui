@@ -5,7 +5,7 @@
 use super::{
     Result, Settings,
     api::{self, Readiness},
-    connect,
+    connect, gateway,
     http::Request,
     store,
 };
@@ -50,6 +50,8 @@ pub(crate) fn add_device(
         name,
         install,
     } = request;
+    // Fail before creating anything when the transport cannot run later.
+    gateway::check_ssh()?;
     let key = store::key(&settings)?;
     let request = Request {
         settings: &settings,

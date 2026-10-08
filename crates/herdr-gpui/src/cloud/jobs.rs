@@ -27,6 +27,9 @@ pub(crate) struct Job {
 pub(crate) struct Jobs {
     jobs: Vec<Job>,
     next: u64,
+    /// How many jobs have finished, so a view showing saved devices (such as
+    /// Settings) can tell when to read them again.
+    finished: u64,
 }
 
 impl Jobs {
@@ -36,6 +39,16 @@ impl Jobs {
 
     pub(crate) fn len(&self) -> usize {
         self.jobs.len()
+    }
+
+    pub(crate) fn finished(&self) -> u64 {
+        self.finished
+    }
+
+    /// Count a job as finished without running one.
+    #[cfg(all(test, feature = "daytona"))]
+    pub(crate) fn finish_for_test(&mut self) {
+        self.finished += 1;
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -100,6 +113,7 @@ impl HerdrWindow {
             Update::Step(step) => self.cloud_jobs.jobs[index].status = step.text(),
             Update::Finished(result) => {
                 let job = self.cloud_jobs.jobs.remove(index);
+                self.cloud_jobs.finished += 1;
                 let (name, noun) = (super::name(job.provider), super::noun(job.provider));
                 match result {
                     Ok(saved) => self.local_transfer_notice(

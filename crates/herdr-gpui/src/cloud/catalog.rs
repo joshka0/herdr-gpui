@@ -38,7 +38,40 @@ pub(crate) struct SavedDevice {
 #[serde(deny_unknown_fields)]
 struct Document {
     version: u32,
-    devices: Vec<SavedDevice>,
+    devices: Vec<Entry>,
+}
+
+/// One saved device. Builds differ in which providers they include, so an
+/// entry from a provider this build lacks is kept as it was written and
+/// written back unchanged, never offered; dropping it, or refusing the whole
+/// file, would lose devices the other build still uses.
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+enum Entry {
+    Known(SavedDevice),
+    Foreign(Foreign),
+}
+
+#[derive(Serialize, Deserialize)]
+struct Foreign {
+    provider: String,
+    #[serde(flatten)]
+    rest: serde_json::Map<String, serde_json::Value>,
+}
+
+impl Entry {
+    fn valid(&self) -> bool {
+        match self {
+            Self::Known(device) => device.valid(),
+            // A known provider's entry that did not parse is damaged, not foreign.
+            Self::Foreign(foreign) => {
+                plain(&foreign.provider, 32)
+                    && !CloudProvider::ALL
+                        .iter()
+                        .any(|provider| provider.key() == foreign.provider)
+            }
+        }
+    }
 }
 
 /// Provider IDs and machine names become endpoint IDs and command arguments,
@@ -97,7 +130,8 @@ fn io(path: &Path) -> impl FnOnce(io::Error) -> Error + '_ {
     }
 }
 
-fn read(path: &Path) -> Result<Vec<SavedDevice>> {
+/// Every entry in the file, including other builds' providers.
+fn read_entries(path: &Path) -> Result<Vec<Entry>> {
     let file = match fs::File::open(path) {
         Ok(file) => file,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -113,15 +147,26 @@ fn read(path: &Path) -> Result<Vec<SavedDevice>> {
     let document: Document = serde_json::from_slice(&bytes).map_err(Error::Json)?;
     if document.version != 1
         || document.devices.len() > MAX_DEVICES
-        || !document.devices.iter().all(SavedDevice::valid)
+        || !document.devices.iter().all(Entry::valid)
     {
         return Err(Error::Invalid(FILE));
     }
     Ok(document.devices)
 }
 
-fn write(path: &Path, devices: Vec<SavedDevice>) -> Result<()> {
-    if devices.len() > MAX_DEVICES || !devices.iter().all(SavedDevice::valid) {
+/// The devices this build can use.
+fn read(path: &Path) -> Result<Vec<SavedDevice>> {
+    Ok(read_entries(path)?
+        .into_iter()
+        .filter_map(|entry| match entry {
+            Entry::Known(device) => Some(device),
+            Entry::Foreign(_) => None,
+        })
+        .collect())
+}
+
+fn write(path: &Path, devices: Vec<Entry>) -> Result<()> {
+    if devices.len() > MAX_DEVICES || !devices.iter().all(Entry::valid) {
         return Err(Error::Invalid("cloud device"));
     }
     let parent = path.parent().ok_or(Error::StateDirectory)?;
@@ -158,18 +203,25 @@ pub(crate) fn save(device: SavedDevice) -> Result<()> {
 }
 
 pub(crate) fn remove(provider: CloudProvider, id: &str) -> Result<()> {
-    transaction(|path| {
-        let mut devices = read(path)?;
-        devices.retain(|saved| !(saved.provider == provider && saved.id == id));
-        write(path, devices)
-    })
+    transaction(|path| remove_in(path, provider, id))
+}
+
+fn remove_in(path: &Path, provider: CloudProvider, id: &str) -> Result<()> {
+    let mut devices = read_entries(path)?;
+    devices.retain(|entry| {
+        !matches!(entry, Entry::Known(saved) if saved.provider == provider && saved.id == id)
+    });
+    write(path, devices)
 }
 
 fn save_in(path: &Path, device: SavedDevice) -> Result<()> {
-    let mut devices = read(path)?;
-    match devices.iter_mut().find(|saved| saved.same(&device)) {
-        Some(saved) => *saved = device,
-        None => devices.push(device),
+    let mut devices = read_entries(path)?;
+    match devices
+        .iter_mut()
+        .find(|entry| matches!(entry, Entry::Known(saved) if saved.same(&device)))
+    {
+        Some(entry) => *entry = Entry::Known(device),
+        None => devices.push(Entry::Known(device)),
     }
     write(path, devices)
 }

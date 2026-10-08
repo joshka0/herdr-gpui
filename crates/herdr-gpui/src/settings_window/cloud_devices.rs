@@ -111,6 +111,20 @@ impl SettingsWindow {
         }
     }
 
+    /// A cloud job finishing in the main window may have saved a device, so
+    /// the cards read the device list and account again.
+    pub(super) fn cloud_source_changed(
+        &mut self,
+        source: &Entity<crate::HerdrWindow>,
+        cx: &mut Context<Self>,
+    ) {
+        let finished = source.read(cx).cloud_jobs.finished();
+        if finished != self.cloud_jobs_seen {
+            self.cloud_jobs_seen = finished;
+            self.cloud_config_changed(cx);
+        }
+    }
+
     fn cloud_tabs(&self, cx: &mut Context<Self>) -> Div {
         let mut tabs = div().flex().flex_wrap().gap(px(8.));
         for &provider in CloudProvider::ALL {
