@@ -286,9 +286,10 @@ impl HerdrWindow {
             "Copying..."
         };
         let accent = self.theme.primary();
-        // In the Herdr realm, clear of the VS Code column.
+        // Left of the VS Code column, however narrow, since its page would
+        // hide the card.
         let viewport = window.viewport_size().width;
-        let realm = self.herdr_realm().unwrap_or(viewport);
+        let realm = self.beside_code().unwrap_or(viewport);
         Some(
             div()
                 .id("file-transfer")

@@ -10,16 +10,21 @@ const MIN_REALM: f32 = 480.;
 
 impl HerdrWindow {
     /// The width of the Herdr realm, the window less the VS Code column,
-    /// while the column shows. Herdr's menus, dialogs, and toasts stay in
-    /// it: the VS Code page draws above GPUI, so it would hide them, and it
-    /// belongs to VS Code, which decides for itself what to dim. `None` when
-    /// the realm is the whole window.
+    /// while the column shows. Herdr's menus and dialogs stay in it: the
+    /// VS Code page draws above GPUI, so it would hide them, and it belongs
+    /// to VS Code, which decides for itself what to dim. `None` when the
+    /// realm is the whole window, as it is when too narrow for a dialog: the
+    /// page then steps aside for an open menu.
     pub(crate) fn herdr_realm(&self) -> Option<Pixels> {
-        if !self.shown_code() {
-            return None;
-        }
-        let realm = self.viewport_width - self.code_width.width(self.viewport_width);
-        (realm >= MIN_REALM).then(|| px(realm))
+        self.beside_code().filter(|realm| *realm >= px(MIN_REALM))
+    }
+
+    /// The width left of the VS Code column while it shows, however narrow.
+    /// Toasts and cards keep to it: no menu is open to make the page step
+    /// aside for them, so the page would hide them anywhere else.
+    pub(crate) fn beside_code(&self) -> Option<Pixels> {
+        self.shown_code()
+            .then(|| px(self.viewport_width - self.code_width.width(self.viewport_width)))
     }
 
     /// `groups`, beside the focused workspace's VS Code panel when it shows.
