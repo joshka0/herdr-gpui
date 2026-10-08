@@ -167,7 +167,8 @@ project_roots = []
 # command_palette = "cmd-shift-p"
 # open_notification_target = "cmd-alt-n"
 # quit = "cmd-q"
-# Unbound by default: themes, reconnect, logs, about.
+# Unbound by default: themes, reconnect, logs, about, worktree_notes,
+# edit_worktree_note.
 
 # What the focused pane receives instead of a keystroke, as Ghostty's text:
 # binds do. The value is a key a terminal can receive (ctrl-a, home, alt-b,
