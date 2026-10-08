@@ -114,42 +114,6 @@ pub(super) fn note(theme: &crate::config::Theme, size: f32) -> gpui::Div {
         )
 }
 
-/// A checkbox drawn like a native one: an outlined box when clear, a filled
-/// primary box with a check mark when set. Sized to the surrounding text.
-pub(super) fn checkbox(theme: &crate::config::Theme, size: f32, checked: bool) -> gpui::Div {
-    use gpui::{div, prelude::*, px, rgb, svg};
-    let fill = theme.primary();
-    // Same pick as the settings switch thumb: whichever theme ink reads better.
-    let ink = if crate::contrast::ratio(theme.background, fill)
-        >= crate::contrast::ratio(theme.foreground, fill)
-    {
-        theme.background
-    } else {
-        theme.foreground
-    };
-    div()
-        .size(px(size))
-        .flex_none()
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded(px(crate::config::corners::SMALL))
-        .border_1()
-        .when(checked, |mark| {
-            mark.bg(rgb(fill)).border_color(rgb(fill)).child(
-                svg()
-                    .path("icons/check.svg")
-                    .size(px(size - 4.))
-                    .text_color(rgb(crate::contrast::ink(
-                        ink,
-                        &[fill],
-                        theme.contrast.mark_ratio(),
-                    ))),
-            )
-        })
-        .when(!checked, |mark| mark.border_color(rgb(theme.muted)))
-}
-
 /// A checkout whose work was teleported to another host.
 pub(super) fn teleported(theme: &crate::config::Theme, size: f32) -> gpui::Div {
     use gpui::{Rgba, div, prelude::*, px, svg};
