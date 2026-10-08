@@ -205,6 +205,26 @@ second is removed, so exactly one remains. A terminal setup keeps its claim for
 15 minutes, because the GUI cannot see when its `machine add` finishes; another
 client adding the host during that window can still create a duplicate.
 
+Under the SSH target, **Nearby devices** suggests hosts to add. Opening the
+dialog starts one search, shown by a sliding bar, which lasts about five seconds;
+**Search again** repeats it. Suggestions come from three places, and a machine
+two of them name is listed once:
+
+- **SSH config**: concrete `Host` aliases in `~/.ssh/config` and the files it
+  `Include`s. Patterns, `Match` blocks, and git hosting services are skipped.
+- **Tailscale**: online peers from the local `tailscale status --json`, by their
+  MagicDNS name, on Linux, macOS, and BSD peers. Phones, TVs, and Windows peers
+  are left out. Tailscale not being installed is not an error.
+- **Bonjour**: hosts that advertise `_ssh._tcp` on the local network, such as a
+  Mac with Remote Login on or a Linux host whose Avahi publishes SSH. This
+  machine is skipped.
+
+Choosing a suggestion fills in the target with the user's own alias when there
+is one, then the Tailscale name, then the Bonjour host. Devices already saved
+are not suggested. Nothing is scanned: a host that runs SSH without announcing
+it, or that is on another subnet, appears only through SSH config or Tailscale.
+On macOS 15 and later the first search may ask for Local Network access.
+
 Right-click a saved SSH device's header in the Spaces list to **Rename** it or
 choose **Remove device…** to forget it. Renaming runs `herdr machine rename`;
 an empty name falls back to the SSH target, as when adding. Removal runs the installed `herdr machine remove`, which
