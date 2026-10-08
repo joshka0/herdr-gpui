@@ -41,6 +41,7 @@ fn waking_redials_dropped_endpoints_now_and_leaves_detached_ones(cx: &mut gpui::
                 crate::endpoint::tests::host("down", true),
                 crate::endpoint::tests::host("parked", true),
             ],
+            Vec::new(),
             cx,
         );
         let now = Instant::now();

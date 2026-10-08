@@ -29,8 +29,9 @@ pub enum SshFailure {
     /// The host could not be resolved or reached.
     #[error("the host is unreachable")]
     Unreachable,
-    /// The host has no Herdr that speaks this client's endpoint protocol.
-    #[error("no compatible Herdr is installed on the host")]
+    /// No Herdr was found in the known install locations. One that is
+    /// installed but cannot serve this client is `Error::BridgeIncompatible`.
+    #[error("no Herdr is installed on the host")]
     HerdrMissing,
     /// None of the above could be told from what `ssh` reported.
     #[error("check host trust, authentication, and remote Herdr installation")]
@@ -45,7 +46,7 @@ impl SshFailure {
     }
 
     /// `ssh` exits 255 for its own failures; the bridge script exits 127 when
-    /// no candidate binary was compatible. Any other status is the remote's.
+    /// it found no candidate binary at all. Any other status is the remote's.
     #[cfg(unix)]
     pub(super) fn classify(code: Option<i32>, stderr: &[u8]) -> Self {
         match code {

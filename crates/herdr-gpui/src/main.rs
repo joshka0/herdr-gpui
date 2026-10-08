@@ -13,6 +13,7 @@ mod avatars;
 mod bell;
 mod browser;
 mod caffeine;
+mod checkpoint;
 mod cli;
 mod close_modal;
 mod config;
@@ -54,6 +55,7 @@ mod menus;
 mod mockup;
 mod motion;
 mod navigation;
+mod new_tab_menu;
 mod notifications;
 mod osc52;
 mod palette;
@@ -93,6 +95,7 @@ mod window;
 mod window_state;
 mod worktree;
 mod worktree_banner;
+mod worktree_scripts;
 
 #[cfg(feature = "integration-test")]
 mod performance;

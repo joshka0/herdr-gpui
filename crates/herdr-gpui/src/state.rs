@@ -4,6 +4,10 @@ use herdr_client::{
 };
 use std::sync::Arc;
 
+mod agent_recency;
+
+use agent_recency::AgentRecency;
+
 pub(crate) type DialogResponse = Result<serde_json::Value, Arc<crate::Error>>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,6 +61,9 @@ pub struct LiveState {
     pub(crate) sound_cancel: Arc<std::sync::atomic::AtomicBool>,
     pub(crate) sound_connection_cancel: Arc<std::sync::atomic::AtomicBool>,
     pub snapshot: Option<Arc<ClientShellSnapshot>>,
+    /// When each of `snapshot`'s agents last changed, on a clock shared with
+    /// every other connection, so the agents panel can merge hosts by recency.
+    pub(crate) agent_recency: AgentRecency,
     /// The pane focused before the current one, in any workspace or tab of
     /// this daemon boot, for Herdr's `last_pane`.
     pub(crate) previous_pane: Option<String>,
@@ -68,6 +75,9 @@ pub struct LiveState {
     /// Why `ssh` refused the bridge, when that is how the connection ended.
     pub(crate) ssh_failure: Option<herdr_client::SshFailure>,
     pub missing_installation: bool,
+    /// Why the last handshake was refused, when updating one side fixes it.
+    /// Cleared by the next accepted handshake.
+    pub version_mismatch: Option<herdr_client::VersionMismatch>,
     /// Same-user peer at the owned standard socket, not executable attestation.
     pub(crate) local_daemon_peer: bool,
     /// `pane.clear` arrived after Herdr 0.9.1; older daemons reject it.
@@ -90,6 +100,10 @@ pub struct LiveState {
     pub(crate) supports_edit_scrollback: bool,
     pub dirty: bool,
     pub(crate) dialog_response: Option<(String, Option<DialogResponse>)>,
+    /// The one request a worktree script is waiting on (`worktree.list` or
+    /// `tab.create`), kept apart from dialogs so opening one cannot lose it.
+    /// Cleared from the mailbox once the script job has read it.
+    pub(crate) script_response: Option<(String, Option<DialogResponse>)>,
     pub(crate) notifications: std::collections::VecDeque<crate::notifications::Notice>,
     pub(crate) notifications_lost: bool,
     outer_focused: Option<bool>,
@@ -162,6 +176,7 @@ impl Default for LiveState {
             sound_cancel: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             sound_connection_cancel: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             snapshot: None,
+            agent_recency: AgentRecency::default(),
             previous_pane: None,
             surface: None,
             surface_images: Default::default(),
@@ -169,6 +184,7 @@ impl Default for LiveState {
             error: None,
             ssh_failure: None,
             missing_installation: false,
+            version_mismatch: None,
             local_daemon_peer: false,
             supports_pane_clear: false,
             supports_tab_move: false,
@@ -180,6 +196,7 @@ impl Default for LiveState {
             supports_edit_scrollback: false,
             dirty: true,
             dialog_response: None,
+            script_response: None,
             notifications: Default::default(),
             notifications_lost: false,
             keyboard_report_all: false,
@@ -211,6 +228,8 @@ impl LiveState {
             sound_cancel,
             sound_connection_cancel,
             snapshot,
+            // Changes only with `snapshot`, which is compared below.
+            agent_recency: _,
             previous_pane,
             surface: _,
             surface_images: _,
@@ -218,6 +237,7 @@ impl LiveState {
             error,
             ssh_failure,
             missing_installation,
+            version_mismatch,
             local_daemon_peer,
             supports_pane_clear,
             supports_tab_move,
@@ -229,6 +249,7 @@ impl LiveState {
             supports_edit_scrollback,
             dirty: _,
             dialog_response,
+            script_response,
             notifications,
             notifications_lost,
             outer_focused,
@@ -267,6 +288,7 @@ impl LiveState {
             && *error == self.error
             && *ssh_failure == self.ssh_failure
             && *missing_installation == self.missing_installation
+            && *version_mismatch == self.version_mismatch
             && *local_daemon_peer == self.local_daemon_peer
             && *supports_pane_clear == self.supports_pane_clear
             && *supports_tab_move == self.supports_tab_move
@@ -277,6 +299,10 @@ impl LiveState {
             && *supports_copy_motion == self.supports_copy_motion
             && *supports_edit_scrollback == self.supports_edit_scrollback
             && match (dialog_response, &self.dialog_response) {
+                (Some((a, None)), Some((b, None))) => a == b,
+                (a, b) => a.is_none() && b.is_none(),
+            }
+            && match (script_response, &self.script_response) {
                 (Some((a, None)), Some((b, None))) => a == b,
                 (a, b) => a.is_none() && b.is_none(),
             }
@@ -304,9 +330,10 @@ impl LiveState {
     }
 
     fn has_operation_result(&self, request_id: &str) -> bool {
-        self.dialog_response
-            .as_ref()
-            .is_some_and(|(id, _)| id == request_id)
+        [&self.dialog_response, &self.script_response]
+            .into_iter()
+            .flatten()
+            .any(|(id, _)| id == request_id)
             || [&self.tab_rename, &self.pane_rename]
                 .into_iter()
                 .flatten()
@@ -426,6 +453,7 @@ impl LiveState {
                             welcome.capabilities.iter().any(|value| value == capability)
                         });
                 self.missing_installation = false;
+                self.version_mismatch = None;
                 // The daemon reports the mode to each new connection.
                 self.keyboard_report_all = false;
                 self.status = ConnectionStatus::AwaitingSnapshot;
@@ -477,6 +505,12 @@ impl LiveState {
                         .or_else(|| self.previous_pane.take()),
                     _ => None,
                 };
+                // Pane IDs, and so each agent's history, belong to one boot.
+                let previous = self
+                    .snapshot
+                    .as_deref()
+                    .filter(|old| old.boot_id == snapshot.boot_id);
+                self.agent_recency.observe(previous, &snapshot);
                 self.snapshot = Some(snapshot);
             }
             ClientEvent::Surface(surface) => {
@@ -489,6 +523,8 @@ impl LiveState {
                 }
             }
             ClientEvent::SurfaceImages(images) => self.surface_images = images,
+            // The `Disconnected` that follows carries the reason text.
+            ClientEvent::VersionMismatch(mismatch) => self.version_mismatch = Some(mismatch),
             ClientEvent::Disconnected { reason, ssh } => {
                 self.ssh_failure = ssh;
                 self.settings_reload = false;
@@ -500,6 +536,7 @@ impl LiveState {
                 self.status = ConnectionStatus::Disconnected;
                 self.error = Some(reason);
                 self.snapshot = None;
+                self.agent_recency = AgentRecency::default();
                 self.surface = None;
                 self.announcement_dismissal = None;
                 self.surface_images = Default::default();
@@ -515,10 +552,13 @@ impl LiveState {
                     self.error = Some(reason.to_string());
                 }
                 let reason = Arc::new(crate::Error::Client(reason));
-                if let Some((id, result)) = &mut self.dialog_response
-                    && request_id.as_ref() == Some(id)
+                for (id, result) in [&mut self.dialog_response, &mut self.script_response]
+                    .into_iter()
+                    .flatten()
                 {
-                    *result = Some(Err(reason.clone()));
+                    if request_id.as_ref() == Some(id) {
+                        *result = Some(Err(reason.clone()));
+                    }
                 }
                 for rename in [&mut self.tab_rename, &mut self.pane_rename]
                     .into_iter()
@@ -586,6 +626,11 @@ impl LiveState {
                     && response.get("error").is_some_and(|error| !error.is_null())
                 {
                     self.announcement_dismissal = None;
+                }
+                if let Some((id, result)) = &mut self.script_response
+                    && *id == request_id
+                {
+                    *result = Some(Ok(response.clone()));
                 }
                 if let Some((id, result)) = &mut self.dialog_response
                     && *id == request_id
