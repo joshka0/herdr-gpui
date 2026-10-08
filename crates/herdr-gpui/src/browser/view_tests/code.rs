@@ -1,4 +1,5 @@
 use super::*;
+#[cfg(any(target_os = "macos", windows))]
 use crate::browser::code::Reach;
 use crate::{code_server::Server, controls::Command};
 use gpui::{Modifiers, MouseButton, point, px};
@@ -88,6 +89,7 @@ fn each_workspace_shows_its_own_panel_beside_its_groups(cx: &mut gpui::TestAppCo
 
 /// A page that could not be created is not retried every tick, and another
 /// tab's failure must not make it forget that.
+#[cfg(any(target_os = "macos", windows))]
 #[gpui::test]
 fn a_failed_vs_code_page_stays_failed_when_another_page_fails(cx: &mut gpui::TestAppContext) {
     let (view, cx) = window(cx);
@@ -139,8 +141,11 @@ fn a_failed_vs_code_page_stays_failed_when_another_page_fails(cx: &mut gpui::Tes
     assert!(cx.debug_bounds("code-placeholder").is_some());
 }
 
+// Only builds that show pages ask the server, so only they need answers.
+#[cfg(any(target_os = "macos", windows))]
 const COMMIT: &str = "2a59476c9bfcb90b3ddc372c36762471b7dfad1c";
 
+#[cfg(any(target_os = "macos", windows))]
 fn answers(_: &WebUrl) -> crate::Result<Server> {
     Ok(Server::from_version(COMMIT).unwrap())
 }
@@ -169,6 +174,7 @@ fn show_with(
 
 /// A server that does not answer is named in the panel, and asked again
 /// once a while has passed.
+#[cfg(any(target_os = "macos", windows))]
 #[gpui::test]
 fn an_unreachable_server_is_shown_and_asked_again(cx: &mut gpui::TestAppContext) {
     let (view, cx) = window(cx);
@@ -220,6 +226,7 @@ fn an_unreachable_server_is_shown_and_asked_again(cx: &mut gpui::TestAppContext)
 
 /// A new server address closes the pages still on the old one, so each
 /// workspace reopens VS Code on the new server.
+#[cfg(any(target_os = "macos", windows))]
 #[gpui::test]
 fn a_new_server_address_closes_pages_on_the_old_one(cx: &mut gpui::TestAppContext) {
     let (view, cx) = window(cx);
@@ -259,6 +266,7 @@ fn a_new_token_on_the_same_server_keeps_the_tabs(cx: &mut gpui::TestAppContext) 
 /// An answer is trusted only for a while: once the server stops, a panel
 /// opened in another space asks it again and says it cannot be reached,
 /// rather than showing a page that stays blank.
+#[cfg(any(target_os = "macos", windows))]
 #[gpui::test]
 fn a_new_panel_asks_the_server_again_once_an_answer_is_old(cx: &mut gpui::TestAppContext) {
     let (view, cx) = window(cx);
