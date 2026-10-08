@@ -1703,6 +1703,12 @@ Windows setup) nothing is saved and the window says so.
   end on one-line rows, Compact included. Minimal rows leave them off. They
   appear only while the daemon's `[ui.sidebar.spaces]` rows name `git_status`,
   as its defaults do, because the daemon computes them only then.
+- With several hosts listed, the Spaces list groups workspaces under a row per
+  host, and the row of the host whose workspaces are at the top of the
+  scrolled list stays pinned there, so you can always see which machine they
+  are on, until the next host's row pushes it out. The pinned copy works like
+  the row itself: click to select the host, use the arrow to collapse it, or
+  right-click for its menu.
 - Agents panel header ends with its sort, `grouped` or `priority`, which a
   click flips; an active agent view names itself there instead. Client-local
   and persisted beside the sidebar width, as in the terminal client. With
@@ -2125,9 +2131,14 @@ Windows setup) nothing is saved and the window says so.
   supplies the currently focused source workspace when available; tabs and splits
   target the current workspace/pane explicitly. An empty session can create a
   workspace without guessing a local path. Nothing is created while disconnected.
-- Vertical mouse-wheel/trackpad scrolling targets the pane under the pointer
-  (inside its content, not borders). Fractional pixel motion accumulates into
-  terminal lines, with bounded per-event work. Popups capture wheel input only
+- Mouse-wheel/trackpad scrolling targets the pane under the pointer (inside its
+  content, not borders). Fractional pixel motion accumulates into terminal
+  lines, and horizontal motion into columns, with bounded per-event work.
+  Horizontal scrolling reaches only a pane or popup whose application reports
+  the mouse, since Herdr has nothing else to do with it; sideways drift during a
+  mostly vertical swipe is ignored. Shift+wheel arrives already turned
+  horizontal by the platform (macOS, X11, Wayland), so it is sent as horizontal
+  motion with Shift held, not swapped back. Popups capture wheel input only
   within their displayed bounds; input never falls through to a covered pane.
 - Direct semantic cell canvas: named ANSI colors, indexed 256-color palette,
   RGB, reset foreground/background, reverse, dim, hidden, bold, italic,
@@ -2210,7 +2221,9 @@ Like the upstream TUI's normal wheel handling, this GUI instead sends semantic
 `ClientPaneInputEvent::Mouse` (`ScrollUp`/`ScrollDown`, pane-relative position,
 modifiers, and line count). The daemon's `apply_scroll` chooses host scrollback,
 alternate-screen behavior, or application mouse reporting using the current
-terminal mode. This avoids racing absolute `pane.scroll` offsets against incoming
+terminal mode. `ScrollLeft`/`ScrollRight` carry a column count but are only
+ever encoded as one wheel report for a mouse-reporting application, so the GUI
+sends them only to such a target. This avoids racing absolute `pane.scroll` offsets against incoming
 frames and avoids duplicating terminal-mode policy in the GUI. Scrolling does not
 change keyboard focus to the hovered pane. The existing client advertises no pixel
 mouse capability, so the daemon uses the supplied cell-coordinate fallback.
@@ -2231,8 +2244,7 @@ GPUI native action/menu/keybinding patterns.
   not synchronized from the host terminal's theme.
 - No draggable scrollback UI, split dragging,
   image rendering, or animated blinking.
-- No horizontal wheel handling,
-  server-owned keybindings, session picker, saved-host editing, or daemon
+- No server-owned keybindings, session picker, saved-host editing, or daemon
   stop/upgrade management.
 - IME uses a minimal transient buffer, not a local editable terminal document;
   composition appears in the status bar rather than inline. Key releases are
