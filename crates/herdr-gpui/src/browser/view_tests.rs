@@ -52,5 +52,9 @@ mod requests;
 /// Browser tabs in a group's strip: reordering and growing in.
 mod tab_strip;
 
+/// The panel beside the groups. No address is configured, so no native
+/// page is created and this runs on every platform.
+mod code;
+
 /// What closing a workspace does to its browser tabs.
 mod workspace_close;

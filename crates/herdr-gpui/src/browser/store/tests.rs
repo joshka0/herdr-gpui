@@ -171,6 +171,78 @@ fn an_agent_reopening_its_page_reuses_the_tab() {
 }
 
 #[test]
+fn a_workspace_has_one_panel_tab_kept_out_of_its_strips() {
+    let mut store = Store::default();
+    let (local, remote) = (Scope::endpoint("local"), Scope::endpoint("ssh:box"));
+    let page = url("http://127.0.0.1:8000/").unwrap();
+    let strip = store.open(local.clone(), "w_1", None, None).unwrap();
+    assert!(store.code_tab(&local, "w_1").is_none());
+    let panel = store
+        .open_code_tab(local.clone(), "w_1", page.clone())
+        .unwrap();
+    assert_ne!(panel, strip);
+    // Opening it again finds the same tab, wherever it went since.
+    store.visited(panel, url("http://127.0.0.1:8000/?folder=/x"), None);
+    assert_eq!(
+        store.open_code_tab(local.clone(), "w_1", page.clone()),
+        Some(panel)
+    );
+    assert_eq!(
+        store.get(panel).unwrap().location,
+        url("http://127.0.0.1:8000/?folder=/x")
+    );
+    // Each workspace of each daemon has its own.
+    let other = store
+        .open_code_tab(remote.clone(), "w_1", page.clone())
+        .unwrap();
+    assert_ne!(other, panel);
+    assert_eq!(store.code_tab(&local, "w_1").map(|tab| tab.id), Some(panel));
+    assert!(store.code_tab(&local, "w_2").is_none());
+    // Strips list only their own tabs.
+    let listed: Vec<_> = store
+        .in_workspace(&local, "w_1")
+        .map(|tab| tab.id)
+        .collect();
+    assert_eq!(listed, [strip]);
+    assert!(store.in_workspace(&remote, "w_1").next().is_none());
+    // An agent showing the same page gets a strip tab, not the panel.
+    assert_eq!(store.opened_before(&local, "w_1", None, &page), None);
+    // The panel goes with its workspace.
+    assert!(store.forget_workspaces(&local, &["w_1".to_owned()]));
+    assert!(store.code_tab(&local, "w_1").is_none());
+    assert!(store.code_tab(&remote, "w_1").is_some());
+}
+
+#[test]
+fn saved_panel_tabs_round_trip_and_older_files_hold_strip_tabs() {
+    let mut store = Store::default();
+    let scope = Scope::endpoint("local");
+    store
+        .open(scope.clone(), "w_1", url("https://a.test/"), None)
+        .unwrap();
+    store
+        .open_code_tab(scope.clone(), "w_1", url("http://127.0.0.1:8000/").unwrap())
+        .unwrap();
+    let bytes = serde_json::to_vec(&Saved {
+        tabs: store.tabs.clone(),
+    })
+    .unwrap();
+    let restored = Store::with_tabs(parse(&bytes).unwrap(), None);
+    assert_eq!(restored.tabs, store.tabs);
+    assert!(restored.code_tab(&scope, "w_1").is_some());
+    let old =
+        r#"{"tabs":[{"id":0,"scope":"local","workspace_id":"w","location":null,"title":""}]}"#;
+    let tabs = parse(old.as_bytes()).unwrap();
+    assert_eq!(tabs[0].place, Place::Group);
+    for invalid in [
+        r#"{"tabs":[{"id":0,"scope":"local","workspace_id":"w","location":null,"title":"","origin":"w:p1","place":"code"}]}"#,
+        r#"{"tabs":[{"id":0,"scope":"local","workspace_id":"w","location":null,"title":"","place":"sidebar"}]}"#,
+    ] {
+        assert!(parse(invalid.as_bytes()).is_err(), "{invalid}");
+    }
+}
+
+#[test]
 fn the_store_is_bounded() {
     let mut store = Store::default();
     for _ in 0..MAX_TABS {

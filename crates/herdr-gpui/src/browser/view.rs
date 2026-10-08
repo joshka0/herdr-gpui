@@ -60,6 +60,8 @@ pub(crate) struct Browser {
     /// per tab, so a failure elsewhere never clears another's and sets it
     /// retrying; bounded by the tabs the store keeps.
     pub(super) failed: HashMap<TabId, SharedString>,
+    /// Whether the VS Code server answers, asked before its pages open.
+    pub(super) code_server: super::code::CodeServer,
     /// The workspaces of the last snapshot and the boot they came from: one
     /// missing from the next snapshot of the same boot was closed.
     workspaces: Option<(Scope, String, HashSet<String>)>,
@@ -89,6 +91,7 @@ impl Browser {
             tab_scroll: Default::default(),
             group_motion: Default::default(),
             failed: HashMap::new(),
+            code_server: Default::default(),
             workspaces: None,
             #[cfg(any(target_os = "macos", windows))]
             annotations: Annotations::new(cx),
@@ -275,6 +278,7 @@ impl HerdrWindow {
         }
         self.forget_closed_workspaces(cx);
         self.forget_closed_herdr_tabs(cx);
+        self.ensure_code_page(window, cx);
         self.poll_deliveries(cx);
         self.poll_reviews(cx);
         self.sync_addresses(false, window, cx);

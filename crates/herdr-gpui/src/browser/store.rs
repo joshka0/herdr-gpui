@@ -46,6 +46,16 @@ impl Scope {
     }
 }
 
+/// Where a tab's page shows. Only `Group` tabs are listed in tab strips; a
+/// workspace's one `Code` tab shows in the VS Code panel beside its groups.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum Place {
+    #[default]
+    Group,
+    Code,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Tab {
     pub id: TabId,
@@ -59,6 +69,13 @@ pub(crate) struct Tab {
     /// go back to.
     #[serde(default)]
     pub origin: Option<String>,
+    /// Tabs saved before panels existed are all `Group` tabs.
+    #[serde(default, skip_serializing_if = "is_group")]
+    pub place: Place,
+}
+
+fn is_group(place: &Place) -> bool {
+    *place == Place::Group
 }
 
 impl Tab {
@@ -70,6 +87,8 @@ impl Tab {
                 .origin
                 .as_ref()
                 .is_none_or(|pane| !pane.is_empty() && pane.len() <= 256)
+            // No agent opens a VS Code tab, so none has notes to send back.
+            && (self.place == Place::Group || self.origin.is_none())
     }
 }
 
@@ -189,25 +208,59 @@ impl Store {
         self.tabs.iter().find(|tab| tab.id == id)
     }
 
-    /// The tabs of one workspace, in the order they were opened.
+    /// The tab strip tabs of one workspace, in the order they were opened.
     pub(crate) fn in_workspace<'a>(
         &'a self,
         scope: &'a Scope,
         workspace_id: &'a str,
     ) -> impl Iterator<Item = &'a Tab> + 'a {
-        self.tabs
-            .iter()
-            .filter(move |tab| &tab.scope == scope && tab.workspace_id == workspace_id)
+        self.tabs.iter().filter(move |tab| {
+            tab.place == Place::Group && &tab.scope == scope && tab.workspace_id == workspace_id
+        })
     }
 
-    /// Opens a tab, or returns `None` when the app already holds the most
-    /// it keeps.
+    /// The workspace's VS Code tab, if it has one.
+    pub(crate) fn code_tab(&self, scope: &Scope, workspace_id: &str) -> Option<&Tab> {
+        self.tabs.iter().find(|tab| {
+            tab.place == Place::Code && &tab.scope == scope && tab.workspace_id == workspace_id
+        })
+    }
+
+    /// Opens a tab for the strips, or returns `None` when the app already
+    /// holds the most it keeps.
     pub(crate) fn open(
         &mut self,
         scope: Scope,
         workspace_id: &str,
         location: Option<Location>,
         origin: Option<String>,
+    ) -> Option<TabId> {
+        self.push(scope, workspace_id, location, origin, Place::Group)
+    }
+
+    /// The workspace's VS Code tab, opened on `location` if it has none yet.
+    /// `None` when the app already holds the most tabs it keeps. Only builds
+    /// that show pages open one.
+    #[cfg(any(target_os = "macos", windows, test))]
+    pub(crate) fn open_code_tab(
+        &mut self,
+        scope: Scope,
+        workspace_id: &str,
+        location: Location,
+    ) -> Option<TabId> {
+        if let Some(tab) = self.code_tab(&scope, workspace_id) {
+            return Some(tab.id);
+        }
+        self.push(scope, workspace_id, Some(location), None, Place::Code)
+    }
+
+    fn push(
+        &mut self,
+        scope: Scope,
+        workspace_id: &str,
+        location: Option<Location>,
+        origin: Option<String>,
+        place: Place,
     ) -> Option<TabId> {
         if self.tabs.len() >= MAX_TABS {
             return None;
@@ -223,6 +276,7 @@ impl Store {
                 .map_or_else(|| "New Tab".to_owned(), Location::default_title),
             location,
             origin,
+            place,
         });
         self.save();
         Some(id)
@@ -241,7 +295,8 @@ impl Store {
         self.tabs
             .iter()
             .find(|tab| {
-                &tab.scope == scope
+                tab.place == Place::Group
+                    && &tab.scope == scope
                     && tab.workspace_id == workspace_id
                     && tab.origin.as_deref() == origin
                     && tab.location.as_ref() == Some(location)
@@ -332,6 +387,27 @@ impl Store {
             self.save();
         }
         changed
+    }
+
+    /// Closes the VS Code tabs, of every workspace, that are not on
+    /// `origin`, so each opens anew on the server now configured. Returns
+    /// the tabs closed.
+    pub(crate) fn close_code_tabs_off(&mut self, origin: &str) -> Vec<TabId> {
+        let off = |tab: &Tab| {
+            tab.place == Place::Code
+                && !matches!(&tab.location, Some(Location::Web { url }) if url.origin() == origin)
+        };
+        let gone: Vec<TabId> = self
+            .tabs
+            .iter()
+            .filter(|tab| off(tab))
+            .map(|tab| tab.id)
+            .collect();
+        if !gone.is_empty() {
+            self.tabs.retain(|tab| !off(tab));
+            self.save();
+        }
+        gone
     }
 
     /// Whether any tab belongs to one of `closed`, without claiming the

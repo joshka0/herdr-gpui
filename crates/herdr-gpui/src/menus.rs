@@ -244,6 +244,12 @@ pub(crate) fn menus(layout: Layout) -> Vec<Menu> {
                         command: Command::ToggleSidebar,
                     },
                 ),
+                MenuItem::action(
+                    "Toggle VS Code",
+                    RunCommand {
+                        command: Command::ToggleCode,
+                    },
+                ),
                 MenuItem::separator(),
                 MenuItem::action(
                     "Reconnect",

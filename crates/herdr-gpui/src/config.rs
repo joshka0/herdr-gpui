@@ -75,6 +75,7 @@ pub struct Config {
     pub usage: crate::usage::UsageConfig,
     pub option_as_alt: OptionAsAlt,
     pub open_links_in: LinkTarget,
+    pub code: CodeConfig,
     /// Whether a terminal selection stays highlighted, and readable by
     /// selection tools, after it is copied.
     pub keep_selection_after_copy: bool,
@@ -150,6 +151,16 @@ pub enum LinkTarget {
     System,
     /// A browser tab in the workspace, where the build can show pages.
     BrowserTab,
+}
+
+/// The VS Code panel beside a space's editor groups, served by
+/// `code serve-web`. Each space that shows it gets
+/// its own page, which starts at `url` and then goes wherever it navigates.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct CodeConfig {
+    /// `None` leaves the panel empty, with a hint to set it.
+    pub(crate) url: Option<crate::browser::WebUrl>,
 }
 
 /// Whether macOS Option sends Alt shortcuts to a pane or types the character
@@ -281,6 +292,7 @@ impl Default for Config {
             usage: crate::usage::UsageConfig::default(),
             option_as_alt: OptionAsAlt::default(),
             open_links_in: LinkTarget::default(),
+            code: CodeConfig::default(),
             keep_selection_after_copy: true,
             features: Features::default(),
             notifications: NotificationConfig::default(),
@@ -319,6 +331,7 @@ struct Settings {
     usage: crate::usage::UsageConfig,
     option_as_alt: OptionAsAlt,
     open_links_in: LinkTarget,
+    code: CodeConfig,
     keep_selection_after_copy: Option<bool>,
     sidebar: FontSettings,
     tabs: FontSettings,
@@ -641,6 +654,7 @@ impl Config {
         config.usage = settings.usage;
         config.option_as_alt = settings.option_as_alt;
         config.open_links_in = settings.open_links_in;
+        config.code = settings.code;
         config.keep_selection_after_copy = settings.keep_selection_after_copy.unwrap_or(true);
         for (name, font, settings) in [
             ("sidebar", &mut config.sidebar, settings.sidebar),

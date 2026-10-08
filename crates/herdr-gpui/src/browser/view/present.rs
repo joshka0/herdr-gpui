@@ -35,7 +35,8 @@ impl HerdrWindow {
         #[cfg(any(target_os = "macos", windows))]
         {
             use crate::menu::Cover;
-            let live = self.live_pages(cx);
+            let mut live = self.live_pages(cx);
+            live.extend(self.code_page(cx));
             if self.menu.page.is_none() {
                 self.browser.frozen.clear();
                 self.browser.pages.present(&live, cx);

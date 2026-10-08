@@ -96,6 +96,8 @@ pub(crate) struct Layout {
     groups: Vec<Group>,
     active: GroupId,
     clock: u64,
+    /// Whether the VS Code panel shows to the right of the groups.
+    pub(super) code: bool,
 }
 
 /// A layout as saved across restarts: each group's tab and width, left to
@@ -189,6 +191,7 @@ impl Layout {
             groups,
             active,
             clock: 1,
+            code: false,
         }
     }
 
@@ -204,6 +207,7 @@ impl Layout {
             }],
             active: id,
             clock: 0,
+            code: false,
         }
     }
 

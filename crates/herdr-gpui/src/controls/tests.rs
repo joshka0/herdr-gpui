@@ -10,7 +10,7 @@ fn snapshot() -> ClientShellSnapshot {
 #[test]
 fn catalog_has_all_native_commands_and_gpui_shortcuts() {
     use Command::*;
-    let expected: [(Command, &[&str]); 87] = [
+    let expected: [(Command, &[&str]); 88] = [
         (OpenNotificationTarget, &["cmd-alt-n"]),
         (Logs, &[]),
         (NewWindow, &["cmd-alt-shift-n"]),
@@ -98,6 +98,7 @@ fn catalog_has_all_native_commands_and_gpui_shortcuts() {
         (NewBrowserTab, &[]),
         (InstallBrowserSkill, &[]),
         (SplitEditor, &["cmd-\\"]),
+        (ToggleCode, &[]),
     ];
     assert_eq!(COMMANDS.len(), expected.len());
     let shortcuts: std::collections::HashSet<_> =
@@ -167,6 +168,7 @@ fn gui_commands_never_send_daemon_requests() {
         Command::NewBrowserTab,
         Command::InstallBrowserSkill,
         Command::SplitEditor,
+        Command::ToggleCode,
         Command::RenameTab,
         Command::LastPane,
         Command::ResizeMode,

@@ -3,6 +3,7 @@ use anyhow::Context as _;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 mod bold_color;
+mod code;
 mod default_fonts;
 mod discovery;
 mod fonts;
