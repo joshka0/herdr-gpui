@@ -20,6 +20,10 @@ pub(crate) enum Page {
     RemoveDevice,
     /// Sign in to Coder and add one of its workspaces as a device.
     AddCoder,
+    /// Picking a WSL distribution to save as a device.
+    AddWsl,
+    /// Confirming a saved WSL distribution should be forgotten.
+    RemoveWsl,
     Keybinds,
     Themes,
     Fonts,
@@ -28,12 +32,16 @@ pub(crate) enum Page {
     Update,
     AppUpdate,
     Install,
+    /// A daemon refused the handshake until one side is updated.
+    VersionMismatch,
     /// The one-time offer to install the agent skill for browser tabs.
     AgentSkill,
     Tab,
     RenameTab,
     /// A group's "…" menu: closing tabs and splitting.
     Group,
+    /// A group's "+" menu: the kinds of tab to open in it.
+    NewTab,
     Pane,
     RenamePane,
     /// The processes under the pane menu's pane.
@@ -57,6 +65,8 @@ pub(crate) enum Page {
     Checkpoints,
     /// One prompt sent to several agents, and their comparison.
     FanOut,
+    /// Asks whether to trust a repository's worktree script before it runs.
+    WorktreeScript,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -91,6 +101,8 @@ pub(crate) enum WorkspaceMenuAction {
     Checkpoints,
     /// Send one prompt to several agents, or reopen their comparison.
     FanOut,
+    /// Run one of the repository's worktree scripts in a new tab.
+    Script(crate::worktree_scripts::ScriptKind),
 }
 
 impl WorkspaceMenuAction {
@@ -113,6 +125,8 @@ impl WorkspaceMenuAction {
             Self::ClearTeleported => "icons/x.svg",
             Self::Checkpoints => "icons/refresh.svg",
             Self::FanOut => "icons/fan-out.svg",
+            Self::Script(crate::worktree_scripts::ScriptKind::Setup) => "icons/refresh.svg",
+            Self::Script(_) => "icons/play.svg",
             Self::PullRequest => return None,
         })
     }

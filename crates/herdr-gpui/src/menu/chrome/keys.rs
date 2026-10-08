@@ -128,6 +128,10 @@ impl HerdrWindow {
             self.group_menu_key(event, window, cx);
             return;
         }
+        if self.menu.page == Some(Page::NewTab) {
+            self.new_tab_menu_key(event, window, cx);
+            return;
+        }
         if matches!(
             self.menu.page,
             Some(Page::Pane | Page::RenamePane | Page::PaneProcesses | Page::KillProcesses)
@@ -140,6 +144,14 @@ impl HerdrWindow {
         {
             cx.stop_propagation();
             window.prevent_default();
+            return;
+        }
+        if self.menu.page == Some(Page::AddWsl) {
+            self.add_wsl_key(event, window, cx);
+            return;
+        }
+        if self.menu.page == Some(Page::RemoveWsl) {
+            self.remove_wsl_key(event, window, cx);
             return;
         }
         if matches!(self.menu.page, Some(Page::Devices | Page::AddDevice)) {
@@ -301,6 +313,9 @@ impl HerdrWindow {
             }
             "enter" if self.menu.page == Some(Page::AgentSkill) => {
                 self.install_browser_skill(window, cx);
+            }
+            "enter" if self.menu.page == Some(Page::VersionMismatch) => {
+                self.act_on_version_mismatch(window, cx);
             }
             "enter" if self.menu.page == Some(Page::Install) => {
                 cx.open_url(crate::about::WEBSITE);

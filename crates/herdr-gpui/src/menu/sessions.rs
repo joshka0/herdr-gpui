@@ -68,6 +68,7 @@ impl Entry {
 fn target_session(target: &ConnectTarget) -> String {
     match target {
         ConnectTarget::Ssh { session, .. }
+        | ConnectTarget::Wsl { session, .. }
         | ConnectTarget::Coder { session, .. }
         | ConnectTarget::Session { name: session, .. } => session.clone(),
         ConnectTarget::Socket(path) => path.display().to_string(),
@@ -247,10 +248,10 @@ impl HerdrWindow {
                 text: note,
             });
         }
-        if let ConnectTarget::Ssh { target, .. } = &endpoint.connection.target {
+        if let Some(host) = endpoint.connection.target.remote_host() {
             entries.push(self.add_session_entry(management::Target::Device {
                 id: endpoint.id.clone(),
-                host: target.clone(),
+                host,
             }));
         }
     }
@@ -321,15 +322,16 @@ impl HerdrWindow {
     ) -> AnyElement {
         let theme = &self.theme;
         let font = &self.config.ui;
-        let matches_target = |target: &ConnectTarget| {
-            match (&choice, target) {
-                (Row::Local(name), ConnectTarget::Session { name: deleted, .. }) => name == deleted,
-                (Row::Device { id, session }, ConnectTarget::Ssh { target, session: deleted }) => {
-                    session == deleted && self.endpoints.iter().any(|endpoint| endpoint.id == *id
-                        && matches!(&endpoint.connection.target, ConnectTarget::Ssh { target: host, .. } if host == target))
-                }
-                _ => false,
+        let matches_target = |target: &ConnectTarget| match (&choice, target) {
+            (Row::Local(name), ConnectTarget::Session { name: deleted, .. }) => name == deleted,
+            (Row::Device { id, session }, target) if target.is_remote() => {
+                target.remote_session() == Some(session.as_str())
+                    && self.endpoints.iter().any(|endpoint| {
+                        endpoint.id == *id
+                            && endpoint.connection.target.remote_host() == target.remote_host()
+                    })
             }
+            _ => false,
         };
         let deleting = self
             .sessions
@@ -564,6 +566,8 @@ impl HerdrWindow {
                 for revealed in &self.sidebar_revealed {
                     revealed.set(None);
                 }
+                // The row a reveal left for the next frame is in the old list.
+                self.sidebar_pin_reveal.set(None);
             }
             // A device row is one of that device's sessions, so it retargets the
             // device rather than adding an endpoint for every session it runs.
@@ -590,6 +594,8 @@ impl HerdrWindow {
                 for revealed in &self.sidebar_revealed {
                     revealed.set(None);
                 }
+                // The row a reveal left for the next frame is in the old list.
+                self.sidebar_pin_reveal.set(None);
             }
         }
     }

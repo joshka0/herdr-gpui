@@ -2,7 +2,7 @@
 //! the caller's thread; failures arrive as events rather than as a return value.
 
 use crate::{
-    ConnectTarget, Result, catalog,
+    ConnectTarget, Error, Result, catalog,
     discovery::session_socket,
     event::{ClientEvent, deliver},
     handle::{Client, ClientHandle, HandleInner},
@@ -12,6 +12,7 @@ use crate::{
     session::run_connection,
     ssh::{self, Bridge},
     transport::Stream,
+    wsl,
 };
 use crossbeam_channel::bounded;
 use std::{
@@ -63,9 +64,9 @@ impl From<Bridge> for Transport {
     }
 }
 
-/// Connect using application-specific setup on the I/O worker. SSH targets
-/// always use the built-in remote bridge; local and Coder targets use the
-/// connector. The connector should observe `stop` during waits so detach
+/// Connect using application-specific setup on the I/O worker. SSH and WSL
+/// targets always use the built-in remote bridge; local and Coder targets use
+/// the connector. The connector should observe `stop` during waits so detach
 /// cancels setup.
 pub fn connect_with_connector<T: Into<Transport>>(
     target: ConnectTarget,
@@ -79,6 +80,7 @@ pub fn connect_with_connector<T: Into<Transport>>(
             catalog::validate_target(target)?;
             session_socket(std::path::Path::new(""), session)?;
         }
+        ConnectTarget::Wsl { distro, session } => wsl::validate(distro, session)?,
         ConnectTarget::Coder { session, .. } => {
             session_socket(std::path::Path::new(""), session)?;
         }
@@ -93,6 +95,7 @@ pub fn connect_with_connector<T: Into<Transport>>(
         .spawn(move || {
             let transport = match target {
                 ConnectTarget::Ssh { .. } => "ssh",
+                ConnectTarget::Wsl { .. } => "wsl",
                 ConnectTarget::Coder { .. } => "coder",
                 _ => "local",
             };
@@ -103,6 +106,10 @@ pub fn connect_with_connector<T: Into<Transport>>(
                 let (stream, child) = match &target {
                     ConnectTarget::Ssh { target, session } => {
                         let (stream, child) = ssh::connect(target, session, &worker_stop)?;
+                        (stream, Some(child))
+                    }
+                    ConnectTarget::Wsl { distro, session } => {
+                        let (stream, child) = wsl::connect(distro, session, &worker_stop)?;
                         (stream, Some(child))
                     }
                     _ => match connector(&target, &worker_stop)?.into() {
@@ -129,6 +136,9 @@ pub fn connect_with_connector<T: Into<Transport>>(
                 tracing::info!("connection ended");
             }
             if !worker_stop.load(Ordering::Acquire) {
+                if let Some(mismatch) = result.as_ref().err().and_then(Error::version_mismatch) {
+                    let _ = deliver(&tx, ClientEvent::VersionMismatch(mismatch), &worker_stop);
+                }
                 let reason = result
                     .err()
                     .map(|e| {

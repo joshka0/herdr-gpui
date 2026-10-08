@@ -17,6 +17,7 @@ mod sessions;
 mod settings;
 mod state;
 mod teleport;
+mod version_mismatch;
 mod whats_new;
 mod workspace;
 mod workspace_close;
@@ -30,6 +31,8 @@ mod announcement_tests;
 mod font_size_tests;
 #[cfg(test)]
 mod sessions_tests;
+#[cfg(test)]
+mod version_mismatch_tests;
 #[cfg(test)]
 pub(crate) mod workspace_tests;
 #[cfg(test)]
@@ -45,9 +48,11 @@ pub(crate) use {
     colors::{accent, danger, online, teleported, tint},
     page::{Page, WorkspaceAction},
     state::{MenuState, Removal},
+    version_mismatch::Notice as VersionNotice,
     worktree_source::WorktreeSource,
 };
 
+pub(crate) use devices::enter as enter_key;
 use page::WorkspaceMenuAction;
 use state::Submission;
 use workspace::WorkspaceTarget;

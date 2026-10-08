@@ -275,12 +275,14 @@ impl HerdrWindow {
                 | Page::Tab
                 | Page::RenameTab
                 | Page::Group
+                | Page::NewTab
                 | Page::Pane
                 | Page::RenamePane
                 | Page::PaneProcesses
                 | Page::KillProcesses
                 | Page::Host
                 | Page::RemoveDevice
+                | Page::RemoveWsl
                 | Page::Git
                 | Page::GitCommit
                 | Page::PrReview
@@ -377,12 +379,14 @@ impl HerdrWindow {
                     Page::Tab
                         | Page::RenameTab
                         | Page::Group
+                        | Page::NewTab
                         | Page::Pane
                         | Page::RenamePane
                         | Page::PaneProcesses
                         | Page::KillProcesses
                         | Page::Host
                         | Page::RemoveDevice
+                        | Page::RemoveWsl
                 ),
                 |panel| {
                     panel
@@ -395,7 +399,7 @@ impl HerdrWindow {
                             } else if page == Page::PaneProcesses {
                                 // Name, command, pid, CPU and memory columns.
                                 560.
-                            } else if page == Page::Group {
+                            } else if matches!(page, Page::Group | Page::NewTab) {
                                 240.
                             } else {
                                 360.
@@ -432,6 +436,7 @@ impl HerdrWindow {
                         | Page::AppUpdate
                         | Page::GitHub
                         | Page::AddDevice
+                        | Page::AddWsl
                         | Page::Usage(_)
                         | Page::RenameDevice
                         | Page::AddCoder
@@ -468,16 +473,23 @@ impl HerdrWindow {
                     .overflow_hidden()
                     .shadow_lg()
             })
-            .when(matches!(page, Page::Install | Page::AgentSkill), |panel| {
-                panel
-                    .w((viewport.width - px(24.)).max(px(0.)).min(px(420.)))
-                    .max_h((viewport.height - px(24.)).max(px(0.)))
-            })
+            .when(
+                matches!(
+                    page,
+                    Page::Install | Page::AgentSkill | Page::VersionMismatch
+                ),
+                |panel| {
+                    panel
+                        .w((viewport.width - px(24.)).max(px(0.)).min(px(420.)))
+                        .max_h((viewport.height - px(24.)).max(px(0.)))
+                },
+            )
             .when(
                 matches!(
                     page,
                     Page::AppUpdate
                         | Page::AddDevice
+                        | Page::AddWsl
                         | Page::RenameDevice
                         | Page::ForwardPort
                         | Page::AddCoder
@@ -548,6 +560,10 @@ impl HerdrWindow {
             panel = panel.child(self.render_add_device(cx));
         } else if page == Page::AddCoder {
             panel = panel.child(self.render_add_coder(cx));
+        } else if page == Page::AddWsl {
+            panel = panel.child(self.render_add_wsl(cx));
+        } else if page == Page::RemoveWsl {
+            panel = panel.child(self.render_remove_wsl(cx));
         } else if page == Page::GitHub {
             panel = panel.child(self.render_github_auth(cx));
         } else if page == Page::Workspace {
@@ -584,6 +600,8 @@ impl HerdrWindow {
             panel = panel.child(self.render_tab_menu(cx));
         } else if page == Page::Group {
             panel = panel.child(self.render_group_menu(cx));
+        } else if page == Page::NewTab {
+            panel = panel.child(self.render_new_tab_menu(cx));
         } else if matches!(
             page,
             Page::Pane | Page::RenamePane | Page::PaneProcesses | Page::KillProcesses
@@ -607,6 +625,10 @@ impl HerdrWindow {
             panel = panel.child(self.render_about(cx));
         } else if page == Page::AgentSkill {
             panel = panel.child(self.render_agent_skill_offer(cx));
+        } else if page == Page::VersionMismatch {
+            panel = panel.child(self.render_version_mismatch(cx));
+        } else if page == Page::WorktreeScript {
+            panel = panel.child(self.render_worktree_script(cx));
         } else if page == Page::Install {
             panel = panel
                 .child(div().p(px(8.)).child("Herdr must be installed"))

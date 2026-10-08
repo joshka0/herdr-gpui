@@ -116,16 +116,18 @@ impl HerdrWindow {
             self.wheel = WheelAccumulator::default();
             return;
         };
-        let lines = self.wheel.lines(&target.target, event, cell_height);
+        let steps = self
+            .wheel
+            .steps(&target, event, self.cell_width, cell_height);
         cx.stop_propagation();
-        if lines == 0 {
-            return;
-        }
-        let input = target.event(lines, event.modifiers);
-        let result = ConnectionBridge::send_input(handle, &snapshot.boot_id, &target.target, input);
-        if let Err(error) = result {
-            self.local_error = Some(format!("Wheel input not sent: {error}"));
-            cx.notify();
+        for input in target.wheel_events(steps, event.modifiers) {
+            let result =
+                ConnectionBridge::send_input(handle, &snapshot.boot_id, &target.target, input);
+            if let Err(error) = result {
+                self.local_error = Some(format!("Wheel input not sent: {error}"));
+                cx.notify();
+                return;
+            }
         }
     }
 
@@ -181,14 +183,13 @@ impl HerdrWindow {
         // highlight is waiting for that copy; a selection the release already
         // copied must not stop Ctrl-C from interrupting the pane.
         let copy = if modifiers.platform {
-            !modifiers.control
+            !modifiers.control && !modifiers.shift
         } else {
-            modifiers.control && !self.copy_on_select()
+            modifiers.control && (modifiers.shift || !self.copy_on_select())
         };
         if event.keystroke.key.eq_ignore_ascii_case("c")
             && copy
             && !modifiers.alt
-            && !modifiers.shift
             && self.copy_retained_selection(cx)
         {
             cx.stop_propagation();
@@ -201,7 +202,11 @@ impl HerdrWindow {
         {
             cx.stop_propagation();
             window.prevent_default();
-        } else if event.keystroke.modifiers.platform && event.keystroke.key == "v" {
+        } else if (event.keystroke.modifiers.platform
+            || (event.keystroke.modifiers.control && event.keystroke.modifiers.shift)
+            || (event.keystroke.modifiers.shift && event.keystroke.key == "insert"))
+            && (event.keystroke.key.eq_ignore_ascii_case("v") || event.keystroke.key == "insert")
+        {
             self.paste(cx);
             cx.stop_propagation();
             window.prevent_default();

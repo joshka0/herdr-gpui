@@ -14,6 +14,7 @@ mod layout;
 mod notifications;
 pub(crate) mod preferences;
 pub(crate) mod sidebar;
+mod sidebar_style;
 mod theme;
 pub(crate) mod watch;
 
@@ -34,6 +35,7 @@ use serde::Deserialize;
 pub(crate) use sidebar::{
     AgentLayout, AgentToken, Rows, SidebarLayout, SpaceLayout, SpaceToken, TokenStyle,
 };
+pub use sidebar_style::{SelectMode, SidebarOverrides, SidebarStyle};
 use std::{
     collections::BTreeMap,
     env, fs,
@@ -93,6 +95,8 @@ pub struct Config {
     pub clipboard_toast: ClipboardToast,
     pub bell: BellConfig,
     pub layout: Layout,
+    /// Spacing overrides, host colours, and selection marking for the sidebar.
+    pub sidebar_style: SidebarStyle,
     /// Daemon sidebar rows, falling back to defaults when invalid.
     pub sidebar_layout: SidebarLayout,
     pub keybindings: Keymap,
@@ -261,15 +265,16 @@ const MAX_DAEMON_CONFIG_BYTES: u64 = 1 << 20;
 
 impl Default for Config {
     fn default() -> Self {
-        let (monospace, ui) = if cfg!(target_os = "linux") {
-            ("DejaVu Sans Mono", "DejaVu Sans")
-        } else {
-            ("Menlo", ".SystemUIFont")
-        };
+        let fonts::DefaultFonts {
+            monospace,
+            sans: ui,
+            ..
+        } = fonts::PLATFORM_FONTS;
         let font = |family: &str, size| FontConfig {
             family: family.into(),
             size,
             fallbacks: None,
+            line_height_multiple: None,
         };
         Self {
             theme: "Default".into(),
@@ -292,6 +297,7 @@ impl Default for Config {
             clipboard_toast: ClipboardToast::default(),
             bell: BellConfig::default(),
             layout: Layout::default(),
+            sidebar_style: SidebarStyle::default(),
             sidebar_layout: SidebarLayout::default(),
             keybindings: Keymap::default(),
             keybinding_overrides: BTreeMap::new(),
@@ -324,7 +330,7 @@ struct Settings {
     option_as_alt: OptionAsAlt,
     open_links_in: LinkTarget,
     keep_selection_after_copy: Option<bool>,
-    sidebar: FontSettings,
+    sidebar: sidebar_style::SidebarSettings,
     tabs: FontSettings,
     terminal: FontSettings,
     ui: FontSettings,
@@ -574,6 +580,17 @@ impl Config {
             }
             known
         });
+        // Only the terminal grid takes a line height. The other faces size
+        // fixed chrome, so there it is ignored like any other unknown key.
+        unknown_keys.extend(
+            [
+                ("sidebar", &mut settings.sidebar.font),
+                ("tabs", &mut settings.tabs),
+                ("ui", &mut settings.ui),
+            ]
+            .into_iter()
+            .filter_map(|(name, face)| face.reject_line_height(name)),
+        );
         // Unknown keys are ignored, but a credential pasted into the file is
         // refused so it is noticed and removed rather than left on disk.
         if let Some(name) = ["client_secret", "private_key", "token"]
@@ -612,6 +629,7 @@ impl Config {
             return Err(Error::InvalidSidebarGap);
         }
         config.layout = settings.layout;
+        config.sidebar_style = settings.sidebar.style()?;
         config.keybindings =
             Keymap::with_overrides(&settings.keybindings, &settings.pane_keys, &base.keys)?;
         config.keybinding_overrides = settings.keybindings;
@@ -641,7 +659,7 @@ impl Config {
         config.open_links_in = settings.open_links_in;
         config.keep_selection_after_copy = settings.keep_selection_after_copy.unwrap_or(true);
         for (name, font, settings) in [
-            ("sidebar", &mut config.sidebar, settings.sidebar),
+            ("sidebar", &mut config.sidebar, settings.sidebar.font),
             ("tabs", &mut config.tabs, settings.tabs),
             ("terminal", &mut config.terminal, settings.terminal),
             ("ui", &mut config.ui, settings.ui),

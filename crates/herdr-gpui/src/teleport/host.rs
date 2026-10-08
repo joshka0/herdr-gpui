@@ -52,9 +52,11 @@ impl Host {
                 #[cfg(test)]
                 env: Vec::new(),
             }),
-            // A Coder workspace is reached only through `coder ssh`, which
-            // Teleport's scripts cannot run over.
-            ConnectTarget::Socket(_) | ConnectTarget::Coder { .. } => Err(Error::UnsupportedHost),
+            // WSL distributions and Coder workspaces are reached through their
+            // own bridge commands, which Teleport's scripts do not run over.
+            ConnectTarget::Socket(_) | ConnectTarget::Wsl { .. } | ConnectTarget::Coder { .. } => {
+                Err(Error::UnsupportedHost)
+            }
         }
     }
 

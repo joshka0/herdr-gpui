@@ -16,6 +16,9 @@ use std::{
 pub(crate) enum Host {
     Local,
     Ssh(String),
+    /// A WSL distribution. Nothing is read from one yet: its files are not this
+    /// machine's, and no shell is opened into it for these probes.
+    Wsl(String),
 }
 
 impl Host {
@@ -25,6 +28,7 @@ impl Host {
     pub(crate) fn of(target: &ConnectTarget) -> Option<Self> {
         match target {
             ConnectTarget::Ssh { target, .. } => Some(Self::Ssh(target.clone())),
+            ConnectTarget::Wsl { distro, .. } => Some(Self::Wsl(distro.clone())),
             ConnectTarget::Coder { .. } => None,
             ConnectTarget::Local | ConnectTarget::Session { .. } | ConnectTarget::Socket(_) => {
                 Some(Self::Local)
