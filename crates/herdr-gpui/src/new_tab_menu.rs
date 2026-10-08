@@ -6,6 +6,10 @@
 use crate::{HerdrWindow, browser::GroupId, controls::Command, listening_ports::Link, menu::Page};
 use gpui::{prelude::*, *};
 
+/// The most a port's process name takes in its row. Names run to 32
+/// characters, and the address beside it is what tells ports apart.
+const PROCESS_WIDTH: f32 = 64.;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Row {
     Terminal,
@@ -189,6 +193,8 @@ impl HerdrWindow {
                 Row::Port { process, .. } => process.clone().into(),
             };
             let selector = row.selector();
+            let (label, process) = (format!("{selector}-label"), format!("{selector}-detail"));
+            let capped = matches!(row, Row::Port { .. });
             body = body.child(
                 div()
                     .id(("new-tab-menu-row", index))
@@ -210,9 +216,23 @@ impl HerdrWindow {
                             .flex_none()
                             .text_color(rgb(theme.muted)),
                     )
-                    .child(div().flex_1().min_w_0().truncate().child(row.label()))
+                    .child(
+                        div()
+                            .debug_selector(move || label.clone())
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .child(row.label()),
+                    )
                     .when(!detail.is_empty(), |line| {
-                        line.child(div().flex_none().text_color(rgb(theme.muted)).child(detail))
+                        line.child(
+                            div()
+                                .debug_selector(move || process.clone())
+                                .flex_none()
+                                .when(capped, |detail| detail.max_w(px(PROCESS_WIDTH)).truncate())
+                                .text_color(rgb(theme.muted))
+                                .child(detail),
+                        )
                     })
                     .on_hover(cx.listener(move |this, hovered, _, cx| {
                         if *hovered && let Some(menu) = &mut this.menu.new_tab {

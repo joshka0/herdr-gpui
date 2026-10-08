@@ -38,12 +38,19 @@ fn rows(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) -> Vec<Row> {
 
 /// Workspace `w0` listening on every interface and on loopback alone.
 fn seed_ports(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) {
+    seed(
+        view,
+        cx,
+        "L 1 *:3000 node\nL 1 127.0.0.1:5173 vite\nE 1 w0\n",
+    );
+}
+
+fn seed(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext, scan: &str) {
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
             view.listening_ports.seed(
                 crate::usage::Host::Local,
-                crate::listening_ports::parse("L 1 *:3000 node\nL 1 127.0.0.1:5173 vite\nE 1 w0\n")
-                    .unwrap(),
+                crate::listening_ports::parse(scan).unwrap(),
             );
             cx.notify();
         })
@@ -233,4 +240,25 @@ fn a_port_link_names_where_it_opens() {
         link: page,
     };
     assert_eq!(row.selector(), "new-tab-menu-Port5173");
+}
+
+#[gpui::test]
+fn a_long_process_name_leaves_the_port_address_readable(cx: &mut TestAppContext) {
+    let (view, cx) = window(cx);
+    // The scan keeps at most 32 characters of a process name.
+    let name = "w".repeat(32);
+    seed(&view, cx, &format!("L 1 127.0.0.1:5173 {name}\nE 1 w0\n"));
+    click(cx, "new-tab");
+    let panel = cx.debug_bounds("menu-panel").unwrap();
+    let row = cx.debug_bounds("new-tab-menu-Port5173").unwrap();
+    let address = cx.debug_bounds("new-tab-menu-Port5173-label").unwrap();
+    let process = cx.debug_bounds("new-tab-menu-Port5173-detail").unwrap();
+    assert!(process.size.width <= px(PROCESS_WIDTH), "{process:?}");
+    assert!(address.right() <= process.left(), "{address:?} {process:?}");
+    assert!(row.right() <= panel.right(), "{row:?} {panel:?}");
+    // The address keeps most of the row rather than being squeezed out.
+    assert!(address.size.width >= px(100.), "{address:?}");
+    // A shortcut hint is not capped.
+    let shortcut = cx.debug_bounds("new-tab-menu-Browser-detail").unwrap();
+    assert!(shortcut.size.width > px(0.));
 }

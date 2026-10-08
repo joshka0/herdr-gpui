@@ -431,9 +431,15 @@ impl HerdrWindow {
                     .border_color(rgb(theme.active))
                     .cursor_pointer()
                     .hover(|chip| chip.bg(rgb(theme.active)))
-                    .child(div().text_color(rgb(theme.foreground)).child(link.label()))
+                    .child(
+                        div()
+                            .flex_none()
+                            .text_color(rgb(theme.foreground))
+                            .child(link.label()),
+                    )
+                    // A long process name gives way; the address stays whole.
                     .when(!port.process.is_empty(), |chip| {
-                        chip.child(port.process.clone())
+                        chip.child(div().max_w(px(160.)).truncate().child(port.process.clone()))
                     })
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.open_blank_port(slot.id, id, &link, window, cx);
