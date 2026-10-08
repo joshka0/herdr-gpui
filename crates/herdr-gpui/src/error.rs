@@ -410,6 +410,8 @@ pub enum Error {
     UsageUnsupported,
     #[error("usage must be a TOML table")]
     InvalidUsageTable,
+    #[error("code must be a TOML table")]
+    InvalidCodeTable,
     #[error("Could not read CPU and memory on this host.")]
     SystemLoadRemote(#[source] Box<Error>),
     /// The host's `uname -s`, bounded, so the message names what it is.

@@ -247,6 +247,7 @@ impl SettingsWindow {
                 }
                 self.shared = loaded.shared;
                 self.error = loaded.error;
+                self.sync_code_field(cx);
             }
             Err(error) => {
                 self.error = Some(format!(

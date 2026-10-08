@@ -49,17 +49,19 @@ pub(super) enum Section {
     Sound,
     Notifications,
     Integrations,
+    Code,
     General,
 }
 
 impl Section {
-    const ALL: [Self; 7] = [
+    const ALL: [Self; 8] = [
         Self::Appearance,
         Self::Fonts,
         Self::Indicators,
         Self::Sound,
         Self::Notifications,
         Self::Integrations,
+        Self::Code,
         Self::General,
     ];
 
@@ -71,6 +73,7 @@ impl Section {
             Self::Sound => "Sound",
             Self::Notifications => "Notifications",
             Self::Integrations => "Integrations",
+            Self::Code => "Code",
             Self::General => "General",
         }
     }
@@ -83,6 +86,7 @@ impl Section {
             Self::Sound => "icons/chart.svg",
             Self::Notifications => "icons/bell.svg",
             Self::Integrations => "icons/agent-generic.svg",
+            Self::Code => "icons/vscode.svg",
             Self::General => "icons/settings.svg",
         }
     }
@@ -95,6 +99,9 @@ impl Section {
             Self::Sound => "A little signal when something needs you.",
             Self::Notifications => "Stay informed without losing your place.",
             Self::Integrations => "Connect the agents you work with.",
+            Self::Code => {
+                "Review code and diffs beside your terminals by connecting to a Visual Studio Code server."
+            }
             Self::General => "The small details of your daily workflow.",
         }
     }
@@ -180,6 +187,7 @@ struct SettingsWindow {
     section: Section,
     themes: themes::ThemeBrowser,
     controls: controls::Controls,
+    code: controls::code::CodeSettings,
     error: Option<String>,
     status: Option<String>,
     focus: FocusHandle,
@@ -296,6 +304,7 @@ impl SettingsWindow {
             #[cfg(test)]
             layout_io: None,
             remote_history: Default::default(),
+            code: Default::default(),
             theme_loading: false,
             theme_waiting: false,
             theme_light: false,
@@ -453,6 +462,9 @@ impl SettingsWindow {
         if !self.finish_control_size_edit(true, cx) {
             return false;
         }
+        if !self.finish_code_edit(true, cx) {
+            self.finish_code_edit(false, cx);
+        }
         if !self.theme_dirty() && self.layout_intent.is_none() && !self.busy() {
             return true;
         }
@@ -511,8 +523,14 @@ impl SettingsWindow {
         if !self.finish_control_size_edit(true, cx) {
             self.finish_control_size_edit(false, cx);
         }
+        if !self.finish_code_edit(true, cx) {
+            self.finish_code_edit(false, cx);
+        }
         self.dismiss_control_font_picker(window, cx);
         self.section = section;
+        if section == Section::Code {
+            self.open_code_page(window, cx);
+        }
         self.body_scroll.set_offset(Point::default());
         window.focus(&self.focus, cx);
         if section == Section::Integrations {
@@ -630,6 +648,7 @@ impl Render for SettingsWindow {
         let content = match self.section {
             Section::Appearance => self.render_appearance(window, cx),
             Section::Integrations => self.render_integration_controls(cx),
+            Section::Code => self.render_code_controls(window, cx),
             _ => self.render_controls(window, cx),
         };
         self.viewport_width = f32::from(window.viewport_size().width);

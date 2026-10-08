@@ -10,7 +10,7 @@ use fonts::verify_fonts;
 use themes::verify_themes;
 
 #[derive(Default)]
-struct Layout([Option<Bounds<Pixels>>; 8]);
+struct Layout([Option<Bounds<Pixels>>; 9]);
 impl Global for Layout {}
 
 pub(super) fn probe(index: usize) -> impl IntoElement {
@@ -212,7 +212,7 @@ pub(crate) async fn verify_native(
             {
                 let offset = settings.update(cx, |view, _, cx| -> Result<_> {
                     let card =
-                        cx.global::<Layout>().0[7].context("missing Sidebar layout paint")?;
+                        cx.global::<Layout>().0[8].context("missing Sidebar layout paint")?;
                     Ok(f32::from(card.top() - view.body_scroll.bounds().top()) - 28.)
                 })??;
                 let captures: &[(f32, &str)] = if expected.width == px(960.) {

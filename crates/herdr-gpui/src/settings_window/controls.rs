@@ -1,4 +1,5 @@
 //! Prepared controls for the standalone window; persistence belongs to its serial save path.
+pub(super) mod code;
 mod fonts;
 mod preferences;
 
@@ -192,6 +193,7 @@ impl SettingsWindow {
                 input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
             });
         }
+        self.refresh_code_appearance(cx);
     }
 
     fn flush_control_sizes(&mut self, cx: &mut Context<Self>) {
@@ -402,7 +404,7 @@ impl SettingsWindow {
             Section::Sound => self.render_sound_controls(cx),
             Section::Notifications => self.render_notification_controls(cx),
             Section::General => self.render_general_controls(cx),
-            Section::Appearance | Section::Integrations => div(),
+            Section::Appearance | Section::Integrations | Section::Code => div(),
         };
         div()
             .flex()
@@ -959,7 +961,7 @@ impl SettingsWindow {
             .debug_selector(|| "settings-sidebar-layout".into())
             .map(|card| {
                 #[cfg(all(feature = "integration-test", target_os = "macos"))]
-                let card = card.child(super::native::probe(7));
+                let card = card.child(super::native::probe(8));
                 card
             })
             .child(chooser)
