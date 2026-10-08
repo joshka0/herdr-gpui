@@ -34,6 +34,7 @@ fn open_form(view: &mut HerdrWindow, step: Step, cx: &mut Context<HerdrWindow>) 
         step,
         claim: None,
         task: None,
+        discovery: None,
     });
     view.menu.page = Some(Page::AddDevice);
 }

@@ -558,6 +558,25 @@ pub enum Error {
     DeviceExists(String),
     #[error("This host is already being added.")]
     DeviceAdding,
+    #[error("Searching the local network failed: {0}")]
+    Bonjour(#[from] mdns_sd::Error),
+    #[error("Could not list this machine's network addresses: {0}")]
+    LocalAddresses(#[source] io::Error),
+    #[error("Tailscale is unavailable ({status}){}", if detail.is_empty() { String::new() } else { format!(": {detail}") })]
+    TailscaleStatus {
+        status: std::process::ExitStatus,
+        detail: String,
+    },
+    #[error("Tailscale did not answer in time")]
+    TailscaleTimeout,
+    #[error("Tailscale returned an unreadable status: {0}")]
+    TailscaleJson(#[source] serde_json::Error),
+    #[error("Could not read {}: {source}", path.display())]
+    SshConfig {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
     #[error("Removing the device failed ({status}){}", if detail.is_empty() { String::new() } else { format!(": {detail}") })]
     DeviceRemove {
         status: std::process::ExitStatus,
