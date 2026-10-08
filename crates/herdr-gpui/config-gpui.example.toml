@@ -431,6 +431,8 @@ size = 12
 # [usage.providers.antigravity]
 #   The agy executable on the probed host when it is not on the PATH (install it
 #   with `brew install --cask antigravity-cli`, run `agy` once, and sign in).
+#   agy runs only when this is set or antigravity is in show_providers, as a
+#   signed-out agy opens a browser to sign in.
 # cli_path = ""  # or ANTIGRAVITY_CLI_PATH
 #
 # Copilot (copilot)
