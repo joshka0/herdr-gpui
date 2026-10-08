@@ -753,6 +753,11 @@ pub(crate) fn state_dir() -> Option<PathBuf> {
 fn state_dir_with(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<PathBuf> {
     let var = |name| var(name).filter(|value| !value.is_empty());
     let root = var("XDG_STATE_HOME").map(PathBuf::from).or_else(|| {
+        // Existing Windows installations with HOME already store preferences
+        // here. Keep selecting the same directory after an upgrade.
+        if let Some(home) = var("HOME") {
+            return Some(PathBuf::from(home).join(".local").join("state"));
+        }
         #[cfg(windows)]
         {
             if let Some(local) = var("LOCALAPPDATA") {
@@ -762,7 +767,7 @@ fn state_dir_with(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<Pa
                 return Some(PathBuf::from(profile).join("AppData").join("Local"));
             }
         }
-        var("HOME").map(|home| PathBuf::from(home).join(".local").join("state"))
+        None
     });
     root.map(|root| root.join("herdr").join("gpui"))
 }

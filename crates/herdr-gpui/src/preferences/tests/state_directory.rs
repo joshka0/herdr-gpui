@@ -33,9 +33,27 @@ fn empty_variables_are_ignored_and_missing_roots_disable_storage() {
 
 #[cfg(windows)]
 #[core::prelude::v1::test]
+fn windows_existing_home_state_keeps_its_location() {
+    assert_eq!(
+        directory(&[
+            ("XDG_STATE_HOME", ""),
+            ("HOME", "home"),
+            ("LOCALAPPDATA", "local"),
+            ("USERPROFILE", "profile"),
+        ]),
+        Some(PathBuf::from("home").join(".local/state/herdr/gpui"))
+    );
+}
+
+#[cfg(windows)]
+#[core::prelude::v1::test]
 fn windows_logs_and_preferences_work_without_xdg_or_home() {
     assert_eq!(
-        directory(&[("LOCALAPPDATA", "local"), ("USERPROFILE", "profile")]),
+        directory(&[
+            ("HOME", ""),
+            ("LOCALAPPDATA", "local"),
+            ("USERPROFILE", "profile")
+        ]),
         Some(PathBuf::from("local").join("herdr/gpui"))
     );
     assert_eq!(

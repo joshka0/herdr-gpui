@@ -73,7 +73,7 @@ Each window reopens on the display it was on; if that display is disconnected,
 it opens on the primary display, resized and moved to fit. Logs windows
 are not restored. Geometry is stored in `window-state.json` under
 `$XDG_STATE_HOME/herdr/gpui`, or `~/.local/state/herdr/gpui` by default
-(`%LOCALAPPDATA%\herdr\gpui` on Windows). Native
+(`%LOCALAPPDATA%\herdr\gpui` on Windows when `HOME` is unset). Native
 test modes skip this state. Up to 64 main windows are restored.
 
 The Rust GitHub updater verifies signed archive manifests and presents a shared
@@ -1731,9 +1731,11 @@ attention can keep the badge visible. This QA setting is not saved.
 
 The client's own logs are written to
 `$XDG_STATE_HOME/herdr/gpui/logs/herdr-gpui.jsonl` (falling back to
-`~/.local/state` on Unix or `%LOCALAPPDATA%` on Windows), one JSON record per
-line, readable only by you on Unix. If `LOCALAPPDATA` is missing, Windows uses
-`%USERPROFILE%\AppData\Local` before trying the Unix `HOME` fallback. Past
+`$HOME/.local/state`, or `%LOCALAPPDATA%` on Windows when `HOME` is unset), one
+JSON record per line, readable only by you on Unix. Windows installations with
+`HOME` set retain their existing state directory after upgrading. If both
+`HOME` and `LOCALAPPDATA` are missing, Windows uses
+`%USERPROFILE%\AppData\Local`. Empty variables are treated as unset. Past
 16 MiB the file is rotated to `herdr-gpui.1.jsonl`, replacing the previous one,
 so at most two files are kept. Logs are not held in memory: **Window > Logs**
 reads the newest 5,000 records of the file while it is open, including earlier
