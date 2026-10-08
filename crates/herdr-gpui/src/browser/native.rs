@@ -9,6 +9,11 @@ use std::{
     rc::Rc,
     sync::mpsc::{self, Receiver, SyncSender, TrySendError},
 };
+#[cfg(target_os = "macos")]
+use std::{
+    collections::HashSet,
+    sync::{Arc, Mutex, PoisonError},
+};
 use wry::raw_window_handle::HasWindowHandle;
 
 /// Enough for a burst of title and load reports between two window ticks;
@@ -85,7 +90,7 @@ const MAX_POST_BYTES: usize = 64 * 1024;
 pub(crate) struct Pages {
     pages: HashMap<TabId, Entity<WebView>>,
     shown: Vec<TabId>,
-    sender: SyncSender<Event<Source>>,
+    outbox: Outbox,
     events: Receiver<Event<Source>>,
     /// The tab each adopted popup became.
     #[cfg(target_os = "macos")]
@@ -103,7 +108,11 @@ impl Default for Pages {
         Self {
             pages: HashMap::new(),
             shown: Vec::new(),
-            sender,
+            outbox: Outbox {
+                sender,
+                #[cfg(target_os = "macos")]
+                closed: Arc::default(),
+            },
             events,
             #[cfg(target_os = "macos")]
             adopted: HashMap::new(),
@@ -112,6 +121,17 @@ impl Default for Pages {
             preview: None,
         }
     }
+}
+
+/// Where a page's handlers send what it reports.
+#[derive(Clone)]
+struct Outbox {
+    sender: SyncSender<Event<Source>>,
+    /// Popups whose script closed them. A close must not be dropped with
+    /// the queue full, or its tab would stay, so these wait here instead:
+    /// at most one entry per popup.
+    #[cfg(target_os = "macos")]
+    closed: Arc<Mutex<HashSet<u64>>>,
 }
 
 fn report(sender: &SyncSender<Event<Source>>, event: Event<Source>) {
@@ -124,9 +144,9 @@ fn report(sender: &SyncSender<Event<Source>>, event: Event<Source>) {
 fn with_handlers<'a>(
     builder: wry::WebViewBuilder<'a>,
     source: Source,
-    sender: &SyncSender<Event<Source>>,
+    outbox: &Outbox,
 ) -> wry::WebViewBuilder<'a> {
-    let (title, loaded, popup) = (sender.clone(), sender.clone(), sender.clone());
+    let (title, loaded, popup) = (outbox.sender.clone(), outbox.sender.clone(), outbox.clone());
     builder
         .with_devtools(cfg!(debug_assertions))
         .with_navigation_handler(|url| navigable(&url))
@@ -150,25 +170,33 @@ fn new_window(
     opener: Source,
     url: String,
     features: wry::NewWindowFeatures,
-    sender: &SyncSender<Event<Source>>,
+    outbox: &Outbox,
 ) -> wry::NewWindowResponse {
     #[cfg(target_os = "macos")]
     if let (Some(mtm), Ok(address)) = (objc2::MainThreadMarker::new(), WebUrl::try_from(&*url)) {
         let key = NEXT_POPUP.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let source = Source::Popup(key);
-        let builder = with_handlers(wry::WebViewBuilder::new(), source, sender);
-        let closed = sender.clone();
+        let builder = with_handlers(wry::WebViewBuilder::new(), source, outbox);
+        let closed = outbox.closed.clone();
         let built = super::popup::build(
             builder,
             features.opener,
-            move || report(&closed, Event::Closed(source)),
+            move || {
+                closed
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .insert(key);
+            },
             mtm,
         );
         match built {
             Ok(popup) => {
                 let webview = popup.webview(mtm);
                 // A popup the window never hears of would stay hidden.
-                return match sender.try_send(Event::Opened(opener, address, source, popup)) {
+                return match outbox
+                    .sender
+                    .try_send(Event::Opened(opener, address, source, popup))
+                {
                     Ok(()) => wry::NewWindowResponse::Create { webview },
                     Err(_) => wry::NewWindowResponse::Deny,
                 };
@@ -178,7 +206,7 @@ fn new_window(
     }
     #[cfg(not(target_os = "macos"))]
     let _ = features;
-    report(sender, Event::NewWindow(opener, url));
+    report(&outbox.sender, Event::NewWindow(opener, url));
     wry::NewWindowResponse::Deny
 }
 
@@ -224,7 +252,7 @@ impl Pages {
             return Ok(());
         };
         let id = tab.id;
-        let posted = self.sender.clone();
+        let posted = self.outbox.sender.clone();
         let preview = match &self.preview {
             Some(preview) => preview.clone(),
             None => {
@@ -239,7 +267,7 @@ impl Pages {
             Location::Local { file } => Some(file.root().to_owned()),
             Location::Web { .. } | Location::Review { .. } => None,
         };
-        let builder = with_handlers(wry::WebViewBuilder::new(), Source::Tab(id), &self.sender)
+        let builder = with_handlers(wry::WebViewBuilder::new(), Source::Tab(id), &self.outbox)
             .with_url(location.page_url())
             .with_asynchronous_custom_protocol(
                 PREVIEW_SCHEME.into(),
@@ -378,7 +406,7 @@ impl Pages {
     ) -> bool {
         #[cfg(target_os = "macos")]
         if let Some(page) = self.pages.get(&id) {
-            let sender = self.sender.clone();
+            let sender = self.outbox.sender.clone();
             super::snapshot::capture(page.read(cx).raw(), rect, move |tiff| {
                 report(&sender, Event::Captured(Source::Tab(id), capture, tiff));
             });
@@ -394,7 +422,7 @@ impl Pages {
     pub(crate) fn freeze(&self, id: TabId, size: gpui::Size<gpui::Pixels>, cx: &App) -> bool {
         #[cfg(target_os = "macos")]
         if let Some(page) = self.pages.get(&id) {
-            let sender = self.sender.clone();
+            let sender = self.outbox.sender.clone();
             let rect = super::annotate::Rect {
                 x: 0.,
                 y: 0.,
@@ -427,8 +455,7 @@ impl Pages {
     /// The next thing the pages reported. One at a time, as the window
     /// adopts a popup between its report and the popup's own.
     pub(crate) fn next_event(&self) -> Option<Event> {
-        loop {
-            let event = self.events.try_recv().ok()?;
+        while let Ok(event) = self.events.try_recv() {
             let resolved = event.resolve(|source| match source {
                 Source::Tab(id) => Some(id),
                 #[cfg(target_os = "macos")]
@@ -438,6 +465,29 @@ impl Pages {
                 return resolved;
             }
         }
+        #[cfg(target_os = "macos")]
+        return self.next_close();
+        #[cfg(not(target_os = "macos"))]
+        None
+    }
+
+    /// A popup that closed itself, once the queue is empty: its `Opened`
+    /// report, queued before the popup ran any script, has been applied by
+    /// then, so a popup no tab adopted is forgotten.
+    #[cfg(target_os = "macos")]
+    fn next_close(&self) -> Option<Event> {
+        let mut closed = self
+            .outbox
+            .closed
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        while let Some(key) = closed.iter().next().copied() {
+            closed.remove(&key);
+            if let Some(tab) = self.adopted.get(&key) {
+                return Some(Event::Closed(*tab));
+            }
+        }
+        None
     }
 }
 
@@ -471,7 +521,7 @@ mod tests {
         let pages = Pages::default();
         for index in 0..EVENT_CAPACITY + 10 {
             report(
-                &pages.sender,
+                &pages.outbox.sender,
                 Event::Title(Source::Tab(TabId::test(0)), index.to_string()),
             );
         }
@@ -489,19 +539,56 @@ mod tests {
         let (popup, tab) = (Source::Popup(7), TabId::test(3));
         let title = |text: &str| Event::Title(popup, text.to_owned());
         // A popup no tab adopted reports to no one.
-        report(&pages.sender, title("before"));
+        report(&pages.outbox.sender, title("before"));
         assert!(pages.next_event().is_none());
         pages.adopted.insert(7, tab);
-        report(&pages.sender, title("after"));
-        report(&pages.sender, Event::Closed(popup));
+        report(&pages.outbox.sender, title("after"));
+        pages
+            .outbox
+            .closed
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(7);
         assert!(
             matches!(pages.next_event(), Some(Event::Title(id, text)) if id == tab && text == "after")
         );
         assert!(matches!(pages.next_event(), Some(Event::Closed(id)) if id == tab));
         // Its tab closing forgets it.
         pages.close(tab);
-        report(&pages.sender, title("gone"));
+        report(&pages.outbox.sender, title("gone"));
         assert!(pages.next_event().is_none());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn popup_closes_survive_a_full_queue() {
+        let mut pages = Pages::default();
+        let tab = TabId::test(4);
+        pages.adopted.insert(5, tab);
+        for index in 0..EVENT_CAPACITY + 10 {
+            report(
+                &pages.outbox.sender,
+                Event::Title(Source::Popup(5), index.to_string()),
+            );
+        }
+        // A close no tab adopted is forgotten rather than kept.
+        pages
+            .outbox
+            .closed
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .extend([5, 6]);
+        let events: Vec<Event> = std::iter::from_fn(|| pages.next_event()).collect();
+        assert_eq!(events.len(), EVENT_CAPACITY + 1);
+        assert!(matches!(events.last(), Some(Event::Closed(id)) if *id == tab));
+        assert!(
+            pages
+                .outbox
+                .closed
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .is_empty()
+        );
     }
 
     #[cfg(target_os = "macos")]
@@ -509,9 +596,12 @@ mod tests {
     fn tab_reports_skip_unadopted_popups_in_order() {
         let pages = Pages::default();
         let tab = TabId::test(1);
-        report(&pages.sender, Event::Title(Source::Popup(9), "lost".into()));
         report(
-            &pages.sender,
+            &pages.outbox.sender,
+            Event::Title(Source::Popup(9), "lost".into()),
+        );
+        report(
+            &pages.outbox.sender,
             Event::Loaded(Source::Tab(tab), "https://a.test/".into()),
         );
         assert!(matches!(pages.next_event(), Some(Event::Loaded(id, _)) if id == tab));
