@@ -151,3 +151,57 @@ fn hidden_lines_above_a_hunk_show_on_request(cx: &mut gpui::TestAppContext) {
         assert_eq!(lines.text(1), "line 1");
     });
 }
+
+/// A file named with a tab shows its hidden lines from that file.
+#[cfg(unix)]
+#[gpui::test]
+fn hidden_lines_come_from_the_file_git_named(cx: &mut gpui::TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().canonicalize().unwrap();
+    let checkout = path.to_str().unwrap().to_owned();
+    git(&checkout, &["init", "-q", "-b", "main"]);
+    let numbered: String = (1..=30).map(|line| format!("line {line}\n")).collect();
+    let name = "odd\tname.txt";
+    std::fs::write(path.join(name), &numbered).unwrap();
+    git(&checkout, &["add", "-A"]);
+    git(&checkout, &["commit", "-qm", "base"]);
+    std::fs::write(
+        path.join(name),
+        numbered.replace("line 20\n", "line twenty\n"),
+    )
+    .unwrap();
+    // Another file with the name the tab-named one is shown as.
+    std::fs::write(path.join("odd    name.txt"), "decoy\n".repeat(30)).unwrap();
+    let input = Input {
+        checkout: Some(checkout),
+        repo_key: Some(path.join(".git").to_str().unwrap().to_owned()),
+        branch: "main".into(),
+    };
+    let mut listed = load(&input, Scope::Uncommitted, None, false).unwrap();
+    listed.read_all();
+    let file = listed
+        .diff
+        .files
+        .iter()
+        .position(|file| file.git_path() == name)
+        .unwrap();
+    let (view, cx) = window(cx, None);
+    cx.simulate_resize(gpui::size(gpui::px(1600.), gpui::px(900.)));
+    cx.update(|window, cx| view.update(cx, |view, cx| view.seed_review(listed, window, cx)));
+    draw(cx);
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            let id = *view.reviews.keys().next().unwrap();
+            view.expand_review_hunk(id, file, 0, cx);
+        })
+    });
+    cx.run_until_parked();
+    view.read_with(cx, |view, _| {
+        let review = view.reviews.values().next().unwrap();
+        let lines = review.loaded().unwrap().diff.files[file]
+            .lines()
+            .unwrap()
+            .clone();
+        assert_eq!(lines.text(1), "line 1");
+    });
+}

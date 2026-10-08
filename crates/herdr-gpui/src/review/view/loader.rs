@@ -203,7 +203,7 @@ impl HerdrWindow {
             return;
         };
         let range = gap.next();
-        let (checkout, path) = (loaded.source.checkout.clone(), entry.path.clone());
+        let (checkout, path) = (loaded.source.checkout.clone(), entry.git_path().to_owned());
         let request = review.request;
         review.expanding.insert((file, header));
         let reading = cx.background_executor().spawn({

@@ -69,6 +69,9 @@ pub(crate) struct Lines {
     /// Where each hunk header is.
     hunks: Vec<usize>,
     split: Vec<SplitRow>,
+    /// Each line's partner in an edit: the added line that replaced a
+    /// removed one, and back; `u32::MAX` for none.
+    partners: Vec<u32>,
     /// Lines were left out to stay within bounds.
     pub truncated: bool,
 }
@@ -104,7 +107,28 @@ impl Lines {
     /// Pairs the lines side by side; done once the lines are all in.
     pub(crate) fn finish(mut self) -> Self {
         self.split = split_rows(&self.lines);
+        let mut partners = vec![u32::MAX; self.lines.len()];
+        for row in &self.split {
+            if let SplitRow::Sides {
+                left: Some(left),
+                right: Some(right),
+            } = *row
+                && left != right
+            {
+                partners[left] = u32::try_from(right).unwrap_or(u32::MAX);
+                partners[right] = u32::try_from(left).unwrap_or(u32::MAX);
+            }
+        }
+        self.partners = partners;
         self
+    }
+
+    /// The line paired with `line` in an edit, if any.
+    pub(crate) fn partner(&self, line: usize) -> Option<usize> {
+        self.partners
+            .get(line)
+            .filter(|partner| **partner != u32::MAX)
+            .map(|partner| *partner as usize)
     }
 
     /// A whole new file's text, every line added.
@@ -374,6 +398,11 @@ impl FileDiff {
             folded: false,
             body: Body::Pending,
         }
+    }
+
+    /// The file's name as Git wrote it, for reading it from the checkout.
+    pub(crate) fn git_path(&self) -> &str {
+        &self.git_path
     }
 
     /// Where a renamed file was, as Git named it.
