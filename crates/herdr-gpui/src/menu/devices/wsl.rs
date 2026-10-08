@@ -402,6 +402,7 @@ impl HerdrWindow {
             let result = background.await;
             let _ = this.update(cx, |this, cx| {
                 if let Err(error) = result {
+                    crate::storage_warning::warn_storage_failure("Remove WSL device", &error);
                     this.menu.removing_devices.remove(&id);
                     this.local_error = Some(format!("Remove {distro}: {error}"));
                     cx.notify();
@@ -471,7 +472,10 @@ fn add(distro: &str, session: &str) -> Outcome {
         Ok(HostProbe::Running | HostProbe::Stopped) => {
             match herdr_client::add_wsl_host(false, distro, session) {
                 Ok(()) => Outcome::Saved,
-                Err(error) => Outcome::Refused(format!("Save {distro}: {error}")),
+                Err(error) => {
+                    crate::storage_warning::warn_storage_failure("Save WSL device", &error);
+                    Outcome::Refused(format!("Save {distro}: {error}"))
+                }
             }
         }
         Ok(HostProbe::Missing) => Outcome::Refused(format!(

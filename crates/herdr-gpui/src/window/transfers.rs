@@ -217,7 +217,10 @@ impl HerdrWindow {
                         }).err().map(|error: crate::Error| error.to_string())
                     }
                     Ok(_) => Some(herdr_client::Error::UploadCancelled.to_string()),
-                    Err(error) => Some(error.to_string()),
+                    Err(error) => {
+                        crate::storage_warning::warn_storage_failure("File transfer", error);
+                        Some(error.to_string())
+                    }
                 };
                 let accepted = error.is_none();
                 if current && !matches!(&result, Err(herdr_client::Error::UploadCleanup { .. })) {

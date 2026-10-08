@@ -152,6 +152,9 @@ def generate(root, temporary):
     # Result alias and does not need the GPUI/config-dependent crate error module.
     for child in source.with_suffix("").iterdir():
         (modules / child.name).symlink_to(child, target_is_directory=child.is_dir())
+    # The updater names the app's identifiers through constants.rs, which holds
+    # only plain constants and so compiles here unchanged.
+    constants = root / "crates/herdr-gpui/src/constants.rs"
     # Unused UI entry points are expected in this updater-only binary.
     # The updater reads build identities such as the app ID from constants.rs,
     # plain values with no GPUI dependency, compiled here as the app does.

@@ -33,6 +33,7 @@ impl HerdrWindow {
         // can replace it; input held across a gap may only go there.
         self.flush_pending_input(cx);
         if let Some(error) = self.catalog.poll_write() {
+            crate::storage_warning::warn_storage_failure("Save host selection", &error);
             self.local_error = Some(format!("Save host selection: {error}"));
             cx.notify();
         }
