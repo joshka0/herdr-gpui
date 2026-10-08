@@ -317,6 +317,7 @@ impl Config {
     where
         I: IntoIterator<Item = String>,
     {
+        self.replace_undrawable_fonts(super::bitmap_fonts::is_undrawable);
         let mut faces = [
             &mut self.sidebar,
             &mut self.tabs,
@@ -344,6 +345,28 @@ impl Config {
         for face in faces {
             if face.fallbacks.is_none() {
                 face.fallbacks = Some(detected.clone());
+            }
+        }
+    }
+
+    /// Puts each face whose family `undrawable` rejects back on its default,
+    /// which [`Self::resolve_fonts`] then substitutes if it is not installed.
+    /// The file keeps the chosen family, so a fixed renderer picks it up again.
+    pub(super) fn replace_undrawable_fonts(&mut self, undrawable: impl Fn(&str) -> bool) {
+        let defaults = Config::default();
+        for (face, default) in [
+            (&mut self.sidebar, defaults.sidebar),
+            (&mut self.tabs, defaults.tabs),
+            (&mut self.terminal, defaults.terminal),
+            (&mut self.ui, defaults.ui),
+        ] {
+            if face.family != default.family && undrawable(&face.family) {
+                tracing::warn!(
+                    family = %face.family,
+                    replacement = %default.family,
+                    "Font embeds bitmap glyphs the renderer cannot draw; using the default family"
+                );
+                face.family = default.family;
             }
         }
     }
