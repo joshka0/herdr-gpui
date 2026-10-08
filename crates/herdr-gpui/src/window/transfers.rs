@@ -283,16 +283,17 @@ impl HerdrWindow {
             "Copying..."
         };
         let accent = self.theme.primary();
+        // In the Herdr realm, clear of the VS Code column.
+        let viewport = window.viewport_size().width;
+        let realm = self.herdr_realm().unwrap_or(viewport);
         Some(
             div()
                 .id("file-transfer")
                 .debug_selector(|| "file-transfer".into())
                 .absolute()
-                .right(px(12.))
+                .right(px(12.) + viewport - realm)
                 .top(px(72.))
-                .w((window.viewport_size().width - px(24.))
-                    .max(px(0.))
-                    .min(px(340.)))
+                .w((realm - px(24.)).max(px(0.)).min(px(340.)))
                 .occlude()
                 .rounded(px(crate::config::corners::PANEL))
                 .border_1()

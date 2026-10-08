@@ -37,12 +37,21 @@ impl HerdrWindow {
             use crate::menu::Cover;
             let mut live = self.live_pages(cx);
             live.extend(self.code_page(cx));
-            if self.menu.page.is_none() {
+            let open = self.menu.page;
+            let measured_for = std::mem::replace(&mut self.browser.cover_page, open);
+            if open.is_none() {
                 self.browser.frozen.clear();
                 self.browser.pages.present(&live, cx);
                 return false;
             }
-            let cover = self.menu.cover.get();
+            // A dimmed dialog's cover is known before it is laid out, so the
+            // pages under it step aside in its first frame. A popover's is
+            // measured as it is laid out.
+            let cover = if self.menu_dims() {
+                Cover::dimmed(self.herdr_realm())
+            } else {
+                self.menu.cover.get().settled(measured_for, open)
+            };
             let bounds = self.browser.page_bounds.borrow().clone();
             let now = std::time::Instant::now();
             let mut settling = cover == Cover::Unknown;

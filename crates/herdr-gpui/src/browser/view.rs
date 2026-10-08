@@ -67,6 +67,10 @@ pub(crate) struct Browser {
     workspaces: Option<(Scope, String, HashSet<String>)>,
     #[cfg(any(target_os = "macos", windows))]
     pub(super) annotations: Annotations,
+    /// The menu page open when pages were last presented, which the menu's
+    /// measured cover belongs to.
+    #[cfg(any(target_os = "macos", windows))]
+    pub(super) cover_page: Option<crate::menu::Page>,
 }
 
 impl Browser {
@@ -95,6 +99,8 @@ impl Browser {
             workspaces: None,
             #[cfg(any(target_os = "macos", windows))]
             annotations: Annotations::new(cx),
+            #[cfg(any(target_os = "macos", windows))]
+            cover_page: None,
         }
     }
 }

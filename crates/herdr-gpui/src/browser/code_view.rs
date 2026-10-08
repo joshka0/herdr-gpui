@@ -4,7 +4,24 @@ use super::{code::Reach, view::store};
 use crate::{HerdrWindow, panel_resize::PanelDrag};
 use gpui::{prelude::*, *};
 
+/// The narrowest Herdr realm that still holds a dialog beside VS Code; a
+/// narrower one gives Herdr's menus the whole window again.
+const MIN_REALM: f32 = 480.;
+
 impl HerdrWindow {
+    /// The width of the Herdr realm, the window less the VS Code column,
+    /// while the column shows. Herdr's menus, dialogs, and toasts stay in
+    /// it: the VS Code page draws above GPUI, so it would hide them, and it
+    /// belongs to VS Code, which decides for itself what to dim. `None` when
+    /// the realm is the whole window.
+    pub(crate) fn herdr_realm(&self) -> Option<Pixels> {
+        if !self.shown_code() {
+            return None;
+        }
+        let realm = self.viewport_width - self.code_width.width(self.viewport_width);
+        (realm >= MIN_REALM).then(|| px(realm))
+    }
+
     /// `groups`, beside the focused workspace's VS Code panel when it shows.
     pub(crate) fn render_beside_code(
         &mut self,

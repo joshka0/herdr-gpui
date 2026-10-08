@@ -5,6 +5,7 @@ use herdr_client::ClientEvent;
 use std::sync::Arc;
 
 pub(crate) mod close_option;
+mod vs_code_realm;
 
 fn snapshot() -> ClientShellSnapshot {
     let mut snapshot: ClientShellSnapshot = serde_json::from_str(include_str!(
