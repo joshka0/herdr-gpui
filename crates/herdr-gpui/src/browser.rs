@@ -17,6 +17,8 @@ mod layouts;
 mod location;
 #[cfg(any(target_os = "macos", windows))]
 mod native;
+#[cfg(target_os = "macos")]
+mod popup;
 #[cfg(any(target_os = "macos", windows))]
 mod preview;
 #[cfg(target_os = "macos")]
