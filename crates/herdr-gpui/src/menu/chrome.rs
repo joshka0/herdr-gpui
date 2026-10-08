@@ -442,8 +442,13 @@ impl HerdrWindow {
                 |panel| {
                     // Dialogs draw their own full-bleed header and footer rules,
                     // so the panel's own inset would cut those rules short.
+                    // The device and session pickers scroll their own lists, so
+                    // the panel around them stays put; a second scroller there
+                    // still had its padding to move through.
+                    let lists = matches!(page, Page::Devices | Page::Sessions);
                     panel
-                        .when(!settled, |panel| panel.overflow_y_scroll())
+                        .when(!settled && !lists, |panel| panel.overflow_y_scroll())
+                        .when(lists, |panel| panel.overflow_hidden())
                         .when(!matches!(page, Page::Dialog(_)), |panel| panel.p(px(6.)))
                 },
             )

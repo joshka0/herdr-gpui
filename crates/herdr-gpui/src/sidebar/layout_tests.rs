@@ -35,6 +35,8 @@ mod listening_ports;
 #[cfg(test)]
 mod palette;
 #[cfg(test)]
+mod picker_scroll;
+#[cfg(test)]
 mod preferences_panel;
 #[cfg(test)]
 mod probes;
