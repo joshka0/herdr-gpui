@@ -57,6 +57,10 @@ impl CatalogUpdate {
 /// current cloud endpoints are kept rather than dropped.
 #[cfg(feature = "cloud")]
 fn cloud_devices() -> Option<Vec<crate::cloud::SavedDevice>> {
+    // Devices saved on another system stay in the file but are not offered.
+    if crate::cloud::unavailable().is_some() {
+        return Some(Vec::new());
+    }
     crate::cloud::load()
         .inspect_err(|error| {
             tracing::warn!(category = "cloud_catalog", %error, "Cannot read saved cloud devices");

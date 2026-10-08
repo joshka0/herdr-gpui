@@ -5,7 +5,7 @@
 
 use super::{
     super::{Section, SettingsWindow},
-    input,
+    follow_config, input,
 };
 use crate::{
     cloud::{
@@ -55,6 +55,8 @@ enum Account {
 
 pub(in crate::settings_window) struct CoderCard {
     fields: [Entity<SearchInput>; 6],
+    /// The config values the fields last loaded; see `follow_config`.
+    loaded: CoderFields,
     secret: Entity<SearchInput>,
     account: Account,
     secret_saved: bool,
@@ -69,21 +71,15 @@ impl CoderCard {
         theme: &crate::config::Theme,
         cx: &mut Context<SettingsWindow>,
     ) -> Self {
-        let values = CoderFields::from_config(&config.coder);
-        let texts = [
-            &values.url,
-            &values.oauth_client_id,
-            &values.oauth_redirect_uri,
-            &values.organization,
-            &values.workspace_prefix,
-            &values.cli,
-        ];
+        let loaded = CoderFields::from_config(&config.coder);
+        let texts = texts(&loaded);
         let fields =
             std::array::from_fn(|index| input(FIELDS[index].1, texts[index], config, theme, cx));
         let secret = input("", "", config, theme, cx);
         secret.update(cx, |input, cx| input.set_masked(true, cx));
         Self {
             fields,
+            loaded,
             secret,
             account: Account::Checking,
             secret_saved: false,
@@ -104,6 +100,18 @@ impl CoderCard {
             cli: text(5),
         }
     }
+}
+
+/// The editable values in `FIELDS` order.
+fn texts(values: &CoderFields) -> [&str; 6] {
+    [
+        &values.url,
+        &values.oauth_client_id,
+        &values.oauth_redirect_uri,
+        &values.organization,
+        &values.workspace_prefix,
+        &values.cli,
+    ]
 }
 
 /// Where the client secret in use comes from, before Settings' own store.
@@ -273,6 +281,11 @@ impl SettingsWindow {
     /// Called after the config file reloads, so the account line follows a
     /// deployment that was just saved or edited by hand.
     pub(super) fn coder_config_changed(&mut self, cx: &mut Context<Self>) {
+        if let Some(card) = &mut self.coder_card {
+            let loaded = CoderFields::from_config(&self.config.coder);
+            follow_config(&card.fields, texts(&card.loaded), texts(&loaded), cx);
+            card.loaded = loaded;
+        }
         if self.coder_card.is_some() && self.section == Section::CloudDevices {
             self.refresh_cloud(cx);
         }

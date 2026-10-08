@@ -63,6 +63,9 @@ impl HerdrWindow {
         + 'static,
         cx: &mut Context<Self>,
     ) -> crate::Result<()> {
+        if let Some(reason) = super::unavailable() {
+            return Err(super::Error::Unavailable(reason).into());
+        }
         let id = self.cloud_jobs.next;
         self.cloud_jobs.next += 1;
         let worker = worker::spawn(

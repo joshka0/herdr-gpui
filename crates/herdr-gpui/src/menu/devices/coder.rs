@@ -99,6 +99,9 @@ impl HerdrWindow {
     }
 
     pub(super) fn open_coder_setup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if crate::cloud::unavailable().is_some() {
+            return;
+        }
         let settings = match self.config.coder.settings() {
             Ok(Some(settings)) => settings,
             Ok(None) => return,

@@ -6,7 +6,7 @@
 
 use super::{
     super::{Section, SettingsWindow},
-    input,
+    follow_config, input,
 };
 use crate::{
     cloud::{
@@ -48,6 +48,8 @@ enum Account {
 
 pub(in crate::settings_window) struct DaytonaCard {
     fields: [Entity<SearchInput>; 4],
+    /// The config values the fields last loaded; see `follow_config`.
+    loaded: DaytonaFields,
     key: Entity<SearchInput>,
     account: Account,
     /// The user's approval to install Herdr in sandboxes created from here.
@@ -62,23 +64,15 @@ impl DaytonaCard {
         theme: &crate::config::Theme,
         cx: &mut Context<SettingsWindow>,
     ) -> Self {
-        let mut values = DaytonaFields::from_config(&config.daytona);
-        // Daytona's own cloud is the usual account; saving it sets Daytona up.
-        if values.api_url.is_empty() {
-            values.api_url = crate::daytona::DEFAULT_API_URL.into();
-        }
-        let texts = [
-            &values.api_url,
-            &values.organization_id,
-            &values.target,
-            &values.snapshot,
-        ];
+        let loaded = loaded(config);
+        let texts = texts(&loaded);
         let fields =
             std::array::from_fn(|index| input(FIELDS[index].1, texts[index], config, theme, cx));
         let key = input("dtn_…", "", config, theme, cx);
         key.update(cx, |input, cx| input.set_masked(true, cx));
         Self {
             fields,
+            loaded,
             key,
             account: Account::Checking,
             install: true,
@@ -103,6 +97,26 @@ impl DaytonaCard {
             Account::Checking => &[],
         }
     }
+}
+
+/// The values the fields show for `config`. Daytona's own cloud is the usual
+/// account, so an unset API URL shows it; saving it sets Daytona up.
+fn loaded(config: &Config) -> DaytonaFields {
+    let mut values = DaytonaFields::from_config(&config.daytona);
+    if values.api_url.is_empty() {
+        values.api_url = crate::daytona::DEFAULT_API_URL.into();
+    }
+    values
+}
+
+/// The editable values in `FIELDS` order.
+fn texts(values: &DaytonaFields) -> [&str; 4] {
+    [
+        &values.api_url,
+        &values.organization_id,
+        &values.target,
+        &values.snapshot,
+    ]
 }
 
 impl SettingsWindow {
@@ -260,6 +274,11 @@ impl SettingsWindow {
     }
 
     pub(super) fn daytona_config_changed(&mut self, cx: &mut Context<Self>) {
+        if let Some(card) = &mut self.daytona_card {
+            let loaded = loaded(&self.config);
+            follow_config(&card.fields, texts(&card.loaded), texts(&loaded), cx);
+            card.loaded = loaded;
+        }
         if self.daytona_card.is_some() && self.section == Section::CloudDevices {
             self.refresh_daytona(cx);
         }
@@ -345,7 +364,7 @@ impl SettingsWindow {
                     }),
             ),
         );
-        let create = ready && usable;
+        let create = ready && usable && crate::cloud::unavailable().is_none();
         let mut sandboxes = self
             .control_card("New sandbox")
             .debug_selector(|| "cloud-daytona-new".into())

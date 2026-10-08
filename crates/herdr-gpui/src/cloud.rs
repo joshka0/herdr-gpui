@@ -44,6 +44,16 @@ pub enum Error {
     Install(String),
     #[error("Installing Herdr did not finish within 5 minutes.")]
     InstallTimeout,
+    #[error("{0}")]
+    Unavailable(&'static str),
+}
+
+/// Why cloud machines cannot be used on this system, if they cannot. Each is
+/// reached by running Herdr's bridge over a provider command's standard
+/// streams, which only the Unix client supports; offering setup elsewhere
+/// would save devices that can never connect.
+pub(crate) fn unavailable() -> Option<&'static str> {
+    cfg!(windows).then_some("Cloud devices are unavailable on Windows.")
 }
 
 /// What a job reports while it adds a machine, in words every provider shares.

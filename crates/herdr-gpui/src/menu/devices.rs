@@ -66,6 +66,9 @@ impl HerdrWindow {
     /// The cloud providers set up in the config, in picker order.
     #[cfg(feature = "cloud")]
     fn cloud_providers(&self) -> Vec<crate::cloud::CloudProvider> {
+        if crate::cloud::unavailable().is_some() {
+            return Vec::new();
+        }
         crate::cloud::CloudProvider::ALL
             .iter()
             .copied()

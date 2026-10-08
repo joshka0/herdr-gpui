@@ -116,3 +116,26 @@ fn a_usable_key_lists_devices_within_the_narrowest_width(cx: &mut TestAppContext
         assert!(!view.daytona_card.as_ref().unwrap().install)
     });
 }
+
+#[gpui::test]
+fn a_reloaded_config_updates_untouched_fields_and_keeps_edits(cx: &mut TestAppContext) {
+    let (view, cx) = open(cx);
+    choose_daytona(&view, cx);
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            let card = view.daytona_card.as_mut().unwrap();
+            card.fields[2].update(cx, |input, cx| input.set_text_selected("eu", cx));
+            view.config.daytona = DaytonaConfig {
+                api_url: Some("https://daytona.example.com/api".into()),
+                target: Some("us".into()),
+                ..DaytonaConfig::default()
+            };
+            view.daytona_config_changed(cx);
+        })
+    });
+    view.read_with(cx, |view, cx| {
+        let values = view.daytona_card.as_ref().unwrap().values(cx);
+        assert_eq!(values.api_url, "https://daytona.example.com/api");
+        assert_eq!(values.target, "eu", "an unsaved edit is kept");
+    });
+}

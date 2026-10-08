@@ -63,6 +63,28 @@ fn input(
     input
 }
 
+/// Follow a reloaded config in a card's inputs: a field still showing what
+/// was loaded last takes the new value, and one the user has edited keeps the
+/// edit, so a later Save neither writes stale values back nor drops typing.
+fn follow_config<const N: usize>(
+    inputs: &[Entity<SearchInput>; N],
+    previous: [&str; N],
+    loaded: [&str; N],
+    cx: &mut App,
+) {
+    for ((input, previous), loaded) in inputs.iter().zip(previous).zip(loaded) {
+        if previous != loaded && input.read(cx).text().trim() == previous {
+            input.update(cx, |input, cx| {
+                if loaded.is_empty() {
+                    input.clear(cx);
+                } else {
+                    input.set_text_selected(loaded, cx);
+                }
+            });
+        }
+    }
+}
+
 impl SettingsWindow {
     /// Build each provider's card on first view, then refresh what it reads.
     pub(super) fn open_cloud_devices(&mut self, cx: &mut Context<Self>) {
@@ -122,6 +144,11 @@ impl SettingsWindow {
             .flex_col()
             .gap(px(24.))
             .min_w_0()
+            .when_some(crate::cloud::unavailable(), |section, reason| {
+                section.child(self.control_note(format!(
+                    "{reason} Accounts can still be edited here for other systems."
+                )))
+            })
             .when(CloudProvider::ALL.len() > 1, |section| {
                 section.child(self.cloud_tabs(cx))
             })

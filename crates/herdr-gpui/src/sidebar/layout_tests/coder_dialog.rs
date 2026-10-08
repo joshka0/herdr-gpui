@@ -25,7 +25,7 @@ fn coder_row_appears_only_when_configured_and_its_dialog_fits(cx: &mut gpui::Tes
     let coder_row = row(rows + daytona);
     if std::env::var_os("HERDR_CODER_URL").is_none() {
         assert!(cx.debug_bounds(coder_row).is_none());
-        if daytona == 1 {
+        if daytona == 1 && crate::cloud::unavailable().is_none() {
             assert!(cx.debug_bounds(row(rows)).is_some(), "Daytona's row");
         }
     }
@@ -38,6 +38,11 @@ fn coder_row_appears_only_when_configured_and_its_dialog_fits(cx: &mut gpui::Tes
     });
     cx.simulate_click(picker, Modifiers::default());
     cx.update(|window, cx| full_draw(window, cx).clear(cx));
+    if crate::cloud::unavailable().is_some() {
+        // Nothing offers to create a device that could never connect.
+        assert!(cx.debug_bounds(row(rows)).is_none());
+        return;
+    }
     assert!(cx.debug_bounds(coder_row).is_some());
     cx.simulate_keystrokes("escape");
     cx.update(|window, cx| {

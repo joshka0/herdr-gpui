@@ -31,3 +31,8 @@ fn a_non_cloud_target_is_refused() {
     };
     assert!(error.get_ref().is_some_and(|e| e.is::<Error>()));
 }
+
+#[test]
+fn cloud_devices_are_offered_only_where_they_can_connect() {
+    assert_eq!(unavailable().is_some(), cfg!(windows));
+}

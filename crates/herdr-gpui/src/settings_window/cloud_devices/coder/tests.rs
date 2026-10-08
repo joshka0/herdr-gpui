@@ -98,3 +98,28 @@ fn a_configured_secret_is_named_before_the_saved_one() {
         assert!(configured_secret(&config).unwrap().contains("config file"));
     }
 }
+
+#[gpui::test]
+fn a_reloaded_config_updates_untouched_fields_and_keeps_edits(cx: &mut TestAppContext) {
+    let (view, cx) = open(cx);
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            let card = view.coder_card.as_mut().unwrap();
+            card.fields[3].update(cx, |input, cx| input.set_text_selected("typed-org", cx));
+            view.config.coder = CoderConfig {
+                url: Some("https://edited.example.com".into()),
+                organization: Some("file-org".into()),
+                ..CoderConfig::default()
+            };
+            view.coder_config_changed(cx);
+        })
+    });
+    view.read_with(cx, |view, cx| {
+        let values = view.coder_card.as_ref().unwrap().values(cx);
+        assert_eq!(
+            values.url, "https://edited.example.com",
+            "untouched follows the file"
+        );
+        assert_eq!(values.organization, "typed-org", "an unsaved edit is kept");
+    });
+}
