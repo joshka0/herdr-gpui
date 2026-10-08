@@ -80,6 +80,7 @@ impl HerdrWindow {
             WorkspaceAction::OpenWorktree => ("Open worktree", "Open"),
             WorkspaceAction::NewTab => ("New tab", "Create"),
             WorkspaceAction::NewWorkspace => ("New workspace", "Create"),
+            WorkspaceAction::Note => ("Note", "Save"),
             WorkspaceAction::DeleteWorktree if force => ("Force delete checkout?", "Force remove"),
             WorkspaceAction::DeleteWorktree => ("Delete worktree checkout?", "Remove"),
         };
@@ -89,6 +90,9 @@ impl HerdrWindow {
             WorkspaceAction::Rename => {
                 body.child(div().text_color(rgb(theme.subtext())).child("Edit the workspace label."))
             }
+            WorkspaceAction::Note => body.child(div().text_color(rgb(theme.subtext())).child(
+                "A reminder kept only in this app, on this checkout and branch. Save it empty to remove it.",
+            )),
             WorkspaceAction::NewTab => body.child(
                 div()
                     .text_color(rgb(theme.subtext()))

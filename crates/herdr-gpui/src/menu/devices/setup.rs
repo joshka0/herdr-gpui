@@ -5,6 +5,7 @@
 use crate::{Error, Result};
 use herdr_client::{Destination, HostProbe, SavedHost};
 use std::{
+    collections::BTreeMap,
     io::Read,
     process::{Command, ExitStatus, Stdio},
     sync::Mutex,
@@ -312,24 +313,57 @@ fn quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
 
-fn shell_command(executable: &str, request: &Request, environment: &[(String, String)]) -> String {
-    let mut args = vec!["env".to_owned()];
+/// Prefix of the workspace variables that carry the GUI's environment to the
+/// setup command.
+const STAGED_PREFIX: &str = "HERDR_GPUI_SETUP_";
+
+/// What a local workspace needs to run setup interactively.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct TerminalSetup {
+    /// The line typed into the workspace shell. A shell still in canonical
+    /// mode truncates typed input (1024 bytes on macOS), so it never inlines
+    /// unbounded values such as `PATH`.
+    pub(super) command: String,
+    /// Launch environment for the workspace, which the command expands.
+    pub(super) environment: BTreeMap<String, String>,
+}
+
+fn shell_command(
+    executable: &str,
+    request: &Request,
+    environment: &[(String, String)],
+) -> TerminalSetup {
+    let mut words = vec![quote("env")];
     // The daemon's shell does not inherit the GUI's environment. Clear
-    // optional overrides before restoring this window's exact catalog roots.
-    for name in ["HERDR_CONFIG_PATH", "XDG_STATE_HOME", "XDG_CONFIG_HOME"] {
-        args.extend(["-u".into(), name.into()]);
+    // optional overrides and the staging variables before restoring this
+    // window's exact catalog roots.
+    let names = ["HERDR_CONFIG_PATH", "XDG_STATE_HOME", "XDG_CONFIG_HOME"]
+        .map(String::from)
+        .into_iter()
+        .chain(
+            environment
+                .iter()
+                .map(|(key, _)| format!("{STAGED_PREFIX}{key}")),
+        );
+    for name in names {
+        words.extend([quote("-u"), quote(&name)]);
     }
-    args.extend(
+    // Keys are fixed variable names, so the double quotes only expand the
+    // staged value, which the shell passes on verbatim.
+    words.extend(
         environment
             .iter()
-            .map(|(key, value)| format!("{key}={value}")),
+            .map(|(key, _)| format!("\"{key}=${STAGED_PREFIX}{key}\"")),
     );
-    args.push(executable.into());
-    args.extend(request.arguments().into_iter().map(str::to_owned));
-    args.iter()
-        .map(|arg| quote(arg))
-        .collect::<Vec<_>>()
-        .join(" ")
+    words.push(quote(executable));
+    words.extend(request.arguments().into_iter().map(quote));
+    TerminalSetup {
+        command: words.join(" "),
+        environment: environment
+            .iter()
+            .map(|(key, value)| (format!("{STAGED_PREFIX}{key}"), value.clone()))
+            .collect(),
+    }
 }
 
 /// Runs `machine add` without a terminal, for a host whose probe found a
@@ -470,7 +504,7 @@ pub(super) fn last_line(output: &[u8]) -> String {
 }
 
 /// The shell command a local workspace runs to set the host up interactively.
-pub(super) fn terminal_command(request: &Request) -> Result<String> {
+pub(super) fn terminal_command(request: &Request) -> Result<TerminalSetup> {
     if cfg!(windows) {
         return Err(Error::DeviceSetupInput(
             "Saved SSH devices are unavailable on Windows.",

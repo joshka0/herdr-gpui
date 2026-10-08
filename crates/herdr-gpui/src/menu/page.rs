@@ -79,6 +79,8 @@ pub(crate) enum WorkspaceAction {
     /// Names a workspace before `workspace.create`, when
     /// `ui.prompt_new_workspace_name` asks. Targets the source workspace.
     NewWorkspace,
+    /// Writes the note this app keeps on the checkout; never a daemon request.
+    Note,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -140,6 +142,7 @@ impl WorkspaceMenuAction {
             Self::Dialog(WorkspaceAction::NewWorktree) => "icons/plus.svg",
             Self::Dialog(WorkspaceAction::OpenWorktree) => "icons/chevron-down.svg",
             Self::Dialog(WorkspaceAction::DeleteWorktree) => "icons/trash.svg",
+            Self::Dialog(WorkspaceAction::Note) => "icons/note.svg",
             Self::Dialog(WorkspaceAction::NewTab | WorkspaceAction::NewWorkspace) => {
                 "icons/plus.svg"
             }

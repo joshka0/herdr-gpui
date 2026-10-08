@@ -264,6 +264,14 @@ impl HerdrWindow {
                 self.open_new_worktree(window, cx);
                 return;
             }
+            Command::WorktreeNotes => {
+                self.open_palette(crate::palette::Filter::Notes, window, cx);
+                return;
+            }
+            Command::EditWorktreeNote => {
+                self.edit_focused_worktree_note(window, cx);
+                return;
+            }
             // Every interactive creation path ends here, so Herdr's name prompt
             // covers buttons, menus, shortcuts, and the palette alike.
             Command::Tab | Command::Workspace if self.open_name_prompt(command, window, cx) => {
