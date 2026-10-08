@@ -165,7 +165,8 @@ Report::new(Provider(&MyService), Account { email, plan }, windows)
   window the service names itself. `length` is `kind.length()` for the
   standard kinds, or the service's own window length, so the panel can show
   the pace. The status bar shows the two windows closest to their limits as
-  `N% used <time to reset>`; the panel lists every window.
+  `N% used <time to reset>`, or, with `[status_bar] usage = "compact"`, only
+  the tightest share; the panel lists every window.
 - `Balance` is money or credits: `Unit::Currency("USD")` or
   `Unit::Count("credits")`, with `out_of(total)` when there is a limit.
   A provider with no windows shows its first balance in the status bar.

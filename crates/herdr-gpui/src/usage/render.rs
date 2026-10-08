@@ -1,14 +1,15 @@
 //! The status bar's usage segments: per agent, a meter for the window closest
 //! to its limit and the tightest windows' shares used with their time to
-//! reset. A click opens that agent's panel, so the bar stays one quiet line;
-//! picking a tab there brings that agent to the front of the bar.
+//! reset, or in compact mode the tightest share alone. A click opens that
+//! agent's panel, so the bar stays one quiet line; picking a tab there brings
+//! that agent to the front of the bar.
 
 use super::{
     Reading,
     model::{Severity, Window as Limit},
     panel::PANEL_GAP,
 };
-use crate::window::HerdrWindow;
+use crate::{config::status_bar::Detail, window::HerdrWindow};
 use gpui::{prelude::*, *};
 use std::{
     cell::Cell,
@@ -187,24 +188,37 @@ impl HerdrWindow {
                 )
             });
         };
-        if let Some(tightest) = report.tightest() {
-            segment = segment.child(meter(tightest, theme));
-        }
         let mut labels = div()
             .flex()
             .min_w_0()
             .overflow_hidden()
             .whitespace_nowrap()
             .gap(px(4.));
-        for (index, window) in bar_windows(&report.windows).enumerate() {
-            if index > 0 {
-                labels = labels.child(div().text_color(rgb(theme.muted)).child("·"));
+        match self.config.status_bar.usage {
+            Detail::Compact => {
+                if let Some(tightest) = report.tightest() {
+                    labels = labels.child(
+                        div()
+                            .text_color(rgb(color(tightest.used.into(), theme, theme.foreground)))
+                            .child(format!("{}%", tightest.percent())),
+                    );
+                }
             }
-            labels = labels.child(
-                div()
-                    .text_color(rgb(color(window.used.into(), theme, theme.foreground)))
-                    .child(window.label(now)),
-            );
+            Detail::Detailed => {
+                if let Some(tightest) = report.tightest() {
+                    segment = segment.child(meter(tightest, theme));
+                }
+                for (index, window) in bar_windows(&report.windows).enumerate() {
+                    if index > 0 {
+                        labels = labels.child(div().text_color(rgb(theme.muted)).child("·"));
+                    }
+                    labels = labels.child(
+                        div()
+                            .text_color(rgb(color(window.used.into(), theme, theme.foreground)))
+                            .child(window.label(now)),
+                    );
+                }
+            }
         }
         // A service that meters money or credits rather than a window shows
         // what is left or spent.

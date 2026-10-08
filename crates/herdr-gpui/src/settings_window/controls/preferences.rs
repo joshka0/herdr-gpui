@@ -22,12 +22,12 @@ fn switch_colors(theme: &Theme, checked: bool) -> (u32, u32) {
 #[cfg(test)]
 #[derive(Clone)]
 pub(super) struct PreferenceIo {
-    write: std::sync::Arc<dyn Fn(Preference) -> crate::Result<()> + Send + Sync>,
-    load: fn() -> crate::Result<super::super::Loaded>,
+    pub(super) write: std::sync::Arc<dyn Fn(Preference) -> crate::Result<()> + Send + Sync>,
+    pub(super) load: fn() -> crate::Result<super::super::Loaded>,
 }
 
 impl SettingsWindow {
-    fn save_preference(&mut self, edit: Preference, cx: &mut Context<Self>) {
+    pub(super) fn save_preference(&mut self, edit: Preference, cx: &mut Context<Self>) {
         #[cfg(test)]
         if let Some(io) = self.controls.preference_io.clone() {
             self.save_with(move || (io.write)(edit), io.load, false, cx);
