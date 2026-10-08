@@ -119,7 +119,10 @@ fn a_failed_vs_code_page_stays_failed_when_another_page_fails(cx: &mut gpui::Tes
     // The server answers, so only the failure keeps the page from retrying.
     cx.update(|window, cx| view.update(cx, |view, cx| view.ensure_code_page(window, cx)));
     view.read_with(cx, |view, _| {
-        assert!(matches!(view.browser.code_server.state, Reach::Ready(_)));
+        assert!(matches!(
+            view.browser.code_server.state,
+            Reach::Ready { .. }
+        ));
     });
     draw(cx);
     view.read_with(cx, |view, _| {
@@ -208,10 +211,10 @@ fn an_unreachable_server_is_shown_and_asked_again(cx: &mut gpui::TestAppContext)
     });
     cx.run_until_parked();
     view.read_with(cx, |view, _| {
-        assert_eq!(
-            view.browser.code_server.state,
-            Reach::Ready(Server::from_version(COMMIT).unwrap())
-        );
+        let Reach::Ready { server, .. } = &view.browser.code_server.state else {
+            panic!("{:?}", view.browser.code_server.state);
+        };
+        assert_eq!(server, &Server::from_version(COMMIT).unwrap());
     });
 }
 
@@ -251,4 +254,35 @@ fn a_new_token_on_the_same_server_keeps_the_tabs(cx: &mut gpui::TestAppContext) 
             Some(url("http://127.0.0.1:8000/?folder=/x"))
         );
     });
+}
+
+/// An answer is trusted only for a while: once the server stops, a panel
+/// opened in another space asks it again and says it cannot be reached,
+/// rather than showing a page that stays blank.
+#[gpui::test]
+fn a_new_panel_asks_the_server_again_once_an_answer_is_old(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = window(cx);
+    show_with(&view, cx, "http://127.0.0.1:8000/?tkn=x", answers);
+    view.update(cx, |view, _| {
+        let Reach::Ready { at, .. } = &mut view.browser.code_server.state else {
+            panic!("{:?}", view.browser.code_server.state);
+        };
+        *at = std::time::Instant::now()
+            .checked_sub(std::time::Duration::from_secs(6))
+            .unwrap();
+        // The server stops.
+        view.browser.code_server.probe = refuses;
+    });
+    focus_workspace(&view, cx, "w1");
+    run(&view, cx, Command::ToggleCode);
+    cx.run_until_parked();
+    draw(cx);
+    view.read_with(cx, |view, _| {
+        assert!(
+            matches!(view.browser.code_server.state, Reach::Failed { .. }),
+            "{:?}",
+            view.browser.code_server.state
+        );
+    });
+    assert!(cx.debug_bounds("code-unreachable").is_some());
 }

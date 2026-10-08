@@ -80,7 +80,7 @@ impl HerdrWindow {
                 Reach::Failed { message, .. } => {
                     return self.render_code_unreachable(message.clone());
                 }
-                Reach::Ready(server) => {
+                Reach::Ready { server, .. } => {
                     format!("Loading VS Code {}\u{2026}", server.short_commit()).into()
                 }
                 Reach::Unknown | Reach::Asking => "Connecting to VS Code\u{2026}".into(),

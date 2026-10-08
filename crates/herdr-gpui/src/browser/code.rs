@@ -8,10 +8,10 @@
 //!
 //! A page that cannot load says nothing back through the web view, so the
 //! window first asks the server whether it is there, and creates pages only
-//! once it answers. Until then the panel says why it is empty.
+//! once it has answered lately. Until then the panel says why it is empty.
 #[cfg(any(target_os = "macos", windows))]
-use super::{Location, TabId, store::Place, view::store};
-use super::{Store, WebUrl};
+use super::{Location, TabId, store::Place};
+use super::{Scope, Store, WebUrl, view::store};
 use crate::{
     HerdrWindow,
     code_server::{self, Server},
@@ -24,7 +24,8 @@ use std::time::{Duration, Instant};
 #[cfg(any(target_os = "macos", windows, test))]
 const TOKEN: &str = "tkn";
 
-/// How long an unreachable server is left before it is asked again.
+/// How long an answer is trusted when a page is created, and how long an
+/// unreachable server is left before it is asked again.
 const RETRY: Duration = Duration::from_secs(5);
 
 /// What the window knows of the configured VS Code server.
@@ -53,7 +54,7 @@ impl Default for CodeServer {
 pub(super) enum Reach {
     Unknown,
     Asking,
-    Ready(Server),
+    Ready { server: Server, at: Instant },
     Failed { message: SharedString, at: Instant },
 }
 
@@ -134,7 +135,8 @@ impl HerdrWindow {
         else {
             return;
         };
-        if !self.code_server_ready(&url, cx) {
+        self.follow_code_address(&url, cx);
+        if self.code_page_settled(&scope, &workspace, cx) || !self.code_server_ready(&url, cx) {
             return;
         }
         #[cfg(not(any(target_os = "macos", windows)))]
@@ -153,10 +155,6 @@ impl HerdrWindow {
                 }
                 return;
             };
-            // A page that could not be created is not retried every tick.
-            if self.browser.pages.contains(id) || self.browser.failed.contains_key(&id) {
-                return;
-            }
             let Some(mut tab) = store(cx).and_then(|store| store.get(id)).cloned() else {
                 return;
             };
@@ -173,11 +171,27 @@ impl HerdrWindow {
         }
     }
 
-    /// Whether the server at `url` has answered, asking it when nothing is
-    /// known or it last failed a while ago. A new address starts over: it
-    /// closes the tabs still on another server, so they reopen on this one,
-    /// and the pages of the rest, so they reopen with its token.
-    fn code_server_ready(&mut self, url: &WebUrl, cx: &mut Context<Self>) -> bool {
+    /// Whether the workspace's panel page exists, so VS Code reconnects to
+    /// its server on its own, or could not be created and is not retried
+    /// every tick. Either way the server need not be asked.
+    fn code_page_settled(&self, scope: &Scope, workspace: &str, cx: &App) -> bool {
+        let Some(id) = store(cx)
+            .and_then(|store| store.code_tab(scope, workspace))
+            .map(|tab| tab.id)
+        else {
+            return false;
+        };
+        #[cfg(any(target_os = "macos", windows))]
+        if self.browser.pages.contains(id) {
+            return true;
+        }
+        self.browser.failed.contains_key(&id)
+    }
+
+    /// Starts over when `url` is a new address: it closes the tabs still on
+    /// another server, so they reopen on this one, and the pages of the
+    /// rest, so they reopen with its token.
+    fn follow_code_address(&mut self, url: &WebUrl, cx: &mut Context<Self>) {
         if self.browser.code_server.url.as_ref() != Some(url) {
             let server = &mut self.browser.code_server;
             server.url = Some(url.clone());
@@ -191,11 +205,18 @@ impl HerdrWindow {
             #[cfg(any(target_os = "macos", windows))]
             self.close_code_pages(cx);
         }
+    }
+
+    /// Whether the server at `url` has answered lately, asking it when
+    /// nothing is known, it last answered a while ago, or it last failed a
+    /// while ago. A page created against a server that has since stopped
+    /// would stay blank, so an old answer is not trusted.
+    fn code_server_ready(&mut self, url: &WebUrl, cx: &mut Context<Self>) -> bool {
         match &self.browser.code_server.state {
-            Reach::Ready(_) => return true,
+            Reach::Ready { at, .. } if at.elapsed() < RETRY => return true,
             Reach::Asking => return false,
             Reach::Failed { at, .. } if at.elapsed() < RETRY => return false,
-            Reach::Unknown | Reach::Failed { .. } => {}
+            Reach::Unknown | Reach::Ready { .. } | Reach::Failed { .. } => {}
         }
         let server = &mut self.browser.code_server;
         server.state = Reach::Asking;
@@ -209,7 +230,10 @@ impl HerdrWindow {
                     return;
                 }
                 server.state = match answer {
-                    Ok(answer) => Reach::Ready(answer),
+                    Ok(server) => Reach::Ready {
+                        server,
+                        at: Instant::now(),
+                    },
                     Err(error) => {
                         tracing::info!(%error, "The VS Code server did not answer");
                         Reach::Failed {
