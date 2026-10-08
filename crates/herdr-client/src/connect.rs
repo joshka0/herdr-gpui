@@ -9,7 +9,7 @@ use crate::{
     limits::{COMMAND_CAPACITY, EVENT_CAPACITY},
     options::{ConnectOptions, validate_options},
     queue,
-    session::run_connection,
+    session::{Signals, run_connection},
     ssh::{self, Bridge},
     transport::Stream,
     wsl,
@@ -91,6 +91,8 @@ pub fn connect_with_connector<T: Into<Transport>>(
     let (tx, events) = bounded(EVENT_CAPACITY);
     let stop = Arc::new(AtomicBool::new(false));
     let worker_stop = stop.clone();
+    let liveness = Arc::new(AtomicBool::new(false));
+    let worker_liveness = liveness.clone();
     thread::Builder::new()
         .name("herdr-client-io".into())
         .spawn(move || {
@@ -126,7 +128,10 @@ pub fn connect_with_connector<T: Into<Transport>>(
                     child.is_some(),
                     rx,
                     &tx,
-                    &worker_stop,
+                    Signals {
+                        stop: &worker_stop,
+                        liveness: &worker_liveness,
+                    },
                 )
                 // The child guard is dropped before delivering a disconnect event.
             })();
@@ -141,6 +146,10 @@ pub fn connect_with_connector<T: Into<Transport>>(
                 if let Some(mismatch) = result.as_ref().err().and_then(Error::version_mismatch) {
                     let _ = deliver(&tx, ClientEvent::VersionMismatch(mismatch), &worker_stop);
                 }
+                let ssh = match &result {
+                    Err(Error::SshRefused(failure)) => Some(*failure),
+                    _ => None,
+                };
                 let reason = result
                     .err()
                     .map(|e| {
@@ -151,7 +160,7 @@ pub fn connect_with_connector<T: Into<Transport>>(
                             .collect()
                     })
                     .unwrap_or_else(|| "server disconnected".into());
-                let _ = deliver(&tx, ClientEvent::Disconnected { reason }, &worker_stop);
+                let _ = deliver(&tx, ClientEvent::Disconnected { reason, ssh }, &worker_stop);
             }
             worker_stop.store(true, Ordering::Release);
         })?;
@@ -163,6 +172,7 @@ pub fn connect_with_connector<T: Into<Transport>>(
                 next_request: AtomicU64::new(1),
                 image_busy: Arc::new(AtomicBool::new(false)),
                 last_queued_theme: Default::default(),
+                liveness,
             }),
         },
         events,

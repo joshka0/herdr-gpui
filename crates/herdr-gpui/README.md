@@ -48,6 +48,18 @@ rules. `--socket` must name the binary **client** socket, not the JSON API socke
 in the single-row status bar and host rows. Endpoints reconnect independently with
 bounded backoff; Terminal > Reconnect retries the selected endpoint immediately,
 without input replay. Detach pauses retries for that endpoint until Reconnect.
+A selected host that drops stays selected while it reconnects: its last terminal
+picture stays up, dimmed, under a card with the reason and a Reconnect now button,
+until the new connection presents its own frame. Keys typed meanwhile are not sent,
+and a flash says so. Only a surface activation that fails on a live connection
+falls back to Local. The card names why SSH refused a host: an untrusted host key,
+failed authentication, an unreachable host, or no Herdr installed. The
+first two and the last need the user, so those hosts wait the full 30 seconds
+between retries rather than backing off from half a second. After the machine
+sleeps (the wall clock runs ahead of the monotonic one, which stops while macOS
+and Linux are suspended), every live SSH link must answer a ping within three
+seconds or reconnect, and every dropped endpoint is dialled at once instead of
+at the end of its backoff.
 The status dot pulses amber during local daemon startup and is red when disconnected.
 Healthy connections leave the status bar quiet; connection indicators live in the
 device picker. Startup, disconnection, and operation errors remain in the status bar.
@@ -596,6 +608,14 @@ every two seconds over its own SSH shell, kept open while the host is connected
 (`/proc` on Linux; `vm_stat` and a one-second `iostat` on macOS). Other remote
 systems, and remote hosts from a Windows client, show it as unavailable. Set top-level `show_system_load = false`,
 or turn off **Show CPU and memory** in Settings, to hide it and stop sampling.
+
+The coffee cup in the status bar keeps this machine's display on and stops it
+from sleeping when idle, for as long as the cup is full; click it again to let
+go. It is app-wide, so every window shows the same cup. macOS holds power
+assertions (`pmset -g assertions` lists them), Windows sets the execution
+state (`powercfg /requests`), and Linux asks the session's
+`org.freedesktop.ScreenSaver` and logind (`systemd-inhibit --list`). Quitting
+or a crash lets go too. Closing a laptop lid still sleeps the machine.
 
 Workspaces that run a server show the TCP ports it listens on, as `:3000`
 chips on a line under the workspace's sidebar row and, for the focused

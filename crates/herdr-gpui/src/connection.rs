@@ -249,6 +249,7 @@ impl ConnectionBridge {
             if let Ok(mut state) = self.inbox.lock() {
                 state.apply(ClientEvent::Disconnected {
                     reason: error.to_string(),
+                    ssh: None,
                 });
             }
         }

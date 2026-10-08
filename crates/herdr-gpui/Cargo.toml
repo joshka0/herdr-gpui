@@ -27,6 +27,7 @@ gpui_platform                  = { features = ["font-kit", "runtime_shaders", "w
 herdr-client.workspace         = true
 if-addrs.workspace             = true
 image                          = { features = ["bmp", "tiff"], workspace = true }
+keepawake.workspace            = true
 mdns-sd.workspace              = true
 nucleo-matcher.workspace       = true
 pbkdf2.workspace               = true
@@ -39,6 +40,7 @@ serde_ignored.workspace        = true
 serde_json.workspace           = true
 sha1.workspace                 = true
 sha2.workspace                 = true
+skrifa.workspace               = true
 sysinfo.workspace              = true
 syntect.workspace              = true
 tar.workspace                  = true
@@ -89,11 +91,13 @@ gpui-wry.workspace = true
 wry.workspace      = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
+fontdb.workspace       = true
 futures-lite.workspace = true
 oo7.workspace          = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 block2.workspace                = true
+dispatch2.workspace             = true
 objc2-core-foundation.workspace = true
 objc2-web-kit.workspace         = true
 cocoa                        = { optional = true, workspace = true }

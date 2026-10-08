@@ -64,8 +64,12 @@ pub enum Error {
     SoundTimeout,
     #[error("Audio playback cancelled")]
     SoundCancelled,
-    #[error("Could not keep the display awake")]
-    Caffeine(#[source] io::Error),
+    #[error("Could not keep the display awake: {0}")]
+    Caffeine(#[source] keepawake::Error),
+    #[error("Could not start the keep-awake thread")]
+    CaffeineThread(#[source] io::Error),
+    #[error("The keep-awake thread stopped; the display may sleep")]
+    CaffeineWorkerStopped,
     #[error(
         "PR lookup requires your owned local session socket or a saved SSH device. Other socket locations are unsupported."
     )]
@@ -545,6 +549,9 @@ pub enum Error {
     #[cfg(any(target_os = "macos", windows))]
     #[error("Could not reach the native window for the page: {0}")]
     WindowHandle(#[from] WindowHandleError),
+    #[cfg(target_os = "macos")]
+    #[error("The page that opened a popup is no longer in a window")]
+    PopupOpener,
     #[error("Could not install the agent skill at {}: {source}", path.display())]
     SkillInstall {
         path: PathBuf,

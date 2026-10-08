@@ -4,7 +4,7 @@
 //! come from upstream's endpoint catalog; WSL distributions from this client's
 //! own list beside it, which upstream never reads.
 use super::{Endpoint, LOCAL, SAVED_PREFIX, WSL_PREFIX};
-use crate::{Error, HerdrWindow, Result};
+use crate::{Error, HerdrWindow, Result, storage_warning::StorageFailure};
 use gpui::Context;
 use herdr_client::{ConnectTarget, SavedHost, WslHost};
 use std::{
@@ -22,6 +22,9 @@ pub(crate) struct Catalog {
     pub(super) restore_pending: bool,
     pub(super) queued_write: Option<Option<String>>,
     writing: Option<mpsc::Receiver<Result<()>>>,
+    /// The storage failure last warned about. Loads retry every two seconds,
+    /// so each distinct failure warns once until a load succeeds.
+    last_failure: Option<StorageFailure>,
 }
 
 pub(super) struct CatalogUpdate {
@@ -116,6 +119,7 @@ impl Catalog {
             restore_pending: false,
             queued_write: None,
             writing: None,
+            last_failure: None,
         }
     }
 
@@ -124,6 +128,9 @@ impl Catalog {
         if let Some(result) = self.pending.as_ref().and_then(|rx| rx.try_recv().ok()) {
             self.pending = None;
             self.next_poll = Instant::now() + Duration::from_secs(2);
+            if let Some(failure) = self.new_failure(&result) {
+                failure.warn("Host catalog");
+            }
             return Some(result);
         }
         if self.pending.is_none() && Instant::now() >= self.next_poll {
@@ -142,6 +149,19 @@ impl Catalog {
             }
         }
         None
+    }
+
+    /// The storage failure behind `result` when it differs from the last one.
+    fn new_failure(&mut self, result: &Result<CatalogUpdate>) -> Option<StorageFailure> {
+        let failure = result
+            .as_ref()
+            .err()
+            .and_then(|error| StorageFailure::find(error));
+        if failure == self.last_failure {
+            return None;
+        }
+        self.last_failure = failure.clone();
+        failure
     }
 
     pub(super) fn accept(&mut self, update: &CatalogUpdate) {

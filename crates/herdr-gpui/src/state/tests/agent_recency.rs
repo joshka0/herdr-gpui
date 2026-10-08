@@ -63,6 +63,7 @@ fn history_ends_with_its_pane_boot_or_connection() {
     assert!(state.agent_recency.of("kept") > kept);
     state.apply(ClientEvent::Disconnected {
         reason: "gone".into(),
+        ssh: None,
     });
     assert_eq!(state.agent_recency, AgentRecency::default());
 }
