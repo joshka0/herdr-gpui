@@ -33,7 +33,7 @@ const FORGES: [&str; 7] = [
 pub(super) fn hosts() -> Result<Vec<Candidate>> {
     let home = crate::config::home()?;
     let mut reader = Reader::new(home, read_file);
-    reader.include("~/.ssh/config", 0)?;
+    reader.include("~/.ssh/config", 0, &[])?;
     Ok(reader.candidates())
 }
 
@@ -69,8 +69,10 @@ impl<F: FnMut(&Path) -> io::Result<Option<String>>> Reader<F> {
 
     /// Read every file an `Include` argument names. Relative paths are under
     /// `~/.ssh`, as OpenSSH resolves them for a user configuration; `*` and
-    /// `?` are expanded in the last path component only.
-    pub(super) fn include(&mut self, argument: &str, depth: usize) -> Result<()> {
+    /// `?` are expanded in the last path component only. Each file starts
+    /// inside `block`, the `Host` block that included it, as in OpenSSH, so
+    /// its `HostName` applies to those aliases.
+    pub(super) fn include(&mut self, argument: &str, depth: usize, block: &[usize]) -> Result<()> {
         if depth > MAX_DEPTH {
             return Ok(());
         }
@@ -121,15 +123,17 @@ impl<F: FnMut(&Path) -> io::Result<Option<String>>> Reader<F> {
                 source,
             })?;
             if let Some(text) = text {
-                self.parse(&text, depth)?;
+                self.parse(&text, depth, block)?;
             }
         }
         Ok(())
     }
 
-    pub(super) fn parse(&mut self, text: &str, depth: usize) -> Result<()> {
+    /// Parse one file that starts inside `block`. A `Host` or `Match` line in
+    /// it ends that block for the rest of this file only.
+    pub(super) fn parse(&mut self, text: &str, depth: usize, block: &[usize]) -> Result<()> {
         // Indices into `aliases` that the current `Host` line declared.
-        let mut current: Vec<usize> = Vec::new();
+        let mut current: Vec<usize> = block.to_vec();
         for line in text.lines() {
             let line = line.trim();
             if line.is_empty() || line.starts_with('#') {
@@ -164,7 +168,7 @@ impl<F: FnMut(&Path) -> io::Result<Option<String>>> Reader<F> {
                 }
                 "include" => {
                     for argument in &arguments {
-                        self.include(argument, depth + 1)?;
+                        self.include(argument, depth + 1, &current)?;
                     }
                 }
                 _ => {}
@@ -193,12 +197,11 @@ impl<F: FnMut(&Path) -> io::Result<Option<String>>> Reader<F> {
             .into_iter()
             .filter(|(_, hostname)| !hostname.as_deref().is_some_and(forge))
             .map(|(alias, hostname)| {
-                // `%h` and other tokens are expanded by ssh, not here.
+                // `%h` and other tokens are expanded by ssh, not here. Without
+                // a `HostName`, ssh connects to the alias itself.
                 let hostname = hostname.filter(|hostname| !hostname.contains('%'));
-                let hosts: Vec<&str> = std::iter::once(alias.as_str())
-                    .chain(hostname.as_deref())
-                    .collect();
-                Candidate::new(Source::SshConfig, &alias, alias.clone(), &hosts)
+                let host = hostname.as_deref().unwrap_or(&alias);
+                Candidate::new(Source::SshConfig, &alias, alias.clone(), &[host]).with_alias(&alias)
             })
             .collect()
     }

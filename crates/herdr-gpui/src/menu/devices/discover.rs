@@ -82,6 +82,17 @@ impl Candidate {
             keys,
         }
     }
+
+    /// Also identify the machine by an SSH alias. An alias is the user's own
+    /// name for a host, not a network name, so it adds no short-name key.
+    pub(super) fn with_alias(mut self, alias: &str) -> Self {
+        let alias = alias.to_lowercase();
+        if !self.keys.contains(&alias) {
+            self.keys.truncate(MAX_KEYS - 1);
+            self.keys.insert(0, alias);
+        }
+        self
+    }
 }
 
 /// A machine one or more sources reported.
@@ -95,7 +106,9 @@ pub(super) struct Suggestion {
 }
 
 impl Suggestion {
-    /// Whether a saved SSH target already names this machine.
+    /// Whether a saved SSH target already names this machine: the same alias,
+    /// host name, or address. A saved name that only shares a short name is
+    /// left to `ssh -G`, which the dialog checks before saving.
     pub(super) fn saved_as(&self, target: &str) -> bool {
         let target = target.trim();
         let target = target.strip_prefix("ssh://").unwrap_or(target);
@@ -105,7 +118,8 @@ impl Suggestion {
             None if host.matches(':').count() == 1 => host.split(':').next().unwrap_or(host),
             None => host,
         };
-        host_keys(host).any(|key| self.keys.contains(&key))
+        let host = host.trim().trim_end_matches('.').to_lowercase();
+        !host.is_empty() && self.keys.contains(&host)
     }
 }
 
@@ -142,16 +156,31 @@ pub(super) fn merge(suggestions: &mut Vec<Suggestion>, candidate: Candidate) {
     suggestions.sort_by_cached_key(|suggestion| suggestion.name.to_lowercase());
 }
 
-/// The keys a host name or address contributes: itself, lowercased without a
-/// trailing dot, and for a name also its first label, which is how
-/// `studio.local` and `studio.example.ts.net` are known to be one machine.
+/// The keys a host name or address contributes. The host itself, lowercased
+/// without a trailing dot, always identifies the machine. A name that only
+/// means something on this network or tailnet also yields `~label`: Bonjour's
+/// `studio.local`, MagicDNS's `studio.<tailnet>.ts.net`, and a bare `studio`
+/// all come from the machine's own host name, so they are one machine.
+/// Ordinary DNS names never share a short key: `nas.work.example` and
+/// `nas.home.example` are different machines.
 fn host_keys(host: &str) -> impl Iterator<Item = String> {
     let host = host.trim().trim_end_matches('.').to_lowercase();
-    let label = (!host.is_empty() && host.parse::<IpAddr>().is_err())
-        .then(|| host.split('.').next().map(str::to_owned))
-        .flatten()
-        .filter(|label| label != &host && !label.is_empty());
-    (!host.is_empty()).then_some(host).into_iter().chain(label)
+    let short = local_label(&host).map(|label| format!("~{label}"));
+    (!host.is_empty()).then_some(host).into_iter().chain(short)
+}
+
+/// The machine's own host name inside a local namespace, if `host` is one.
+fn local_label(host: &str) -> Option<&str> {
+    if host.parse::<IpAddr>().is_ok() {
+        return None;
+    }
+    match host.split_once('.') {
+        None => Some(host),
+        Some((label, domain)) => {
+            (domain == "local" || domain.ends_with(".ts.net")).then_some(label)
+        }
+    }
+    .filter(|label| !label.is_empty())
 }
 
 /// Untrusted network names become display text: control characters are

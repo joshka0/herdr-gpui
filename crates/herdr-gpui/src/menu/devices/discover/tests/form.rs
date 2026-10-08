@@ -65,7 +65,7 @@ fn open(
                 "ssh:saved".into(),
                 "Saved".into(),
                 ConnectTarget::Ssh {
-                    target: "me@saved".into(),
+                    target: "me@saved.tail1.ts.net".into(),
                     session: "default".into(),
                 },
                 true,
@@ -192,4 +192,65 @@ fn closing_the_form_ends_the_search(cx: &mut gpui::TestAppContext) {
     cx.update(|window, cx| view.update(cx, |view, cx| view.dismiss_menu(window, cx)));
     settle(cx);
     cx.update(|_, cx| assert!(view.read(cx).menu.device_setup.is_none()));
+}
+
+fn click_row(cx: &mut VisualTestContext, index: usize) {
+    cx.update(|window, cx| full_draw(window, cx).clear(cx));
+    let row = cx
+        .debug_bounds(Box::leak(
+            format!("device-suggestion-{index}").into_boxed_str(),
+        ))
+        .unwrap()
+        .center();
+    cx.simulate_click(row, Modifiers::default());
+}
+
+fn type_label(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext, text: &str) {
+    cx.update(|_, cx| {
+        let label = view.read(cx).menu.device_setup.as_ref().unwrap().fields[1].clone();
+        label.update(cx, |field, cx| field.set_text_selected(text, cx));
+    });
+    cx.run_until_parked();
+}
+
+#[gpui::test]
+fn a_typed_label_is_kept_even_when_it_matches_a_suggestion(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = open(cx, report);
+    settle(cx);
+    // `nas` is also a suggestion's name, but the user typed it.
+    type_label(&view, cx, "nas");
+    click_row(cx, 0);
+    assert_eq!(
+        fields(&view, cx),
+        ("m4max.tail1.ts.net".into(), "nas".into())
+    );
+}
+
+#[gpui::test]
+fn editing_a_filled_label_keeps_it(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = open(cx, report);
+    settle(cx);
+    click_row(cx, 0);
+    cx.run_until_parked();
+    type_label(&view, cx, "m4max office");
+    click_row(cx, 1);
+    assert_eq!(
+        fields(&view, cx),
+        ("ssh://nas.local:2222".into(), "m4max office".into())
+    );
+}
+
+#[gpui::test]
+fn a_filled_label_still_follows_after_searching_again(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = open(cx, report);
+    settle(cx);
+    click_row(cx, 0);
+    cx.run_until_parked();
+    cx.update(|_, cx| view.update(cx, |view, cx| view.start_device_discovery_with(report, cx)));
+    settle(cx);
+    click_row(cx, 1);
+    assert_eq!(
+        fields(&view, cx),
+        ("ssh://nas.local:2222".into(), "nas".into())
+    );
 }

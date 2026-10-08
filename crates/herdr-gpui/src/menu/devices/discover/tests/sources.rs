@@ -17,7 +17,7 @@ fn bonjour_suggests_the_announced_host_and_its_port() {
     assert_eq!(found.source, Source::Bonjour);
     assert_eq!(found.name, "studio");
     assert_eq!(found.target, "studio.local");
-    assert_eq!(found.keys, ["studio.local", "studio", "192.168.1.20"]);
+    assert_eq!(found.keys, ["studio.local", "~studio", "192.168.1.20"]);
 
     let other = bonjour::candidate(
         "nas._ssh._tcp.local.",
@@ -77,7 +77,7 @@ fn tailscale_suggests_online_peers_that_can_serve_ssh() {
         ]
     );
     assert!(peers[1].keys.contains(&"100.84.59.116".to_owned()));
-    assert!(peers[1].keys.contains(&"m4max".to_owned()));
+    assert!(peers[1].keys.contains(&"~m4max".to_owned()));
 }
 
 #[test]
@@ -116,7 +116,7 @@ fn tailscale_is_found_on_path_before_install_locations() {
 
 fn aliases(text: &str) -> Vec<(String, String)> {
     let mut reader = ssh_config::Reader::new("/home/me".into(), |_: &Path| Ok(None));
-    reader.parse(text, 0).unwrap();
+    reader.parse(text, 0, &[]).unwrap();
     reader
         .candidates()
         .into_iter()
@@ -138,9 +138,9 @@ fn ssh_config_lists_concrete_aliases_with_their_host_names() {
     assert_eq!(
         found,
         [
-            ("box".into(), "box box.tail1.ts.net".into()),
-            ("box-alt".into(), "box-alt box.tail1.ts.net box".into()),
-            ("quoted".into(), "quoted".into()),
+            ("box".into(), "box box.tail1.ts.net ~box".into()),
+            ("box-alt".into(), "box-alt box.tail1.ts.net ~box".into()),
+            ("quoted".into(), "quoted ~quoted".into()),
         ]
     );
 }
@@ -157,13 +157,44 @@ fn ssh_config_follows_includes_relative_to_the_ssh_directory() {
             _ => None,
         })
     });
-    reader.include("~/.ssh/config", 0).unwrap();
+    reader.include("~/.ssh/config", 0, &[]).unwrap();
     let found: Vec<String> = reader.candidates().into_iter().map(|c| c.target).collect();
     assert_eq!(found, ["lab"]);
     // The include cycle stops at the depth limit instead of looping.
     assert!(reads.len() < 16, "{reads:?}");
     assert_eq!(reads[1], Path::new("/home/me/.ssh/hosts"));
     assert_eq!(reads[2], Path::new("/home/me/other"));
+}
+
+#[test]
+fn ssh_config_includes_continue_the_enclosing_host_block() {
+    let mut reader = ssh_config::Reader::new("/home/me".into(), |path: &Path| {
+        Ok(match path.to_str() {
+            Some("/home/me/.ssh/config") => {
+                Some("Host gh\n  Include gh.conf\nHost lab\n  Include lab.conf\n  User me\n".into())
+            }
+            Some("/home/me/.ssh/gh.conf") => Some("HostName github.com\n".into()),
+            // A `Host` in an included file ends the block only inside it.
+            Some("/home/me/.ssh/lab.conf") => {
+                Some("HostName lab.tail1.ts.net\nHost other\n".into())
+            }
+            _ => None,
+        })
+    });
+    reader.include("~/.ssh/config", 0, &[]).unwrap();
+    let found: Vec<(String, String)> = reader
+        .candidates()
+        .into_iter()
+        .map(|c| (c.target, c.keys.join(" ")))
+        .collect();
+    // `gh` is a git hosting alias once its included HostName is known.
+    assert_eq!(
+        found,
+        [
+            ("lab".into(), "lab lab.tail1.ts.net ~lab".into()),
+            ("other".into(), "other ~other".into()),
+        ]
+    );
 }
 
 #[test]
@@ -177,8 +208,8 @@ fn ssh_config_expands_include_wildcards() {
     let mut reader = ssh_config::Reader::new(home.path().into(), |path: &Path| {
         std::fs::read_to_string(path).map(Some)
     });
-    reader.include("config.d/*.conf", 0).unwrap();
-    reader.include("missing.d/*", 0).unwrap();
+    reader.include("config.d/*.conf", 0, &[]).unwrap();
+    reader.include("missing.d/*", 0, &[]).unwrap();
     let found: Vec<String> = reader.candidates().into_iter().map(|c| c.target).collect();
     assert_eq!(found, ["alpha", "bravo"]);
 }
@@ -188,7 +219,7 @@ fn ssh_config_read_errors_name_the_file() {
     let mut reader = ssh_config::Reader::new("/home/me".into(), |_: &Path| {
         Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied))
     });
-    let error = reader.include("~/.ssh/config", 0).unwrap_err();
+    let error = reader.include("~/.ssh/config", 0, &[]).unwrap_err();
     let Error::SshConfig { path, source } = &error else {
         panic!("{error:?}");
     };

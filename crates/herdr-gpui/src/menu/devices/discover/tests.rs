@@ -59,12 +59,67 @@ fn a_less_preferred_source_does_not_replace_the_target() {
     );
     assert_eq!(list[0].target, "box.tail1.ts.net");
     assert_eq!(list[0].sources, [Source::Tailscale, Source::Bonjour]);
-    // A second alias for the same machine does not rename the first.
+    // A second report of the same machine from the same source keeps the first.
     merge(
         &mut list,
-        candidate(Source::Tailscale, "box.lan", "box.lan", &["box.lan"]),
+        candidate(
+            Source::Tailscale,
+            "box-again",
+            "box-again.tail1.ts.net",
+            &["box.tail1.ts.net"],
+        ),
     );
+    assert_eq!(list.len(), 1);
     assert_eq!(list[0].target, "box.tail1.ts.net");
+}
+
+#[test]
+fn ordinary_dns_names_that_share_a_first_label_stay_apart() {
+    let mut list = Vec::new();
+    merge(
+        &mut list,
+        candidate(Source::SshConfig, "work", "work", &["nas.work.example"]).with_alias("work"),
+    );
+    merge(
+        &mut list,
+        candidate(Source::SshConfig, "home", "home", &["nas.home.example"]).with_alias("home"),
+    );
+    merge(
+        &mut list,
+        candidate(Source::Bonjour, "nas", "nas.local", &["nas.local"]),
+    );
+    let targets: Vec<&str> = list.iter().map(|s| s.target.as_str()).collect();
+    assert_eq!(targets, ["home", "nas.local", "work"]);
+    // Saving one of them hides only that one.
+    assert!(list[2].saved_as("work"));
+    assert!(!list[0].saved_as("work"));
+    assert!(!list[1].saved_as("nas.work.example"));
+}
+
+#[test]
+fn local_names_link_bonjour_magic_dns_and_bare_hosts() {
+    let mut list = Vec::new();
+    merge(
+        &mut list,
+        candidate(Source::Bonjour, "studio", "studio.local", &["studio.local"]),
+    );
+    merge(
+        &mut list,
+        candidate(
+            Source::Tailscale,
+            "studio",
+            "studio.tail1.ts.net",
+            &["studio.tail1.ts.net"],
+        ),
+    );
+    // An alias that connects to the bare host name.
+    merge(
+        &mut list,
+        candidate(Source::SshConfig, "studio", "studio", &["studio"]).with_alias("studio"),
+    );
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].target, "studio");
+    assert_eq!(list[0].sources, Source::ALL);
 }
 
 #[test]
@@ -108,8 +163,7 @@ fn a_saved_target_hides_its_machine() {
     );
     let suggestion = &list[0];
     for saved in [
-        "box",
-        "me@box",
+        "box.tail1.ts.net",
         "ssh://me@box.tail1.ts.net:2222",
         "BOX.tail1.ts.net",
         "100.64.0.9",
@@ -117,7 +171,8 @@ fn a_saved_target_hides_its_machine() {
     ] {
         assert!(suggestion.saved_as(saved), "{saved}");
     }
-    for other in ["boxer", "me@other", "100.64.0.10"] {
+    // A bare name may be any alias; `ssh -G` settles it when saving.
+    for other in ["box", "me@box", "boxer", "me@other", "100.64.0.10"] {
         assert!(!suggestion.saved_as(other), "{other}");
     }
 }

@@ -131,7 +131,7 @@ impl HerdrWindow {
     }
 
     /// Fill the form from a suggestion. A label the user typed is kept; one an
-    /// earlier suggestion filled in is replaced.
+    /// earlier suggestion filled in, and not edited since, is replaced.
     pub(in crate::menu::devices) fn use_device_suggestion(
         &mut self,
         target: &str,
@@ -139,22 +139,18 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(setup) = &self.menu.device_setup else {
+        let Some(setup) = &mut self.menu.device_setup else {
             return;
         };
         if !matches!(setup.step, super::super::add_device::Step::Form) {
             return;
         }
-        let [target_field, label_field, _] = &setup.fields;
+        let [target_field, label_field, _] = setup.fields.clone();
         target_field.update(cx, |field, cx| field.set_text_selected(target, cx));
         let label = label_field.read(cx).text().trim();
-        let suggested = setup.discovery.as_ref().is_some_and(|discovery| {
-            discovery
-                .suggestions
-                .iter()
-                .any(|suggestion| suggestion.name == label)
-        });
-        if label.is_empty() || suggested {
+        if label.is_empty() || setup.suggested_label.as_deref() == Some(label) {
+            // Recorded first, so the field's change event sees its own fill.
+            setup.suggested_label = Some(name.to_owned());
             label_field.update(cx, |field, cx| field.set_text_selected(name, cx));
         }
         window.focus(&target_field.read(cx).focus.clone(), cx);

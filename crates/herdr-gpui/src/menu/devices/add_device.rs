@@ -2,7 +2,10 @@
 //! UI thread, and the local workspace that carries a setup needing prompts.
 
 use super::{Page, discover::Discovery, setup};
-use crate::{HerdrWindow, NavigationTarget, search_input::SearchInput};
+use crate::{
+    HerdrWindow, NavigationTarget,
+    search_input::{Changed, SearchInput},
+};
 use gpui::{prelude::*, *};
 use herdr_client::{
     HostProbe, Method,
@@ -18,6 +21,11 @@ pub(in crate::menu) struct Setup {
     pub(super) task: Option<Task<()>>,
     /// The search for hosts to suggest, from when the form opens.
     pub(super) discovery: Option<Discovery>,
+    /// The label a suggestion filled in, until the user edits it. Only that
+    /// label is replaced when another suggestion is chosen.
+    pub(super) suggested_label: Option<String>,
+    /// Clears `suggested_label` once the label field holds anything else.
+    pub(super) _label_edits: Option<Subscription>,
 }
 
 /// Where adding a device stands. Each step after `Form` belongs to the request
@@ -103,12 +111,21 @@ impl HerdrWindow {
             input
         });
         window.focus(&fields[0].read(cx).focus.clone(), cx);
+        let label_edits = cx.subscribe(&fields[1], |this, field, _: &Changed, cx| {
+            if let Some(setup) = &mut this.menu.device_setup
+                && setup.suggested_label.as_deref() != Some(field.read(cx).text())
+            {
+                setup.suggested_label = None;
+            }
+        });
         self.menu.device_setup = Some(Setup {
             fields,
             step: Step::Form,
             claim: None,
             task: None,
             discovery: None,
+            suggested_label: None,
+            _label_edits: Some(label_edits),
         });
         self.menu.page = Some(Page::AddDevice);
         self.start_device_discovery(cx);
