@@ -14,6 +14,9 @@ pub(in crate::settings_window) struct CodeSettings {
     /// An address submitted while another save or a reload ran, saved once
     /// the window is free; `Some(None)` removes the address.
     pending: Option<Option<WebUrl>>,
+    /// The address a running save writes, checked against the reload that
+    /// ends it.
+    saving: Option<Option<WebUrl>>,
     test: Test,
     /// Fences out a test answer once the address has changed since.
     generation: u64,
@@ -28,6 +31,7 @@ impl Default for CodeSettings {
         Self {
             field: None,
             pending: None,
+            saving: None,
             test: Test::Idle,
             generation: 0,
             probe: code_server::probe,
@@ -118,13 +122,24 @@ impl SettingsWindow {
 
     /// Shows the saved address in the field, unless it is being edited:
     /// a reload, after a save or a change to the file, keeps an edit that
-    /// is in progress, or one still waiting to be saved.
+    /// is in progress, or one still waiting to be saved. An address whose
+    /// save failed stays in the field as an edit, for Enter to try again.
     pub(in crate::settings_window) fn sync_code_field(&mut self, cx: &mut Context<Self>) {
         let saved = self.saved_code_url().to_owned();
         let pending = self.code.pending.is_some();
+        let failed = self
+            .code
+            .saving
+            .take()
+            .is_some_and(|url| url != self.config.code.url);
         let Some(field) = &mut self.code.field else {
             return;
         };
+        if failed {
+            // The text is no longer the page's own, so it reads as an edit.
+            field.shown = saved;
+            return;
+        }
         let editing = field.invalid || field.input.read(cx).text() != field.shown;
         if editing || pending || field.shown == saved {
             return;
@@ -191,6 +206,7 @@ impl SettingsWindow {
         if self.config.code.url == url {
             return;
         }
+        self.code.saving = Some(url.clone());
         self.save_code_url(url, cx);
     }
 

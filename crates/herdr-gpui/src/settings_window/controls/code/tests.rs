@@ -197,3 +197,40 @@ fn an_address_submitted_during_a_save_is_saved_after_it(cx: &mut TestAppContext)
         )]
     );
 }
+
+/// An address whose save failed stays in the field as an edit, rather
+/// than being replaced by the older saved one, and Enter tries it again.
+#[gpui::test]
+fn an_address_whose_save_failed_stays_in_the_field(cx: &mut TestAppContext) {
+    let (view, cx, _) = page(cx);
+    let tries = Arc::new(Mutex::new(0));
+    let counted = tries.clone();
+    view.update(cx, |view, _| {
+        view.code.io = Some(CodeIo {
+            write: Arc::new(move |_| {
+                *counted.lock().unwrap() += 1;
+                Err(crate::Error::CodeTokenRefused)
+            }),
+            load: skill_load,
+        });
+    });
+    type_address(&view, cx, "127.0.0.1:9000/?tkn=x");
+    cx.simulate_keystrokes("enter");
+    cx.run_until_parked();
+    let text = |view: &Entity<SettingsWindow>, cx: &mut VisualTestContext| {
+        view.read_with(cx, |view, cx| {
+            let field = view.code.field.as_ref().unwrap();
+            field.input.read(cx).text().to_owned()
+        })
+    };
+    assert_eq!(*tries.lock().unwrap(), 1, "not retried on its own");
+    assert_eq!(text(&view, cx), "http://127.0.0.1:9000/?tkn=x");
+
+    // A later reload keeps it too, and Enter saves it again.
+    view.update(cx, |view, cx| view.sync_code_field(cx));
+    assert_eq!(text(&view, cx), "http://127.0.0.1:9000/?tkn=x");
+    type_address(&view, cx, "");
+    cx.simulate_keystrokes("enter");
+    cx.run_until_parked();
+    assert_eq!(*tries.lock().unwrap(), 2);
+}
