@@ -17,6 +17,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod failure;
+pub use failure::SshFailure;
+
 const READY: &[u8] = b"herdr-remote-output-ready:1\n";
 
 /// A bridge, probe, or script child (`ssh`, or `wsl.exe` on Windows), killed
@@ -461,11 +464,24 @@ pub(crate) fn connect(
     command
         .stdin(Stdio::from(OwnedFd::from(child_stream.try_clone()?)))
         .stdout(Stdio::from(OwnedFd::from(child_stream)))
-        // Do not inherit a GUI terminal or collect unbounded/secret-bearing diagnostics.
-        .stderr(Stdio::null());
-    let child = ChildGuard(command.spawn()?);
-    handshake(&mut stream, stop)?;
-    Ok((stream, child))
+        // Never inherit a GUI terminal. The tail is read only to classify a
+        // failed start, then dropped; see `failure`.
+        .stderr(Stdio::piped());
+    let mut child = ChildGuard(command.spawn()?);
+    let stderr = match child.0.stderr.take() {
+        Some(stderr) => failure::drain(stderr)?,
+        None => return Err(Error::SshClosed),
+    };
+    match handshake(&mut stream, stop) {
+        // Every other way the bridge can close already says why; this one is
+        // read from what `ssh` reported.
+        Err(Error::SshClosed) => Err(Error::SshRefused(failure::diagnose(
+            &mut child.0,
+            &stderr,
+            stop,
+        ))),
+        result => result.map(|()| (stream, child)),
+    }
 }
 
 /// Answer the bridge script: skip each incompatible candidate it reports and
