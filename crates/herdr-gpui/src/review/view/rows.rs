@@ -1,45 +1,45 @@
-//! Drawing the diff, unified or side by side, and the switch between them.
-//! Every line cell starts a note on its own row, so a side-by-side change is
-//! noted on the side the user clicked.
-use super::Layout;
+//! Drawing the diff's lines, unified or side by side, and dragging the line
+//! between the sides. Every line cell starts a note on its own row, so a
+//! side-by-side change is noted on the side the user clicked. A row asks for
+//! what it lacks as it is drawn, its file's lines or its colours, and draws
+//! what it has meanwhile.
+use super::{Review, model::Item};
 use crate::browser::TabId;
 use crate::{
     HerdrWindow,
     config::Theme,
     review::{
-        diff::{Diff, Kind, Row, SplitRow},
-        highlight::Token,
+        diff::{Body, Kind, Lines, RowId, SplitRow},
+        highlight::{Span, Token},
     },
 };
 use gpui::{prelude::*, *};
+use std::ops::Range;
 
 /// The old side's share of a side-by-side row until it is dragged, and how
 /// narrow either side may get.
 pub(super) const EVEN_SPLIT: f32 = 0.5;
 const MIN_SIDE: f32 = 0.2;
 
-/// How a row of `kind` is marked and coloured.
-fn look(theme: &Theme, kind: Kind) -> (&'static str, Option<Rgba>, u32) {
-    let tint = |color: u32| rgba((color << 8) | 0x2c);
+/// How a line of `kind` is marked and coloured: its sign, its tint, its
+/// changed words' stronger tint, and its text colour.
+fn look(theme: &Theme, kind: Kind) -> (&'static str, Option<Rgba>, Option<Rgba>, u32) {
+    let tint = |color: u32, alpha: u32| rgba((color << 8) | alpha);
     match kind {
-        Kind::Added => ("+", Some(tint(theme.palette[2])), theme.foreground),
-        Kind::Removed => ("-", Some(tint(theme.palette[1])), theme.foreground),
-        Kind::Context => (" ", None, theme.foreground),
-        Kind::Hunk | Kind::Meta => ("", None, theme.muted),
-        Kind::File => ("", Some(rgb(theme.active)), theme.foreground),
-    }
-}
-
-/// A row's text; a file header names its file and how it changed.
-fn content(diff: &Diff, row: &Row) -> String {
-    if row.kind != Kind::File {
-        return row.text.clone();
-    }
-    let name = diff.files.get(row.file).cloned().unwrap_or_default();
-    if row.text.is_empty() {
-        name
-    } else {
-        format!("{name} ({})", row.text)
+        Kind::Added => (
+            "+",
+            Some(tint(theme.palette[2], 0x2c)),
+            Some(tint(theme.palette[2], 0x70)),
+            theme.foreground,
+        ),
+        Kind::Removed => (
+            "-",
+            Some(tint(theme.palette[1], 0x2c)),
+            Some(tint(theme.palette[1], 0x70)),
+            theme.foreground,
+        ),
+        Kind::Context => (" ", None, None, theme.foreground),
+        Kind::Hunk | Kind::Meta => ("", None, None, theme.muted),
     }
 }
 
@@ -56,27 +56,61 @@ fn token_colour(theme: &Theme, token: Token) -> Rgba {
     })
 }
 
-/// A row's code, coloured where its syntax is known.
-fn code(theme: &Theme, diff: &Diff, row: &Row) -> AnyElement {
-    let text = content(diff, row);
-    if row.spans.is_empty() {
-        return text.into_any_element();
+/// A line's code, coloured by its syntax where known, its changed words on
+/// a stronger tint. The two may overlap, so the text is cut at every edge
+/// of either.
+fn code(
+    theme: &Theme,
+    text: &str,
+    spans: &[Span],
+    words: &[Range<u32>],
+    word_tint: Option<Rgba>,
+) -> AnyElement {
+    let words: Vec<Range<usize>> = word_tint
+        .map(|_| {
+            words
+                .iter()
+                .map(|word| word.start as usize..(word.end as usize).min(text.len()))
+                .filter(|word| word.start < word.end)
+                .collect()
+        })
+        .unwrap_or_default();
+    if spans.is_empty() && words.is_empty() {
+        return SharedString::from(text.to_owned()).into_any_element();
     }
-    let highlights: Vec<_> = row
-        .spans
+    let mut edges: Vec<usize> = spans
         .iter()
-        .filter(|span| span.end <= text.len())
-        .map(|span| {
-            (
-                span.start..span.end,
+        .flat_map(|span| [span.start, span.end])
+        .chain(words.iter().flat_map(|word| [word.start, word.end]))
+        .filter(|&edge| edge <= text.len() && text.is_char_boundary(edge))
+        .collect();
+    edges.sort_unstable();
+    edges.dedup();
+    let mut highlights = Vec::new();
+    for pair in edges.windows(2) {
+        let range = pair[0]..pair[1];
+        let colour = spans
+            .iter()
+            .find(|span| span.start <= range.start && range.end <= span.end)
+            .map(|span| token_colour(theme, span.token).into());
+        let background = words
+            .iter()
+            .any(|word| word.start <= range.start && range.end <= word.end)
+            .then_some(word_tint)
+            .flatten()
+            .map(Into::into);
+        if colour.is_some() || background.is_some() {
+            highlights.push((
+                range,
                 HighlightStyle {
-                    color: Some(token_colour(theme, span.token).into()),
+                    color: colour,
+                    background_color: background,
                     ..HighlightStyle::default()
                 },
-            )
-        })
-        .collect();
-    StyledText::new(text)
+            ));
+        }
+    }
+    StyledText::new(text.to_owned())
         .with_highlights(highlights)
         .into_any_element()
 }
@@ -93,11 +127,12 @@ fn number(theme: &Theme, value: Option<u32>) -> Div {
 }
 
 /// The slot a note's number shows in, empty without one.
-fn mark_slot(theme: &Theme, mark: Option<usize>) -> Div {
+pub(super) fn mark_slot(theme: &Theme, mark: Option<usize>) -> Div {
     div()
         .flex_none()
         .w(px(20.))
         .flex()
+        .items_center()
         .justify_center()
         .when_some(mark, |slot, mark| {
             slot.child(
@@ -118,193 +153,279 @@ fn mark_slot(theme: &Theme, mark: Option<usize>) -> Div {
 /// Which line number a cell shows: the old one on the left of a
 /// side-by-side row, otherwise the new one where there is one.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Numbers {
+pub(super) enum Numbers {
     Both,
     Old,
     New,
 }
 
+impl Numbers {
+    fn selector(self) -> &'static str {
+        match self {
+            Self::Both => "line",
+            Self::Old => "left",
+            Self::New => "right",
+        }
+    }
+}
+
+/// The lines of `file` in `review`, if read.
+fn lines_of(review: &Review, file: usize) -> Option<&std::sync::Arc<Lines>> {
+    review.loaded()?.diff.files.get(file)?.lines()
+}
+
 impl HerdrWindow {
-    /// One row of the diff, drawn as a cell that notes row `index` when it
-    /// can take a note. `id` keeps cells of one list row distinct.
+    /// The list's row at `position`, in the review's layout.
+    pub(super) fn review_row(
+        &mut self,
+        id: TabId,
+        position: usize,
+        line_height: f32,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        self.prepare_review_row(id, position, cx);
+        self.render_review_item(id, position, line_height, cx)
+            .unwrap_or_else(|| div().h(px(line_height)).into_any_element())
+    }
+
+    /// Asks for what the row at `position` needs before it is drawn: its
+    /// file's lines, or its colours.
+    fn prepare_review_row(&mut self, id: TabId, position: usize, cx: &mut Context<Self>) {
+        let Some(review) = self.reviews.get(&id) else {
+            return;
+        };
+        let Some(item) = review.item(position) else {
+            return;
+        };
+        // A side-by-side pair may join two stretches: both are asked for.
+        let (file, lines) = match item {
+            Item::Placeholder(file) => {
+                let pending = review
+                    .loaded()
+                    .and_then(|loaded| loaded.diff.files.get(file))
+                    .is_some_and(|entry| entry.body == Body::Pending && !entry.folded);
+                if pending {
+                    self.want_review_body(id, file, cx);
+                }
+                return;
+            }
+            Item::Header(_) => return,
+            Item::Line { file, line } => (file, [Some(line), None]),
+            Item::Pair { file, row } => {
+                match lines_of(review, file).and_then(|lines| lines.split().get(row).copied()) {
+                    Some(SplitRow::Sides { left, right }) => (file, [left, right]),
+                    _ => return,
+                }
+            }
+        };
+        let Some(read) = lines_of(review, file) else {
+            return;
+        };
+        let needed: Vec<usize> = lines
+            .into_iter()
+            .flatten()
+            .filter(|&line| {
+                read.get(line).is_some_and(|found| {
+                    matches!(found.kind, Kind::Added | Kind::Removed | Kind::Context)
+                }) && review
+                    .colours
+                    .line(file, read.stretch(line).start, line)
+                    .is_none()
+            })
+            .collect();
+        for line in needed {
+            self.want_review_colours(id, file, line, cx);
+        }
+    }
+
+    fn render_review_item(
+        &self,
+        id: TabId,
+        position: usize,
+        line_height: f32,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        let review = self.reviews.get(&id)?;
+        let item = review.item(position)?;
+        let mut line = |file: usize, line: usize, numbers: Numbers| {
+            self.review_cell(id, review, file, line, numbers, line_height, cx)
+        };
+        Some(match item {
+            Item::Header(file) => self.review_file_header(id, review, file, line_height, cx),
+            Item::Placeholder(file) => self.review_placeholder(id, review, file, line_height, cx),
+            // Tints span the list, not the text.
+            Item::Line { file, line: index } => line(file, index, Numbers::Both)?
+                .w_full()
+                .into_any_element(),
+            Item::Pair { file, row } => match *lines_of(review, file)?.split().get(row)? {
+                SplitRow::Across(index) => line(file, index, Numbers::Both)?
+                    .w_full()
+                    .into_any_element(),
+                SplitRow::Sides { left, right } => {
+                    let theme = &self.theme;
+                    let gap = rgba((theme.active << 8) | 0x60);
+                    let mut half = |index: Option<usize>, numbers: Numbers| -> Stateful<Div> {
+                        let cell = index.and_then(|index| line(file, index, numbers));
+                        // Nothing on this side: a quiet gap, as tall as the other.
+                        cell.unwrap_or_else(|| {
+                            div()
+                                .id(("review-gap", position))
+                                .min_h(px(line_height))
+                                .bg(gap)
+                        })
+                        .flex_1()
+                        .min_w_0()
+                    };
+                    // The row is as tall as its taller side; both stretch to it.
+                    div()
+                        .id(("review-split", position))
+                        .w_full()
+                        .flex()
+                        .child(
+                            half(left, Numbers::Old)
+                                .flex_none()
+                                .w(relative(review.split_ratio)),
+                        )
+                        .child(
+                            half(right, Numbers::New)
+                                .border_l_1()
+                                .border_color(rgb(theme.active)),
+                        )
+                        .into_any_element()
+                }
+            },
+        })
+    }
+
+    /// Line `index` of `file`, drawn as a cell that notes it when it can
+    /// take a note.
+    #[allow(clippy::too_many_arguments)]
     fn review_cell(
         &self,
         id: TabId,
+        review: &Review,
+        file: usize,
         index: usize,
-        element: ElementId,
         numbers: Numbers,
         line_height: f32,
         cx: &mut Context<Self>,
-    ) -> Stateful<Div> {
+    ) -> Option<Stateful<Div>> {
         let theme = &self.theme;
-        let cell = div()
-            .id(element)
-            .h(px(line_height))
-            .flex()
-            .items_center()
-            .whitespace_nowrap()
-            .overflow_hidden();
-        let Some((review, loaded)) = self
-            .reviews
-            .get(&id)
-            .and_then(|review| Some((review, review.loaded()?)))
-        else {
-            return cell;
-        };
-        let diff = &loaded.diff;
-        let Some(row) = diff.rows.get(index) else {
-            return cell;
-        };
-        let (sign, background, text) = look(theme, row.kind);
-        let noteable = matches!(
-            row.kind,
-            Kind::File | Kind::Added | Kind::Removed | Kind::Context
-        );
+        let lines = lines_of(review, file)?;
+        let found = lines.get(index)?;
+        let row = RowId::Line { file, line: index };
+        let side = numbers.selector();
+        let (sign, background, word_tint, text) = look(theme, found.kind);
+        let noteable = matches!(found.kind, Kind::Added | Kind::Removed | Kind::Context);
         // An unchanged line shows on both sides; its number shows once.
         let mark = review
             .marks
-            .get(&index)
+            .get(&row)
             .copied()
-            .filter(|_| !(row.kind == Kind::Context && numbers == Numbers::Old));
-        cell.when_some(background, |cell, background| cell.bg(background))
-            .when(review.draft == Some(index), |cell| {
-                cell.bg(rgb(theme.active))
+            .filter(|_| !(found.kind == Kind::Context && numbers == Numbers::Old));
+        let found_here = review.search.found(row);
+        // Long lines wrap, as on GitHub: every text in the row keeps the
+        // diff's line height, so the gutter lines up with the first line.
+        let cell = div()
+            .id((SharedString::from(format!("review-{side}-{file}")), index))
+            .debug_selector(move || format!("review-{side}-{file}-{index}"))
+            .min_h(px(line_height))
+            .line_height(px(line_height))
+            .flex()
+            .items_start()
+            .when_some(background, |cell, background| cell.bg(background))
+            .when_some(found_here, |cell, current| {
+                let alpha = if current { 0x80 } else { 0x38 };
+                cell.bg(rgba((theme.palette[3] << 8) | alpha))
             })
+            .when(review.draft == Some(row), |cell| cell.bg(rgb(theme.active)))
             .text_color(rgb(text))
             .when(noteable, |cell| {
                 cell.cursor_pointer()
                     .hover(|cell| cell.bg(rgb(theme.active)))
                     .on_click(cx.listener(move |this, _, window, cx| {
                         cx.stop_propagation();
-                        this.begin_review_note(id, index, window, cx);
+                        this.begin_review_note(id, row, window, cx);
                     }))
             })
-            .child(mark_slot(theme, mark))
-            .when(row.kind != Kind::File, |line| {
-                let line = match numbers {
-                    Numbers::Both => line
-                        .child(number(theme, row.old))
-                        .child(number(theme, row.new)),
-                    Numbers::Old => line.child(number(theme, row.old)),
-                    Numbers::New => line.child(number(theme, row.new)),
-                };
-                line.child(div().flex_none().w(px(16.)).child(sign))
-            })
-            .when(row.kind == Kind::File, |line| {
-                line.font_weight(FontWeight::SEMIBOLD).gap_1()
-            })
-            .child(div().min_w_0().child(code(theme, diff, row)))
+            .child(mark_slot(theme, mark).h(px(line_height)));
+        if found.kind == Kind::Hunk {
+            return Some(
+                cell.child(self.review_expander(id, review, file, index, cx))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(lines.text_of(found).to_owned()),
+                    ),
+            );
+        }
+        let cell = match numbers {
+            Numbers::Both => cell
+                .child(number(theme, found.old))
+                .child(number(theme, found.new)),
+            Numbers::Old => cell.child(number(theme, found.old)),
+            Numbers::New => cell.child(number(theme, found.new)),
+        };
+        let (spans, words) = review
+            .colours
+            .line(file, lines.stretch(index).start, index)
+            .unwrap_or_default();
+        Some(cell.child(div().flex_none().w(px(16.)).child(sign)).child(
+            div().flex_1().min_w_0().child(code(
+                theme,
+                lines.text_of(found),
+                spans,
+                words,
+                word_tint,
+            )),
+        ))
     }
 
-    /// The list's rows in `range`, in the review's layout.
-    pub(super) fn review_rows(
-        &mut self,
+    /// Before a hunk header, the unchanged lines above it to show, if any.
+    fn review_expander(
+        &self,
         id: TabId,
-        range: std::ops::Range<usize>,
-        line_height: f32,
+        review: &Review,
+        file: usize,
+        header: usize,
         cx: &mut Context<Self>,
-    ) -> Vec<AnyElement> {
-        let Some(review) = self.reviews.get(&id) else {
-            return Vec::new();
-        };
-        let Some(loaded) = review.loaded().cloned() else {
-            return Vec::new();
-        };
-        let diff = &loaded.diff;
+    ) -> AnyElement {
         let theme = &self.theme;
-        range
-            .filter_map(|position| {
-                let element = match review.layout {
-                    Layout::Unified => {
-                        let index = position;
-                        diff.rows.get(index)?;
-                        self.review_cell(
-                            id,
-                            index,
-                            ("review-row", index).into(),
-                            Numbers::Both,
-                            line_height,
-                            cx,
-                        )
-                        .debug_selector(move || format!("review-row-{index}"))
-                        // Tints and the file header span the list, not the text.
-                        .w_full()
-                        .into_any_element()
-                    }
-                    Layout::Split => match *review.split.get(position)? {
-                        SplitRow::Across(index) => self
-                            .review_cell(
-                                id,
-                                index,
-                                ("review-row", index).into(),
-                                Numbers::Both,
-                                line_height,
-                                cx,
-                            )
-                            .debug_selector(move || format!("review-row-{index}"))
-                            .w_full()
-                            .into_any_element(),
-                        SplitRow::Sides { left, right } => {
-                            let side =
-                                |this: &Self,
-                                 index: Option<usize>,
-                                 numbers: Numbers,
-                                 cx: &mut Context<Self>| {
-                                    let half = match index {
-                                        Some(index) => this
-                                            .review_cell(
-                                                id,
-                                                index,
-                                                (
-                                                    if numbers == Numbers::Old {
-                                                        "review-left"
-                                                    } else {
-                                                        "review-right"
-                                                    },
-                                                    index,
-                                                )
-                                                    .into(),
-                                                numbers,
-                                                line_height,
-                                                cx,
-                                            )
-                                            .debug_selector(move || {
-                                                let side = if numbers == Numbers::Old {
-                                                    "left"
-                                                } else {
-                                                    "right"
-                                                };
-                                                format!("review-{side}-{index}")
-                                            }),
-                                        // Nothing on this side: a quiet gap.
-                                        None => div()
-                                            .id(("review-gap", position))
-                                            .h(px(line_height))
-                                            .bg(rgba((theme.active << 8) | 0x60)),
-                                    };
-                                    half.flex_1().min_w_0()
-                                };
-                            div()
-                                .id(("review-split", position))
-                                .w_full()
-                                .flex()
-                                .child(
-                                    side(self, left, Numbers::Old, cx)
-                                        .flex_none()
-                                        .w(relative(review.split_ratio)),
-                                )
-                                .child(
-                                    side(self, right, Numbers::New, cx)
-                                        .border_l_1()
-                                        .border_color(rgb(theme.active)),
-                                )
-                                .into_any_element()
-                        }
-                    },
-                };
-                Some(element)
-            })
-            .collect()
+        let gap = lines_of(review, file).and_then(|lines| lines.gap(header));
+        let Some(gap) = gap else {
+            // Lines up with the numbers' column on rows that have them.
+            return div().flex_none().w(px(104.)).into_any_element();
+        };
+        let reading = review.expanding.contains(&(file, header));
+        let label = if reading {
+            "Reading\u{2026}".to_owned()
+        } else {
+            let count = gap.len();
+            format!(
+                "\u{2195} {count} more line{}",
+                if count == 1 { "" } else { "s" }
+            )
+        };
+        div()
+            .id(ElementId::named_usize(
+                format!("review-expand-{file}"),
+                header,
+            ))
+            .debug_selector(move || format!("review-expand-{file}-{header}"))
+            .flex_none()
+            .w(px(104.))
+            .px_1()
+            .text_color(rgb(theme.foreground))
+            .cursor_pointer()
+            .rounded(px(crate::config::corners::CONTROL))
+            .hover(|button| button.bg(rgb(theme.active)))
+            .child(label)
+            .on_click(cx.listener(move |this, _, _, cx| {
+                cx.stop_propagation();
+                this.expand_review_hunk(id, file, header, cx);
+            }))
+            .into_any_element()
     }
 
     /// Moves the line between the sides to the pointer at `x`, within the
@@ -335,72 +456,5 @@ impl HerdrWindow {
         if let Some(review) = self.reviews.get_mut(&id) {
             review.split_ratio = EVEN_SPLIT;
         }
-    }
-
-    /// Shows the diff unified or side by side; notes and scroll stay.
-    pub(crate) fn set_review_layout(&mut self, id: TabId, layout: Layout, cx: &mut Context<Self>) {
-        if let Some(review) = self.reviews.get_mut(&id) {
-            review.layout = layout;
-        }
-        cx.notify();
-    }
-
-    /// The two layout icons in the header.
-    pub(super) fn render_review_layout(
-        &self,
-        id: TabId,
-        current: Layout,
-        cx: &mut Context<Self>,
-    ) -> Div {
-        let theme = &self.theme;
-        let (foreground, surface) = (theme.foreground, theme.surface);
-        let button =
-            |name: &'static str, icon: &'static str, hint: &'static str, layout: Layout| {
-                let chosen = layout == current;
-                div()
-                    .id(name)
-                    .debug_selector(move || name.into())
-                    .size(px(22.))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded(px(crate::config::corners::CONTROL))
-                    .cursor_pointer()
-                    .when(chosen, |button| button.bg(rgb(theme.active)))
-                    .hover(|button| button.bg(rgb(theme.active)))
-                    .child(svg().path(icon).size(px(14.)).text_color(rgb(if chosen {
-                        theme.foreground
-                    } else {
-                        theme.muted
-                    })))
-                    .tooltip(move |_, cx| {
-                        cx.new(|_| crate::usage::Hint {
-                            text: hint.into(),
-                            foreground,
-                            surface,
-                        })
-                        .into()
-                    })
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        this.set_review_layout(id, layout, cx);
-                    }))
-            };
-        div()
-            .flex()
-            .flex_none()
-            .gap_1()
-            .child(button(
-                "review-layout-unified",
-                "icons/diff-unified.svg",
-                "Unified",
-                Layout::Unified,
-            ))
-            .child(button(
-                "review-layout-split",
-                "icons/diff-split.svg",
-                "Side by side",
-                Layout::Split,
-            ))
     }
 }

@@ -1513,25 +1513,49 @@ comments on a pull request.
   Side by side, drag the line between the halves to give either more room
   (each keeps at least a fifth); a double-click on it evens them again.
 - A list of the changed files sits left of the diff, as on a pull request:
-  grouped under their folders, each with how it changed (A, M, D, R),
-  its added and removed lines, and how many notes are queued on it.
-  Clicking one brings it to the top of the diff, in either layout, and the
-  file at the top of the diff is marked. The list resizes by its right edge
-  and its width is remembered.
-- Code is coloured by its language, chosen by file extension from the
-  grammars bundled with [syntect](https://github.com/trishume/syntect).
-  Removed lines are read in the old file's order and added lines in the new
-  file's, each hunk afresh. Colouring runs in the background after the plain
-  diff shows, and the colours come from the theme's palette, so they follow
-  theme changes.
+  a tree of folders, a folder holding only one other sharing its line
+  (`src/review/`), each file with how it changed (A, M, D, R), its added
+  and removed lines, how many notes are queued on it, and a check once
+  viewed. Click a folder to fold it. Type in the list's filter to keep the
+  files whose path holds the text, and **Hide viewed** to leave viewed files
+  out. Clicking a file, or picking it with the arrows and pressing Enter,
+  brings it to the top of the diff, in either layout; the file at the top of
+  the diff is marked and kept in view as the diff scrolls. The list resizes
+  by its right edge and its width is remembered.
+- Long lines wrap, as on GitHub, so nothing is cut off at the edge.
+- Each file's header folds it (the chevron, or `x`) and marks it **Viewed**,
+  which folds it too. Deleted files, lockfiles and files `.gitattributes`
+  marks `linguist-generated` start folded. A viewed file that changes again
+  is no longer viewed. Renames show as `old → new`.
+- A hunk header shows how many unchanged lines it leaves out above it;
+  click that to show them, up to 200 at a time, read from the working tree.
+- Removed lines and the added lines that replaced them have the words that
+  changed marked, when the two lines are an edit of each other.
+- The whitespace icon leaves changes in whitespace alone out
+  (`git diff --ignore-all-space`).
+- Find in the changes with the search icon, `/`, or Cmd-F (Ctrl-F) while
+  the review is in use; Enter and Shift-Enter, or `n` and `N` in the diff,
+  step through the matches, and a match in a folded file opens it. A query
+  with no capitals ignores case.
+- With the diff in use, `j`/`k` and the arrows scroll a line, Space and Page
+  Up/Down a page, `]`/`[` move to the next or previous hunk and `.`/`,` to
+  the next or previous file, `x` folds the file at the top and `v` marks it
+  viewed.
+- The review reads its changes again when the checkout's change counts
+  move, keeping the line it was on, unless a note is being written.
 - A scrollbar along the diff's right edge shows how much of it is in view
   and where; drag its thumb to move through a long change.
-- Large changes stay reviewable. Line counts come first
-  (`git diff --numstat`), so a file with more than 5,000 changed lines, one
-  larger than 1 MiB on disk, or any file past 15,000 changed lines in total
-  is left out of the diff and listed as "Large change not shown" with its
-  counts; its file header still takes a note. Marking notes is a lookup per
-  note, not a pass over the diff.
+- Changes of any size stay reviewable. The files are listed first
+  (`git diff --numstat` and `--name-status`), so the list and every file's
+  header show at once; their lines are then read a batch of files at a time
+  in the background, at most 64 files or 20,000 changed lines per Git call,
+  and files scrolled into view are read first. Past 500,000 changed lines,
+  a file is read once it scrolls into view. A file with more than 20,000
+  changed lines, or larger than 4 MiB on disk, is listed as "Large change
+  not shown" with a **Load diff** button that reads it whole. Binary files
+  are listed and never read. Each file keeps its text in one buffer, so a
+  change of hundreds of thousands of lines stays compact, and the diff only
+  lays out the rows in view.
 - The notes panel resizes by dragging its left edge, with the sidebar's
   cursor and hover tint, and a double-click on the edge restores its
   default. Settings' section list resizes the same way by its right edge.
@@ -1552,8 +1576,8 @@ comments on a pull request.
   including `browser feedback`. Without an agent, **Copy** is offered.
 - Git runs in the background, never on the UI thread, with explicit `a/`/`b/`
   prefixes and no external diff tools or text conversion. Diff text is
-  cleaned of control characters and bounded (20,000 rows, 400 characters a
-  row, 64 untracked files up to 256 KiB each; links and binaries are not
+  cleaned of control characters and bounded (16,384 characters a line,
+  250,000 lines a file, 5,000 untracked files; links and binaries are not
   read). Only the local daemon's checkouts can be reviewed.
 
 ### Local Pages
