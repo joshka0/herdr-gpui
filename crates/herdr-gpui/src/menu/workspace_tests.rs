@@ -24,6 +24,13 @@ pub(crate) fn submit_dialog(
     view.submit_workspace_dialog(window, cx);
 }
 
+/// Whether the open workspace menu offers a note, for tests outside this module.
+pub(crate) fn offers_note(view: &HerdrWindow) -> bool {
+    view.workspace_items()
+        .iter()
+        .any(|(action, _)| *action == WorkspaceMenuAction::Dialog(WorkspaceAction::Note))
+}
+
 /// The workspace a menu currently targets, for tests outside this module.
 pub(crate) fn target_id(view: &HerdrWindow) -> Option<&str> {
     view.menu.target.as_ref().map(|target| target.id.as_str())

@@ -206,6 +206,7 @@ impl WorkspaceTarget {
                 Method::WorkspaceCreate,
                 serde_json::json!({"focus": true, "source_workspace_id": self.id}),
             ),
+            WorkspaceAction::Note => return Err(crate::Error::LocalWorktreeNote),
             WorkspaceAction::DeleteWorktree => {
                 if !self.can_delete() || self.worktree != workspace.worktree {
                     return Err(crate::Error::WorkspaceCheckoutChanged);
@@ -490,6 +491,9 @@ impl HerdrWindow {
         if self.checkpoint_checkout().is_some() {
             items.push((WorkspaceMenuAction::Checkpoints, "Checkpoints..."));
         }
+        if self.note_checkout().is_some() {
+            items.push((Dialog(WorkspaceAction::Note), "Note..."));
+        }
         if target.can_create() {
             items.push((Dialog(WorkspaceAction::OpenWorktree), "Open worktree..."));
         }
@@ -586,6 +590,7 @@ impl HerdrWindow {
         {
             self.menu.target = Some(target);
         }
+        let note = (action == WorkspaceAction::Note).then(|| self.note_draft(cx));
         let Some(target) = &self.menu.target else {
             return;
         };
@@ -615,6 +620,7 @@ impl HerdrWindow {
             WorkspaceAction::NewWorktree => {
                 Some(DialogInput::new(crate::worktree::proposed_branch()))
             }
+            WorkspaceAction::Note => note.map(DialogInput::new),
             WorkspaceAction::Close
             | WorkspaceAction::DeleteWorktree
             | WorkspaceAction::OpenWorktree => None,

@@ -92,6 +92,28 @@ pub(super) fn uncommitted(theme: &crate::config::Theme, size: f32) -> gpui::Div 
         )
 }
 
+/// A checkout the user keeps a note on, beside the working-tree marker and
+/// in a hue of its own so the two never read as one.
+pub(super) fn note(theme: &crate::config::Theme, size: f32) -> gpui::Div {
+    use gpui::{div, prelude::*, px, rgb, rgba, svg};
+    div()
+        .size(px(size))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(px(crate::config::corners::SMALL))
+        .bg(rgba((theme.palette[4] << 8) | 0x30))
+        .border_1()
+        .border_color(rgba((theme.palette[4] << 8) | 0x90))
+        .child(
+            svg()
+                .path("icons/note.svg")
+                .size(px(size - 4.))
+                .text_color(rgb(theme.ink(theme.palette[4]))),
+        )
+}
+
 /// A checkbox drawn like a native one: an outlined box when clear, a filled
 /// primary box with a check mark when set. Sized to the surrounding text.
 pub(super) fn checkbox(theme: &crate::config::Theme, size: f32, checked: bool) -> gpui::Div {
@@ -166,6 +188,7 @@ impl AssetSource for Icons {
             "icons/user.svg" => include_bytes!("../../../assets/icons/user.svg"),
             "icons/x.svg" => include_bytes!("../../../assets/icons/x.svg"),
             "icons/pencil.svg" => include_bytes!("../../../assets/icons/pencil.svg"),
+            "icons/note.svg" => include_bytes!("../../../assets/icons/note.svg"),
             "icons/trash.svg" => include_bytes!("../../../assets/icons/trash.svg"),
             "icons/chevron-up.svg" => include_bytes!("../../../assets/icons/chevron-up.svg"),
             "icons/chevron-down.svg" => include_bytes!("../../../assets/icons/chevron-down.svg"),

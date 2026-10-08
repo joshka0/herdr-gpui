@@ -15,7 +15,7 @@ use super::{
     sidebar_width, sticky,
     tokens::{self, SpaceContext},
     visible_workspace_entries, wash,
-    workspaces::{displayed_workspace_status, workspace_badge, workspace_label},
+    workspaces::{displayed_workspace_status, workspace_badge, workspace_label, workspace_note},
 };
 use crate::{
     Command, HerdrWindow, NavigationTarget,
@@ -266,27 +266,57 @@ impl HerdrWindow {
                             &workspace.workspace_id,
                         )
                     });
+                // Lines under the row start under its label column, clear of
+                // the status dot.
+                let under_left = content_x
+                    + row_cx.nest
+                    + if indented {
+                        layout.child_indent() + indicators.width(font) - STATUS_WIDTH
+                    } else {
+                        0.
+                    }
+                    + indicators.width(font)
+                    + layout.gap();
+                let note = workspace_note(
+                    workspace,
+                    crate::worktree_notes::Notes::of(cx),
+                    &endpoint.id,
+                )
+                .map(SharedString::from);
+                let note_line = note.clone().map(|note| {
+                    let endpoint = endpoint_id.clone();
+                    let workspace = id.clone();
+                    super::note_line::element(
+                        &format!("{endpoint_id}-{id}"),
+                        note,
+                        (under_left, content_x),
+                        font,
+                        theme,
+                    )
+                    .on_click(cx.listener(
+                        move |this, event: &ClickEvent, window, cx| {
+                            cx.stop_propagation();
+                            this.edit_worktree_note(
+                                &endpoint,
+                                &workspace,
+                                event.position(),
+                                window,
+                                cx,
+                            );
+                        },
+                    ))
+                });
                 let ports = (self.config.show_listening_ports && !removing_row)
                     .then(|| self.listening_ports.get(&daemon, &workspace.workspace_id))
                     .flatten()
                     .map(|listed| {
-                        // Under the label column, clear of the status dot.
-                        let indent = row_cx.nest
-                            + if indented {
-                                layout.child_indent() + indicators.width(font) - STATUS_WIDTH
-                            } else {
-                                0.
-                            };
                         div()
                             .debug_selector(|| format!("ports-{endpoint_id}-{id}"))
                             .h(px(line_height(font)))
                             .flex_none()
                             .w_full()
                             .min_w_0()
-                            .pl(px(content_x
-                                + indent
-                                + indicators.width(font)
-                                + layout.gap()))
+                            .pl(px(under_left))
                             .pr(px(content_x))
                             .text_size(px((font.size * 0.85).round()))
                             .child(crate::listening_ports::chips(
@@ -320,6 +350,7 @@ impl HerdrWindow {
                                 .then_some(&self.menu.pr_cache),
                             &self.git,
                             (&self.teleport_marks, &endpoint.id),
+                            note.as_deref(),
                             theme,
                         ),
                         removing: removing_row,
@@ -434,14 +465,15 @@ impl HerdrWindow {
                     )
                 })
                 .when(carried, |row| row.cursor_grabbing());
-                // Ports ride under their row as one list item, so the drop
-                // preview still measures one height per workspace.
-                let element = match ports {
-                    None => element
+                // The note and ports ride under their row as one list item, so
+                // the drop preview still measures one height per workspace.
+                let element = if note_line.is_none() && ports.is_none() {
+                    element
                         .when(gap > 0., |row| row.mt(px(gap)))
                         .when(shift != px(0.), |row| row.top(shift))
-                        .into_any_element(),
-                    Some(ports) => div()
+                        .into_any_element()
+                } else {
+                    div()
                         .flex()
                         .flex_col()
                         .flex_none()
@@ -450,8 +482,9 @@ impl HerdrWindow {
                         .when(gap > 0., |unit| unit.mt(px(gap)))
                         .when(shift != px(0.), |unit| unit.top(shift))
                         .child(element)
-                        .child(ports)
-                        .into_any_element(),
+                        .children(note_line)
+                        .children(ports)
+                        .into_any_element()
                 };
                 spaces = if carried {
                     // Painted last so it floats over the rows it passes, while
