@@ -101,17 +101,39 @@ fn tailscale_status_without_peers_or_with_bad_json() {
 
 #[test]
 fn tailscale_is_found_on_path_before_install_locations() {
-    let path = std::env::join_paths(["relative", "/custom/bin"]).unwrap();
+    // A real absolute directory, so the search reads the same on every system.
+    let custom = tempfile::tempdir().unwrap();
+    let on_path = custom.path().join("tailscale");
+    let path = std::env::join_paths([Path::new("relative"), custom.path()]).unwrap();
     let found = tailscale::executable(&path, |candidate| {
-        candidate == Path::new("/custom/bin/tailscale")
-            || candidate == Path::new("/usr/bin/tailscale")
+        candidate == on_path || candidate == Path::new("/usr/bin/tailscale")
     });
-    assert_eq!(found.as_deref(), Some(Path::new("/custom/bin/tailscale")));
+    assert_eq!(found.as_deref(), Some(on_path.as_path()));
+    assert!(tailscale::executable(&OsString::new(), |_| false).is_none());
+}
+
+/// The install locations are Unix paths: the Add Device dialog that uses
+/// them is not offered on Windows, which adds WSL distributions instead.
+#[cfg(unix)]
+#[test]
+fn tailscale_falls_back_to_its_install_locations() {
     let found = tailscale::executable(&OsString::new(), |candidate| {
         candidate == Path::new("/usr/bin/tailscale")
     });
     assert_eq!(found.as_deref(), Some(Path::new("/usr/bin/tailscale")));
-    assert!(tailscale::executable(&OsString::new(), |_| false).is_none());
+}
+
+/// A loader over in-memory files. Paths are compared by component, so the
+/// same fixture works with `/` and `\` separators.
+fn files(
+    entries: &'static [(&'static str, &'static str)],
+) -> impl FnMut(&Path) -> std::io::Result<Option<String>> {
+    move |path: &Path| {
+        Ok(entries
+            .iter()
+            .find(|(name, _)| path == Path::new(name))
+            .map(|(_, text)| (*text).to_owned()))
+    }
 }
 
 fn aliases(text: &str) -> Vec<(String, String)> {
@@ -148,14 +170,14 @@ fn ssh_config_lists_concrete_aliases_with_their_host_names() {
 #[test]
 fn ssh_config_follows_includes_relative_to_the_ssh_directory() {
     let mut reads = Vec::new();
+    let mut load = files(&[
+        ("/home/me/.ssh/config", "Include hosts ~/other /abs/conf\n"),
+        ("/home/me/.ssh/hosts", "Host lab\n"),
+        ("/abs/conf", "Include config\n"),
+    ]);
     let mut reader = ssh_config::Reader::new("/home/me".into(), |path: &Path| {
         reads.push(path.to_owned());
-        Ok(match path.to_str() {
-            Some("/home/me/.ssh/config") => Some("Include hosts ~/other /abs/conf\n".into()),
-            Some("/home/me/.ssh/hosts") => Some("Host lab\n".into()),
-            Some("/abs/conf") => Some("Include config\n".into()),
-            _ => None,
-        })
+        load(path)
     });
     reader.include("~/.ssh/config", 0, &[]).unwrap();
     let found: Vec<String> = reader.candidates().into_iter().map(|c| c.target).collect();
@@ -168,19 +190,21 @@ fn ssh_config_follows_includes_relative_to_the_ssh_directory() {
 
 #[test]
 fn ssh_config_includes_continue_the_enclosing_host_block() {
-    let mut reader = ssh_config::Reader::new("/home/me".into(), |path: &Path| {
-        Ok(match path.to_str() {
-            Some("/home/me/.ssh/config") => {
-                Some("Host gh\n  Include gh.conf\nHost lab\n  Include lab.conf\n  User me\n".into())
-            }
-            Some("/home/me/.ssh/gh.conf") => Some("HostName github.com\n".into()),
+    let mut reader = ssh_config::Reader::new(
+        "/home/me".into(),
+        files(&[
+            (
+                "/home/me/.ssh/config",
+                "Host gh\n  Include gh.conf\nHost lab\n  Include lab.conf\n  User me\n",
+            ),
+            ("/home/me/.ssh/gh.conf", "HostName github.com\n"),
             // A `Host` in an included file ends the block only inside it.
-            Some("/home/me/.ssh/lab.conf") => {
-                Some("HostName lab.tail1.ts.net\nHost other\n".into())
-            }
-            _ => None,
-        })
-    });
+            (
+                "/home/me/.ssh/lab.conf",
+                "HostName lab.tail1.ts.net\nHost other\n",
+            ),
+        ]),
+    );
     reader.include("~/.ssh/config", 0, &[]).unwrap();
     let found: Vec<(String, String)> = reader
         .candidates()
