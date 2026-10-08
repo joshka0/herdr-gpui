@@ -3,7 +3,6 @@ use gpui::{ScrollDelta, ScrollWheelEvent, point};
 
 /// The session form has no scroller of its own, so in a window too short for
 /// it the panel around it must still scroll its buttons into reach.
-#[cfg(not(windows))]
 #[gpui::test]
 fn a_session_form_taller_than_the_window_still_scrolls(cx: &mut TestAppContext) {
     let (view, cx) =
