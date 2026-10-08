@@ -139,6 +139,12 @@ fn a_drop_seen_before_its_state_arrives_does_not_fall_back_to_local(cx: &mut gpu
         assert!(view.endpoints[1].connection.handle.is_none());
         assert!(view.live.snapshot.is_some(), "the gap under test");
         assert!(view.activation_deadline.unwrap() > Instant::now());
+        // `live` still holds the lost connection's ready frame; painting it
+        // must not undo the dimming.
+        assert!(view.live.surface_ready());
+        assert!(view.presentation.picture(&view.live).is_some());
+        assert!(view.presentation.stale());
+        assert!(view.reconnecting());
     });
 }
 
@@ -178,4 +184,48 @@ fn a_refusal_that_arrives_after_its_stop_still_waits_the_longest_delay() {
     endpoint.poll(arrived);
     assert_eq!(endpoint.outage(), Some(error.as_str()));
     assert_eq!(endpoint.retry_at, arrived + MAX_RETRY_DELAY);
+}
+
+/// The replacement connection's snapshot ends the outage before its first
+/// frame arrives. The old picture must stay dimmed, under the card, until then.
+#[gpui::test]
+fn the_card_stays_until_the_replacement_frame_lands(cx: &mut gpui::TestAppContext) {
+    let (fixture, cx) = cx.add_window_view(|window, cx| {
+        Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
+    });
+    let view = fixture.update(cx, |fixture, _| fixture.0.clone());
+    let (endpoint, _server) = connected_endpoint("ssh:remote");
+    view.update(cx, |view, cx| {
+        prepare_mouse(view, endpoint);
+        let first = view.presentation.picture(&view.live).unwrap().frame;
+        view.endpoints[1].retry_at = Instant::now() + Duration::from_secs(120);
+        view.endpoints[1]
+            .connection
+            .handle
+            .as_ref()
+            .unwrap()
+            .disconnect();
+        view.poll_endpoints(cx);
+        assert!(view.presentation.stale());
+
+        // Stand in for the replacement: a connection with a snapshot ends the
+        // outage, and its surface is not ready yet.
+        view.endpoints[1].outage = None;
+        view.poll_endpoints(cx);
+        let mut waiting = view.live.clone();
+        waiting.surface = None;
+        let shown = view.presentation.picture(&waiting).unwrap().frame;
+        assert!(Arc::ptr_eq(&shown, &first));
+        assert!(view.presentation.stale());
+        assert!(view.reconnecting(), "the card outlives the outage");
+
+        let mut replacement = view.live.clone();
+        let mut frame = (*first).clone();
+        frame.surface_revision += 1;
+        replacement.surface = Some(Arc::new(frame));
+        assert!(replacement.surface_ready());
+        view.presentation.picture(&replacement);
+        assert!(!view.presentation.stale());
+        assert!(!view.reconnecting());
+    });
 }

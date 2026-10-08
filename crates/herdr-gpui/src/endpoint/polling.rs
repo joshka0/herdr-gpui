@@ -118,6 +118,8 @@ impl HerdrWindow {
         }
         if endpoint.outage().is_some() {
             self.presentation.hold();
+        } else {
+            self.presentation.resume();
         }
         // Activation is timed from the snapshot it needs. An endpoint that is
         // down or still handshaking is retried in place, never given up for Local.

@@ -12,9 +12,19 @@ const MAX_REASON: usize = 240;
 const DIM_ALPHA: u32 = 0xa0;
 
 impl HerdrWindow {
+    /// Whether the card shows. A replacement connection's snapshot ends the
+    /// outage before its first frame, so the card stays over the old picture
+    /// until that frame lands.
+    pub(crate) fn reconnecting(&self) -> bool {
+        self.endpoints[self.selected_endpoint].outage().is_some() || self.presentation.stale()
+    }
+
     pub(super) fn render_reconnecting(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.reconnecting() {
+            return None;
+        }
         let endpoint = &self.endpoints[self.selected_endpoint];
-        let reason = endpoint.outage()?;
+        let reason = endpoint.outage();
         let theme = &self.theme;
         let card = div()
             .id("reconnecting")
@@ -43,12 +53,12 @@ impl HerdrWindow {
                         safe_text(&endpoint.label, 80)
                     )),
             )
-            .child(
+            .children(reason.map(|reason| {
                 div()
                     .debug_selector(|| "reconnecting-reason".into())
                     .text_color(rgb(theme.muted))
-                    .child(safe_text(reason, MAX_REASON)),
-            )
+                    .child(safe_text(reason, MAX_REASON))
+            }))
             .child(
                 div().flex().child(
                     div()

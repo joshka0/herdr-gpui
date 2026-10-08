@@ -38,6 +38,9 @@ pub(crate) struct Presentation {
     /// The presented frame belongs to a connection that was lost, and stays
     /// up only to show where the reconnecting endpoint left off.
     stale: bool,
+    /// The endpoint is down, so any surface `live` still holds, or that the
+    /// lost connection delivered late, is the lost connection's too.
+    held: bool,
     #[cfg(feature = "integration-test")]
     pub(crate) probe: Probe,
 }
@@ -51,7 +54,8 @@ impl Presentation {
             Some(ready) => {
                 self.presented = Some(ready);
                 self.images = live.surface_images.clone();
-                self.stale = false;
+                // Only a frame accepted after `resume` is the new connection's.
+                self.stale = self.held;
             }
             None if self.stale && !self.rebooted(live) => {}
             None if !self.retainable(live) => self.clear(),
@@ -94,7 +98,14 @@ impl Presentation {
     /// Keep the presented frame, as stale, across a lost connection until the
     /// endpoint's next connection presents a frame of its own.
     pub(crate) fn hold(&mut self) {
-        self.stale = self.presented.is_some();
+        self.held = true;
+        self.stale |= self.presented.is_some();
+    }
+
+    /// The endpoint has a connection again: its next ready frame is current.
+    /// The stale picture stays up, dimmed, until that frame arrives.
+    pub(crate) fn resume(&mut self) {
+        self.held = false;
     }
 
     /// Whether the frame on screen is a lost connection's, painted dimmed.
@@ -108,6 +119,7 @@ impl Presentation {
         self.presented = None;
         self.images = Default::default();
         self.stale = false;
+        self.held = false;
     }
 
     /// The frame to paint now, as `frame` chooses it, with its images.
