@@ -23,6 +23,7 @@ pub(crate) use links::PressedLink;
 mod mouse;
 mod pending_input;
 mod prefix;
+mod reconnecting;
 mod regions;
 mod render;
 mod selection;
@@ -65,7 +66,8 @@ use std::time::Duration;
 pub(crate) use server_keys::ActiveServerKeymap;
 
 pub(crate) struct HerdrWindow {
-    pub(crate) sound: crate::sound::Service,
+    /// Shared by every window; see `app::shared_sound`.
+    pub(crate) sound: std::rc::Rc<crate::sound::Service>,
     pub(crate) bell: crate::bell::Bell,
     pub(crate) updater: updater::Updater,
     pub(crate) update_preview: Option<updater::State>,
@@ -139,6 +141,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) flash: Option<(Flash, std::time::Instant)>,
     /// The frame on screen, kept across the gap between two projections.
     pub(crate) presentation: Presentation,
+    /// Tells a sleep from the clocks, so connections are checked on waking.
+    pub(crate) wake: endpoint::WakeClock,
     pub(crate) painter: std::rc::Rc<std::cell::RefCell<terminal_painter::TerminalPainter>>,
     /// The terminal grid's cached regions; see `regions`.
     pub(crate) regions: Vec<regions::RegionLayers>,
@@ -668,7 +672,7 @@ impl HerdrWindow {
             error,
         } = appearance;
         let mut this = Self {
-            sound: crate::sound::Service::default(),
+            sound: Default::default(),
             bell: crate::bell::Bell::default(),
             updater: updater::Updater::default(),
             update_preview: None,
@@ -732,6 +736,7 @@ impl HerdrWindow {
             copy_mode: None,
             flash: None,
             presentation: Default::default(),
+            wake: endpoint::WakeClock::new(std::time::Instant::now(), std::time::SystemTime::now()),
             painter: Default::default(),
             regions: Vec::new(),
             marked: String::new(),

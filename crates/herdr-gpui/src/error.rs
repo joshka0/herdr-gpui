@@ -64,8 +64,12 @@ pub enum Error {
     SoundTimeout,
     #[error("Audio playback cancelled")]
     SoundCancelled,
-    #[error("Could not keep the display awake")]
-    Caffeine(#[source] io::Error),
+    #[error("Could not keep the display awake: {0}")]
+    Caffeine(#[source] keepawake::Error),
+    #[error("Could not start the keep-awake thread")]
+    CaffeineThread(#[source] io::Error),
+    #[error("The keep-awake thread stopped; the display may sleep")]
+    CaffeineWorkerStopped,
     #[error(
         "PR lookup requires your owned local session socket or a saved SSH device. Other socket locations are unsupported."
     )]
@@ -556,6 +560,9 @@ pub enum Error {
     #[cfg(any(target_os = "macos", windows))]
     #[error("Could not reach the native window for the page: {0}")]
     WindowHandle(#[from] WindowHandleError),
+    #[cfg(target_os = "macos")]
+    #[error("The page that opened a popup is no longer in a window")]
+    PopupOpener,
     #[error("Could not install the agent skill at {}: {source}", path.display())]
     SkillInstall {
         path: PathBuf,
@@ -575,6 +582,25 @@ pub enum Error {
     DeviceExists(String),
     #[error("This host is already being added.")]
     DeviceAdding,
+    #[error("Searching the local network failed: {0}")]
+    Bonjour(#[from] mdns_sd::Error),
+    #[error("Could not list this machine's network addresses: {0}")]
+    LocalAddresses(#[source] io::Error),
+    #[error("Tailscale is unavailable ({status}){}", if detail.is_empty() { String::new() } else { format!(": {detail}") })]
+    TailscaleStatus {
+        status: std::process::ExitStatus,
+        detail: String,
+    },
+    #[error("Tailscale did not answer in time")]
+    TailscaleTimeout,
+    #[error("Tailscale returned an unreadable status: {0}")]
+    TailscaleJson(#[source] serde_json::Error),
+    #[error("Could not read {}: {source}", path.display())]
+    SshConfig {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
     #[error("Removing the device failed ({status}){}", if detail.is_empty() { String::new() } else { format!(": {detail}") })]
     DeviceRemove {
         status: std::process::ExitStatus,
@@ -626,6 +652,10 @@ pub enum Error {
     TooManyFontFallbacks(&'static str),
     #[error("layout.sidebar_gap must be finite and between 0 and 64 logical pixels")]
     InvalidSidebarGap,
+    #[error("sidebar.{key} must be finite and between 0 and {max} logical pixels")]
+    InvalidSidebarMetric { key: &'static str, max: f32 },
+    #[error("sidebar.hosts.{host:?} must be a #rgb or #rrggbb colour, not {value:?}")]
+    InvalidHostColor { host: String, value: String },
     #[error("theme must be a name, absolute path, or ~/ path")]
     InvalidThemePath,
     #[error("a theme that follows the system must name both sides: light:NAME,dark:NAME")]

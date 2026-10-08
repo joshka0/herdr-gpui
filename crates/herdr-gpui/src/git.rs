@@ -8,7 +8,7 @@
 //! are explicit user actions and are never retried or replayed automatically.
 use crate::{
     Error,
-    pull_request::{Input, clean, local_checkout, origin_repository, run},
+    pull_request::{Input, clean, local_checkout, origin_repository, run, run_bytes},
 };
 use secrecy::SecretString;
 use std::{
@@ -670,6 +670,40 @@ pub(crate) fn git(
     deadline: Instant,
     cancelled: &impl Fn() -> bool,
 ) -> crate::Result<String> {
+    let (ok, output) = run(&mut command(checkout, args), deadline, cancelled)?;
+    if ok {
+        Ok(output.trim_end_matches(['\r', '\n']).to_owned())
+    } else {
+        Err(Error::GitFailed {
+            operation,
+            details: clean(output.trim()),
+        })
+    }
+}
+
+/// [`git`] for output that may be large or not text: up to `limit` bytes,
+/// as Git wrote them.
+pub(crate) fn git_bytes(
+    checkout: &str,
+    args: &[&str],
+    operation: &'static str,
+    deadline: Instant,
+    cancelled: &impl Fn() -> bool,
+    limit: usize,
+) -> crate::Result<Vec<u8>> {
+    let (ok, output) = run_bytes(&mut command(checkout, args), deadline, cancelled, limit)?;
+    if ok {
+        Ok(output)
+    } else {
+        Err(Error::GitFailed {
+            operation,
+            details: clean(String::from_utf8_lossy(&output).trim()),
+        })
+    }
+}
+
+/// Git in `checkout`, read-only and without the file monitor.
+fn command(checkout: &str, args: &[&str]) -> Command {
     let mut command = Command::new("git");
     command
         .args([
@@ -680,15 +714,7 @@ pub(crate) fn git(
             checkout,
         ])
         .args(args);
-    let (ok, output) = run(&mut command, deadline, cancelled)?;
-    if ok {
-        Ok(output.trim_end_matches(['\r', '\n']).to_owned())
-    } else {
-        Err(Error::GitFailed {
-            operation,
-            details: clean(output.trim()),
-        })
-    }
+    command
 }
 
 /// Fresh close-time probe, including metadata-only and submodule changes that

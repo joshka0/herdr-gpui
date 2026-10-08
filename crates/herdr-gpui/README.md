@@ -48,6 +48,18 @@ rules. `--socket` must name the binary **client** socket, not the JSON API socke
 in the single-row status bar and host rows. Endpoints reconnect independently with
 bounded backoff; Terminal > Reconnect retries the selected endpoint immediately,
 without input replay. Detach pauses retries for that endpoint until Reconnect.
+A selected host that drops stays selected while it reconnects: its last terminal
+picture stays up, dimmed, under a card with the reason and a Reconnect now button,
+until the new connection presents its own frame. Keys typed meanwhile are not sent,
+and a flash says so. Only a surface activation that fails on a live connection
+falls back to Local. The card names why SSH refused a host: an untrusted host key,
+failed authentication, an unreachable host, or no Herdr installed. The
+first two and the last need the user, so those hosts wait the full 30 seconds
+between retries rather than backing off from half a second. After the machine
+sleeps (the wall clock runs ahead of the monotonic one, which stops while macOS
+and Linux are suspended), every live SSH link must answer a ping within three
+seconds or reconnect, and every dropped endpoint is dialled at once instead of
+at the end of its backoff.
 The status dot pulses amber during local daemon startup and is red when disconnected.
 Healthy connections leave the status bar quiet; connection indicators live in the
 device picker. Startup, disconnection, and operation errors remain in the status bar.
@@ -204,6 +216,26 @@ right after: if another client saved the same host in between, the profile added
 second is removed, so exactly one remains. A terminal setup keeps its claim for
 15 minutes, because the GUI cannot see when its `machine add` finishes; another
 client adding the host during that window can still create a duplicate.
+
+Under the SSH target, **Nearby devices** suggests hosts to add. Opening the
+dialog starts one search, shown by a sliding bar, which lasts about five seconds;
+**Search again** repeats it. Suggestions come from three places, and a machine
+two of them name is listed once:
+
+- **SSH config**: concrete `Host` aliases in `~/.ssh/config` and the files it
+  `Include`s. Patterns, `Match` blocks, and git hosting services are skipped.
+- **Tailscale**: online peers from the local `tailscale status --json`, by their
+  MagicDNS name, on Linux, macOS, and BSD peers. Phones, TVs, and Windows peers
+  are left out. Tailscale not being installed is not an error.
+- **Bonjour**: hosts that advertise `_ssh._tcp` on the local network, such as a
+  Mac with Remote Login on or a Linux host whose Avahi publishes SSH. This
+  machine is skipped.
+
+Choosing a suggestion fills in the target with the user's own alias when there
+is one, then the Tailscale name, then the Bonjour host. Devices already saved
+are not suggested. Nothing is scanned: a host that runs SSH without announcing
+it, or that is on another subnet, appears only through SSH config or Tailscale.
+On macOS 15 and later the first search may ask for Local Network access.
 
 Right-click a saved SSH device's header in the Spaces list to **Rename** it or
 choose **Remove device…** to forget it. Renaming runs `herdr machine rename`;
@@ -521,6 +553,14 @@ every two seconds over its own SSH shell, kept open while the host is connected
 (`/proc` on Linux; `vm_stat` and a one-second `iostat` on macOS). Other remote
 systems, and remote hosts from a Windows client, show it as unavailable. Set top-level `show_system_load = false`,
 or turn off **Show CPU and memory** in Settings, to hide it and stop sampling.
+
+The coffee cup in the status bar keeps this machine's display on and stops it
+from sleeping when idle, for as long as the cup is full; click it again to let
+go. It is app-wide, so every window shows the same cup. macOS holds power
+assertions (`pmset -g assertions` lists them), Windows sets the execution
+state (`powercfg /requests`), and Linux asks the session's
+`org.freedesktop.ScreenSaver` and logind (`systemd-inhibit --list`). Quitting
+or a crash lets go too. Closing a laptop lid still sleeps the machine.
 
 Workspaces that run a server show the TCP ports it listens on, as `:3000`
 chips on a line under the workspace's sidebar row and, for the focused
@@ -1352,8 +1392,12 @@ the same tab. Splitting opens nothing new.
   or padded. Pressing that group brings the live tab there. A page shown in
   another group is stood in for with **Show Here**.
 - The group in use has the keyboard, and its chosen tab carries the accent.
-  **+** opens a Herdr tab in that group; New Browser Tab and Close Tab act
-  there too. Close Tab in an empty group closes the group.
+  **+** opens a menu of what to add to that group: **New Terminal Tab**
+  (`cmd-t`), **New Browser Tab** (`cmd-shift-b`), **Review Changes** when
+  the Git chip tracks a checkout, and the workspace's listening ports, each
+  opening its page. The shortcuts skip the menu and open in the group in
+  use, where Close Tab acts too. Close Tab in an empty group closes the
+  group.
 - Drag a divider to resize the groups beside it. Groups are the window's own,
   per workspace. A group's own connection closes with the group, or when the
   window leaves the workspace or host; returning reconnects it.
@@ -1376,7 +1420,7 @@ the same tab. Splitting opens nothing new.
   **Close Tab**, as in Herdr's own tab menu. A zoomed tab, where one pane
   fills the tab, shows a corner mark after its title, and the pane menu
   offers **Zoom** or **Unzoom** to match.
-- **…** also offers **New Browser Tab** and **Split Right**.
+- **…** also offers **Split Right**.
 - A split's new group opens from the right, sliding in at its own width
   while the group it came from gives up the room; a closed group folds away
   to the right as its neighbour takes the room back.
@@ -1394,8 +1438,11 @@ own page for each one. Tabs are saved in
 `$XDG_STATE_HOME/herdr/gpui/browser-tabs.json` (default `~/.local/state/`) and
 come back after a restart; closing a workspace in Herdr removes its tabs.
 
-- Open one with **New Browser Tab** in the command palette, from a clicked link
-  (see [Terminal Links](#terminal-links)), or from an agent (below).
+- Open one from a group's **+** menu, with **New Browser Tab** (`cmd-shift-b`)
+  in the command palette, from a clicked link
+  (see [Terminal Links](#terminal-links)), or from an agent (below). A new
+  tab starts blank with its address field focused, and lists the
+  workspace's listening ports: clicking one loads its page in that tab.
 - The toolbar has back, forward, reload, the address field, and a button that
   opens the page in the system browser. The address field accepts bare hosts:
   `localhost:3000` becomes `http://localhost:3000/`.
@@ -1457,8 +1504,8 @@ them to the agent that opened it, so it can change the page.
 
 ### Reviewing An Agent's Changes
 
-**Review changes...** in the title bar's Git popup opens a review tab on the
-focused local checkout's changes, with untracked text files as wholly added,
+**Review Changes** in a group's **+** menu opens a review tab on the focused
+local checkout's changes, with untracked text files as wholly added,
 and lets you send review notes to the agent that made them, like inline
 comments on a pull request.
 
@@ -1487,25 +1534,49 @@ comments on a pull request.
   Side by side, drag the line between the halves to give either more room
   (each keeps at least a fifth); a double-click on it evens them again.
 - A list of the changed files sits left of the diff, as on a pull request:
-  grouped under their folders, each with how it changed (A, M, D, R),
-  its added and removed lines, and how many notes are queued on it.
-  Clicking one brings it to the top of the diff, in either layout, and the
-  file at the top of the diff is marked. The list resizes by its right edge
-  and its width is remembered.
-- Code is coloured by its language, chosen by file extension from the
-  grammars bundled with [syntect](https://github.com/trishume/syntect).
-  Removed lines are read in the old file's order and added lines in the new
-  file's, each hunk afresh. Colouring runs in the background after the plain
-  diff shows, and the colours come from the theme's palette, so they follow
-  theme changes.
+  a tree of folders, a folder holding only one other sharing its line
+  (`src/review/`), each file with how it changed (A, M, D, R), its added
+  and removed lines, how many notes are queued on it, and a check once
+  viewed. Click a folder to fold it. Type in the list's filter to keep the
+  files whose path holds the text, and **Hide viewed** to leave viewed files
+  out. Clicking a file, or picking it with the arrows and pressing Enter,
+  brings it to the top of the diff, in either layout; the file at the top of
+  the diff is marked and kept in view as the diff scrolls. The list resizes
+  by its right edge and its width is remembered.
+- Long lines wrap, as on GitHub, so nothing is cut off at the edge.
+- Each file's header folds it (the chevron, or `x`) and marks it **Viewed**,
+  which folds it too. Deleted files, lockfiles and files `.gitattributes`
+  marks `linguist-generated` start folded. A viewed file that changes again
+  is no longer viewed. Renames show as `old → new`.
+- A hunk header shows how many unchanged lines it leaves out above it;
+  click that to show them, up to 200 at a time, read from the working tree.
+- Removed lines and the added lines that replaced them have the words that
+  changed marked, when the two lines are an edit of each other.
+- The whitespace icon leaves changes in whitespace alone out
+  (`git diff --ignore-all-space`).
+- Find in the changes with the search icon, `/`, or Cmd-F (Ctrl-F) while
+  the review is in use; Enter and Shift-Enter, or `n` and `N` in the diff,
+  step through the matches, and a match in a folded file opens it. A query
+  with no capitals ignores case.
+- With the diff in use, `j`/`k` and the arrows scroll a line, Space and Page
+  Up/Down a page, `]`/`[` move to the next or previous hunk and `.`/`,` to
+  the next or previous file, `x` folds the file at the top and `v` marks it
+  viewed.
+- The review reads its changes again when the checkout's change counts
+  move, keeping the line it was on, unless a note is being written.
 - A scrollbar along the diff's right edge shows how much of it is in view
   and where; drag its thumb to move through a long change.
-- Large changes stay reviewable. Line counts come first
-  (`git diff --numstat`), so a file with more than 5,000 changed lines, one
-  larger than 1 MiB on disk, or any file past 15,000 changed lines in total
-  is left out of the diff and listed as "Large change not shown" with its
-  counts; its file header still takes a note. Marking notes is a lookup per
-  note, not a pass over the diff.
+- Changes of any size stay reviewable. The files are listed first
+  (`git diff --numstat` and `--name-status`), so the list and every file's
+  header show at once; their lines are then read a batch of files at a time
+  in the background, at most 64 files or 20,000 changed lines per Git call,
+  and files scrolled into view are read first. Past 500,000 changed lines,
+  a file is read once it scrolls into view. A file with more than 20,000
+  changed lines, or larger than 4 MiB on disk, is listed as "Large change
+  not shown" with a **Load diff** button that reads it whole. Binary files
+  are listed and never read. Each file keeps its text in one buffer, so a
+  change of hundreds of thousands of lines stays compact, and the diff only
+  lays out the rows in view.
 - The notes panel resizes by dragging its left edge, with the sidebar's
   cursor and hover tint, and a double-click on the edge restores its
   default. Settings' section list resizes the same way by its right edge.
@@ -1526,8 +1597,8 @@ comments on a pull request.
   including `browser feedback`. Without an agent, **Copy** is offered.
 - Git runs in the background, never on the UI thread, with explicit `a/`/`b/`
   prefixes and no external diff tools or text conversion. Diff text is
-  cleaned of control characters and bounded (20,000 rows, 400 characters a
-  row, 64 untracked files up to 256 KiB each; links and binaries are not
+  cleaned of control characters and bounded (16,384 characters a line,
+  250,000 lines a file, 5,000 untracked files; links and binaries are not
   read). Only the local daemon's checkouts can be reviewed.
 
 ### Local Pages

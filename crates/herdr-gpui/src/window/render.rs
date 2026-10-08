@@ -503,6 +503,7 @@ impl Render for HerdrWindow {
                     .size_full(),
                 ),
             )
+            .children(self.render_reconnecting(cx))
             .when_some(find_bar, |terminal, bar| terminal.child(bar))
             .when_some(copy_badge, |terminal, badge| terminal.child(badge))
             // Direct feedback for the user's own gesture, not a daemon notice:
@@ -809,56 +810,54 @@ impl Render for HerdrWindow {
                     )
                     .children(self.render_listening_ports(cx))
                     .children(self.render_system_load())
-                    .when(crate::caffeine::SUPPORTED, |bar| {
-                        let awake = crate::caffeine::active(cx);
+                    .child({
+                        let cup = crate::caffeine::cup(cx);
+                        let awake = cup == crate::caffeine::Cup::On;
                         let (foreground, surface) = (self.theme.foreground, self.theme.surface);
-                        bar.child(
-                            div()
-                                .id("status-caffeine")
-                                .debug_selector(|| "status-caffeine".into())
-                                .flex_none()
-                                .flex()
-                                .items_center()
-                                .px_2()
-                                .h_full()
-                                .cursor_pointer()
-                                .hover(|s| s.bg(rgb(self.theme.active)))
-                                .child(
-                                    svg()
-                                        .path(if awake {
-                                            "icons/coffee-full.svg"
-                                        } else {
-                                            "icons/coffee.svg"
-                                        })
-                                        .size(px(STATUS_GLYPH))
-                                        .flex_none()
-                                        .text_color(rgb(if awake {
-                                            self.theme.primary()
-                                        } else {
-                                            self.theme.foreground
-                                        })),
-                                )
-                                .tooltip(move |_, cx| {
-                                    cx.new(|_| crate::usage::Hint {
-                                        text: if awake {
-                                            "Keeping the display awake".into()
-                                        } else {
-                                            "Keep the display awake".into()
-                                        },
-                                        foreground,
-                                        surface,
+                        div()
+                            .id("status-caffeine")
+                            .debug_selector(|| "status-caffeine".into())
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .px_2()
+                            .h_full()
+                            .cursor_pointer()
+                            .hover(|s| s.bg(rgb(self.theme.active)))
+                            .child(
+                                svg()
+                                    .path(if awake {
+                                        "icons/coffee-full.svg"
+                                    } else {
+                                        "icons/coffee.svg"
                                     })
-                                    .into()
+                                    .size(px(STATUS_GLYPH))
+                                    .flex_none()
+                                    .text_color(rgb(match cup {
+                                        crate::caffeine::Cup::On => self.theme.primary(),
+                                        crate::caffeine::Cup::Pending => self.theme.muted,
+                                        crate::caffeine::Cup::Off => self.theme.foreground,
+                                    })),
+                            )
+                            .tooltip(move |_, cx| {
+                                cx.new(|_| crate::usage::Hint {
+                                    text: if awake {
+                                        "Keeping the display awake".into()
+                                    } else {
+                                        "Keep the display awake".into()
+                                    },
+                                    foreground,
+                                    surface,
                                 })
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    if let Err(error) = crate::caffeine::toggle(cx) {
-                                        this.show_flash(
-                                            super::Flash::warning(error.to_string()),
-                                            cx,
-                                        );
-                                    }
-                                })),
-                        )
+                                .into()
+                            })
+                            .on_click(cx.listener(|_, _, _, cx| {
+                                let view = cx.entity().downgrade();
+                                crate::caffeine::toggle(cx, move |error, cx| {
+                                    let flash = super::Flash::warning(error.to_string());
+                                    let _ = view.update(cx, |this, cx| this.show_flash(flash, cx));
+                                });
+                            }))
                     })
                     .child(
                         div()

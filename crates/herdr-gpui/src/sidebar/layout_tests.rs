@@ -29,11 +29,17 @@ mod host_agents;
 #[cfg(test)]
 mod host_groups;
 #[cfg(test)]
+mod host_nesting;
+#[cfg(test)]
+mod host_wash;
+#[cfg(test)]
 mod layouts;
 #[cfg(test)]
 mod listening_ports;
 #[cfg(test)]
 mod palette;
+#[cfg(test)]
+mod picker_scroll;
 #[cfg(test)]
 mod preferences_panel;
 #[cfg(test)]
@@ -45,11 +51,15 @@ mod selection_scroll;
 #[cfg(test)]
 mod sidebar_cache;
 #[cfg(test)]
+mod spacing_overrides;
+#[cfg(test)]
 mod split_pane;
 #[cfg(test)]
 mod status_bar;
 #[cfg(test)]
 mod sticky_hosts;
+#[cfg(test)]
+mod superset_dots;
 #[cfg(test)]
 mod text_width;
 #[cfg(test)]
@@ -500,6 +510,10 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         held_keys: Default::default(),
         file_transfer: None,
         presentation: Default::default(),
+        wake: crate::endpoint::WakeClock::new(
+            std::time::Instant::now(),
+            std::time::SystemTime::now(),
+        ),
         painter: Default::default(),
         regions: Vec::new(),
         marked: String::new(),

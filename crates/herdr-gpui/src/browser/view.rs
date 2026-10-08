@@ -345,8 +345,7 @@ impl HerdrWindow {
     #[cfg(any(target_os = "macos", windows))]
     fn apply_page_events(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         use super::native::Event;
-        let events: Vec<Event> = self.browser.pages.drain().collect();
-        for event in events {
+        while let Some(event) = self.browser.pages.next_event() {
             match event {
                 Event::Title(id, title) => {
                     Store::update(cx, |store| store.visited(id, None, Some(&title)));
@@ -368,25 +367,47 @@ impl HerdrWindow {
                 #[cfg(target_os = "macos")]
                 Event::Frozen(id, tiff) => self.page_frozen(id, tiff, cx),
                 Event::NewWindow(id, url) => {
-                    let parent = store(cx).and_then(|store| store.get(id)).cloned();
-                    if let (Some(parent), Ok(url)) = (parent, WebUrl::try_from(url.as_str())) {
-                        // The new tab opens where its opener shows.
-                        let group = self.group_showing(&Pick::Page(id), cx);
-                        let opened = Store::update(cx, |store| {
-                            store.open(
-                                parent.scope,
-                                &parent.workspace_id,
-                                Some(Location::Web { url }),
-                                parent.origin,
-                            )
-                        });
-                        if let Some(opened) = opened {
-                            self.show_browser_tab_in(group, opened, window, cx);
-                        }
+                    if let Ok(url) = WebUrl::try_from(url.as_str())
+                        && let Some(opened) = self.open_beside(id, url, cx)
+                    {
+                        self.show_browser_tab_in(opened.0, opened.1, window, cx);
                     }
                 }
+                #[cfg(target_os = "macos")]
+                Event::Opened(id, url, source, popup) => {
+                    // Without a tab the popup is dropped, and with it the
+                    // opener's link to it.
+                    if let Some((group, opened)) = self.open_beside(id, url, cx) {
+                        self.browser.pages.adopt(opened, source, popup, window, cx);
+                        self.show_browser_tab_in(group, opened, window, cx);
+                    }
+                }
+                #[cfg(target_os = "macos")]
+                Event::Closed(id) => self.close_browser_tab(id, window, cx),
             }
         }
+    }
+
+    /// Opens a tab on `url` for a page of tab `opener`, in its workspace and
+    /// in the group showing it. Returns that group and the new tab.
+    #[cfg(any(target_os = "macos", windows))]
+    fn open_beside(
+        &mut self,
+        opener: TabId,
+        url: WebUrl,
+        cx: &mut Context<Self>,
+    ) -> Option<(Option<GroupId>, TabId)> {
+        let parent = store(cx).and_then(|store| store.get(opener)).cloned()?;
+        let group = self.group_showing(&Pick::Page(opener), cx);
+        let opened = Store::update(cx, |store| {
+            store.open(
+                parent.scope,
+                &parent.workspace_id,
+                Some(Location::Web { url }),
+                parent.origin,
+            )
+        })?;
+        Some((group, opened))
     }
 
     /// Whether a notes panel or a note is still moving, so the window draws

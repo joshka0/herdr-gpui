@@ -22,6 +22,8 @@ mod location;
 mod native;
 #[cfg(target_os = "macos")]
 mod page_keys;
+#[cfg(target_os = "macos")]
+mod popup;
 #[cfg(any(target_os = "macos", windows))]
 mod preview;
 #[cfg(target_os = "macos")]

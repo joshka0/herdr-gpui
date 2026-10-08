@@ -10,6 +10,8 @@ use super::{
 use crate::Error;
 use std::time::{Duration, Instant, SystemTime};
 
+#[cfg(unix)]
+mod antigravity_consent;
 mod browser_cookies;
 #[cfg(unix)]
 mod claude_keychain;

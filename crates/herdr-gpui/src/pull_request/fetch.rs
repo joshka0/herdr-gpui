@@ -422,6 +422,20 @@ pub(crate) fn run(
     deadline: Instant,
     cancelled: &impl Fn() -> bool,
 ) -> crate::Result<(bool, String)> {
+    let (ok, output) = run_bytes(command, deadline, cancelled, OUTPUT_LIMIT)?;
+    String::from_utf8(output)
+        .map(|text| (ok, text))
+        .map_err(|error| Error::PrEncoding(error.utf8_error()))
+}
+
+/// [`run`], keeping up to `limit` bytes of output as they came: for output
+/// that may be large, or may not be text.
+pub(crate) fn run_bytes(
+    command: &mut Command,
+    deadline: Instant,
+    cancelled: &impl Fn() -> bool,
+    limit: usize,
+) -> crate::Result<(bool, Vec<u8>)> {
     if cancelled() {
         return Err(Error::PrCancelled);
     }
@@ -444,7 +458,7 @@ pub(crate) fn run(
     let (output, mut child) = capture(command)?;
     // Command retains Stdio descriptors after spawn; release them so EOF is observable.
     command.stdout(Stdio::null()).stderr(Stdio::null());
-    let result = collect(output, &mut child, deadline, cancelled);
+    let result = collect(output, &mut child, deadline, cancelled, limit);
     if result.is_err() {
         let _ = child.kill();
     }
@@ -517,7 +531,8 @@ fn collect(
     child: &mut Child,
     deadline: Instant,
     cancelled: &impl Fn() -> bool,
-) -> crate::Result<(bool, String)> {
+    limit: usize,
+) -> crate::Result<(bool, Vec<u8>)> {
     let mut output = Vec::new();
     let mut buffer = [0; 8192];
     let mut eof = false;
@@ -531,7 +546,7 @@ fn collect(
         match reader.read(&mut buffer) {
             Ok(0) => eof = true,
             Ok(n) => {
-                if output.len() + n > OUTPUT_LIMIT {
+                if output.len() + n > limit {
                     return Err(Error::PrSize);
                 }
                 output.extend_from_slice(&buffer[..n]);
@@ -546,9 +561,7 @@ fn collect(
             source,
         })? && eof
         {
-            return String::from_utf8(output)
-                .map(|text| (status.success(), text))
-                .map_err(|error| Error::PrEncoding(error.utf8_error()));
+            return Ok((status.success(), output));
         }
         thread::sleep(Duration::from_millis(10));
     }
@@ -563,7 +576,8 @@ fn collect(
     child: &mut Child,
     deadline: Instant,
     cancelled: &impl Fn() -> bool,
-) -> crate::Result<(bool, String)> {
+    limit: usize,
+) -> crate::Result<(bool, Vec<u8>)> {
     let (sender, reads) = std::sync::mpsc::channel();
     thread::Builder::new()
         .name("herdr-pr-output".into())
@@ -574,7 +588,7 @@ fn collect(
                 match reader.read(&mut buffer) {
                     Ok(0) => break Ok(output),
                     Ok(n) => {
-                        if output.len() + n > OUTPUT_LIMIT {
+                        if output.len() + n > limit {
                             break Err(Error::PrSize);
                         }
                         output.extend_from_slice(&buffer[..n]);
@@ -608,9 +622,7 @@ fn collect(
             source,
         })? && let Some(output) = ended.take()
         {
-            return String::from_utf8(output)
-                .map(|text| (status.success(), text))
-                .map_err(|error| Error::PrEncoding(error.utf8_error()));
+            return Ok((status.success(), output));
         }
         thread::sleep(Duration::from_millis(10));
     }

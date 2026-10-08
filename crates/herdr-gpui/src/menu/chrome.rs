@@ -380,6 +380,7 @@ impl HerdrWindow {
                     Page::Tab
                         | Page::RenameTab
                         | Page::Group
+                        | Page::NewTab
                         | Page::Pane
                         | Page::RenamePane
                         | Page::PaneProcesses
@@ -399,7 +400,7 @@ impl HerdrWindow {
                             } else if page == Page::PaneProcesses {
                                 // Name, command, pid, CPU and memory columns.
                                 560.
-                            } else if page == Page::Group {
+                            } else if matches!(page, Page::Group | Page::NewTab) {
                                 240.
                             } else {
                                 360.
@@ -444,8 +445,14 @@ impl HerdrWindow {
                 |panel| {
                     // Dialogs draw their own full-bleed header and footer rules,
                     // so the panel's own inset would cut those rules short.
+                    // The device and session pickers scroll their own lists, so
+                    // the panel around them stays put; a second scroller there
+                    // still had its padding to move through. A session create or
+                    // delete form has no inner scroller and keeps the panel's.
+                    let lists = matches!(page, Page::Devices | Page::Sessions) && !session_modal;
                     panel
-                        .when(!settled, |panel| panel.overflow_y_scroll())
+                        .when(!settled && !lists, |panel| panel.overflow_y_scroll())
+                        .when(lists, |panel| panel.overflow_hidden())
                         .when(!matches!(page, Page::Dialog(_)), |panel| panel.p(px(6.)))
                 },
             )
@@ -596,6 +603,8 @@ impl HerdrWindow {
             panel = panel.child(self.render_tab_menu(cx));
         } else if page == Page::Group {
             panel = panel.child(self.render_group_menu(cx));
+        } else if page == Page::NewTab {
+            panel = panel.child(self.render_new_tab_menu(cx));
         } else if matches!(
             page,
             Page::Pane | Page::RenamePane | Page::PaneProcesses | Page::KillProcesses
