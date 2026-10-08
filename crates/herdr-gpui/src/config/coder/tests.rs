@@ -53,7 +53,7 @@ fn invalid_fields_are_refused_before_anything_is_written_and_secret_is_optional(
             ..fields()
         },
         CoderFields {
-            oauth_client_id: String::new(),
+            oauth_client_id: "bad id".into(),
             ..fields()
         },
         CoderFields {
@@ -68,10 +68,27 @@ fn invalid_fields_are_refused_before_anything_is_written_and_secret_is_optional(
         assert!(broken.validate(&existing).is_err(), "{broken:?}");
     }
     assert!(CoderFields::default().validate(&existing).is_ok());
+    // HERDR_CODER_OAUTH_* may supply what the file leaves out.
+    let partial = CoderFields {
+        oauth_client_id: String::new(),
+        oauth_redirect_uri: String::new(),
+        ..fields()
+    };
+    assert!(partial.validate(&existing).is_ok());
     let round = CoderFields::from_config(&CoderConfig {
         url: Some("https://coder.example.com".into()),
         cli: Some("/opt/coder".into()),
         ..CoderConfig::default()
     });
     assert_eq!(round.cli, "/opt/coder");
+}
+
+#[test]
+fn loading_accepts_a_coder_table_the_environment_completes() {
+    let config = Config::parse("[coder]\nurl = \"https://coder.example.com\"\n").unwrap();
+    assert_eq!(
+        config.coder.url.as_deref(),
+        Some("https://coder.example.com")
+    );
+    assert!(Config::parse("[coder]\nurl = \"http://coder.example.com\"\n").is_err());
 }

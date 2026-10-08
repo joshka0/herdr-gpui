@@ -269,3 +269,23 @@ fn waiting_starts_a_stopped_workspace_once_and_renews_a_rejected_token() {
         Err(crate::coder::Error::Cancelled)
     ));
 }
+
+#[test]
+fn a_saved_workspace_is_reached_by_id_and_a_missing_one_reads_as_deleted() {
+    // The ID now names a renamed workspace; the old name belongs to no one.
+    let (settings, _) = serve(|request| match request.target.as_str() {
+        "/api/v2/workspaces/w1" => (
+            200,
+            workspace("running", "start", "ready").replace("herdr-box", "Renamed-Box"),
+        ),
+        _ => (404, r#"{"message":"Resource not found"}"#.into()),
+    });
+    let tokens = |_| Ok(SecretString::from("fresh"));
+    let (ready, _) = wait_ready(&settings, &tokens, "w1", || false, |_| {}).unwrap();
+    assert_eq!(ready.name, "Renamed-Box");
+    // Deleted, even if a newer workspace has since taken its old name.
+    assert!(matches!(
+        wait_ready(&settings, &tokens, "w0", || false, |_| {}),
+        Err(crate::coder::Error::Deleted)
+    ));
+}

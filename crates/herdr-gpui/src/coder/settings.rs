@@ -61,9 +61,7 @@ impl Settings {
         let base = deployment(&url)?;
         let client_id = text("HERDR_CODER_OAUTH_CLIENT_ID", &config.oauth_client_id)?
             .ok_or(Error::Missing("oauth_client_id"))?;
-        if !identifier(&client_id, 256) {
-            return Err(Error::Field("coder.oauth_client_id"));
-        }
+        check_client_id(&client_id)?;
         let client_secret = match var("HERDR_CODER_OAUTH_CLIENT_SECRET") {
             Some(value) => Some({
                 // Own and wipe the copy, even when it is not valid UTF-8.
@@ -74,44 +72,46 @@ impl Settings {
             }),
             None => config.oauth_client_secret.clone(),
         };
-        if client_secret
-            .as_ref()
-            .is_some_and(|secret| !super::token::valid(secret.expose_secret()))
-        {
-            return Err(Error::Field("coder.oauth_client_secret"));
+        if let Some(secret) = &client_secret {
+            check_secret(secret)?;
         }
         let redirect = redirect(
             &text("HERDR_CODER_OAUTH_REDIRECT_URI", &config.oauth_redirect_uri)?
                 .ok_or(Error::Missing("oauth_redirect_uri"))?,
         )?;
-        let organization = config.organization.clone();
-        if organization
-            .as_deref()
-            .is_some_and(|name| !identifier(name, 64))
-        {
-            return Err(Error::Field("coder.organization"));
-        }
-        let workspace_prefix = config
-            .workspace_prefix
-            .clone()
-            .unwrap_or_else(|| DEFAULT_PREFIX.into());
-        if !super::names::valid(&workspace_prefix) || workspace_prefix.len() > PREFIX_LIMIT {
-            return Err(Error::Field("coder.workspace_prefix"));
-        }
-        let cli = config.cli.clone();
-        if cli.as_deref().is_some_and(|path| !path.is_absolute()) {
-            return Err(Error::Field("coder.cli"));
-        }
+        check_file_only(config)?;
         Ok(Some(Self {
-            cli,
+            cli: config.cli.clone(),
             base,
             client_id,
             client_secret,
             redirect,
-            organization,
-            workspace_prefix,
+            organization: config.organization.clone(),
+            workspace_prefix: config
+                .workspace_prefix
+                .clone()
+                .unwrap_or_else(|| DEFAULT_PREFIX.into()),
             store: Store::for_policy(config.allow_plaintext_credentials),
         }))
+    }
+
+    /// Each value the file sets, checked on its own. Whether the settings are
+    /// complete is judged only by `resolve`, once the `HERDR_CODER_*`
+    /// variables have had their chance to fill what the file leaves out.
+    pub(crate) fn check(config: &CoderConfig) -> Result<()> {
+        if let Some(url) = &config.url {
+            deployment(url)?;
+        }
+        if let Some(client_id) = &config.oauth_client_id {
+            check_client_id(client_id)?;
+        }
+        if let Some(secret) = &config.oauth_client_secret {
+            check_secret(secret)?;
+        }
+        if let Some(uri) = &config.oauth_redirect_uri {
+            redirect(uri)?;
+        }
+        check_file_only(config)
     }
 
     /// The OAuth client secret: the configured one, else the one saved from
@@ -127,6 +127,48 @@ impl Settings {
     pub(crate) fn endpoint(&self, path: &str) -> String {
         format!("{}{path}", self.base)
     }
+}
+
+fn check_client_id(client_id: &str) -> Result<()> {
+    if identifier(client_id, 256) {
+        Ok(())
+    } else {
+        Err(Error::Field("coder.oauth_client_id"))
+    }
+}
+
+fn check_secret(secret: &SecretString) -> Result<()> {
+    if super::token::valid(secret.expose_secret()) {
+        Ok(())
+    } else {
+        Err(Error::Field("coder.oauth_client_secret"))
+    }
+}
+
+/// The keys no environment variable overrides.
+fn check_file_only(config: &CoderConfig) -> Result<()> {
+    if config
+        .organization
+        .as_deref()
+        .is_some_and(|name| !identifier(name, 64))
+    {
+        return Err(Error::Field("coder.organization"));
+    }
+    if config
+        .workspace_prefix
+        .as_deref()
+        .is_some_and(|prefix| !super::names::valid(prefix) || prefix.len() > PREFIX_LIMIT)
+    {
+        return Err(Error::Field("coder.workspace_prefix"));
+    }
+    if config
+        .cli
+        .as_deref()
+        .is_some_and(|path| !path.is_absolute())
+    {
+        return Err(Error::Field("coder.cli"));
+    }
+    Ok(())
 }
 
 fn identifier(value: &str, limit: usize) -> bool {

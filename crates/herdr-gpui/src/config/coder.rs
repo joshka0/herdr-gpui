@@ -42,6 +42,11 @@ impl CoderConfig {
     ) -> Result<Option<crate::coder::Settings>> {
         Ok(crate::coder::Settings::resolve(self, var)?)
     }
+
+    /// The values this table sets, each checked alone; see `Settings::check`.
+    pub(crate) fn check(&self) -> Result<()> {
+        Ok(crate::coder::Settings::check(self)?)
+    }
 }
 
 /// The `[coder]` keys the Settings window edits. An empty value removes its
@@ -102,7 +107,7 @@ impl CoderFields {
             cli: value(&self.cli).map(PathBuf::from),
             ..existing.clone()
         };
-        config.settings_with(|_| None).map(drop)
+        config.check()
     }
 }
 

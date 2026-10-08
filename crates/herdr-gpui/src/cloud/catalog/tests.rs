@@ -32,6 +32,7 @@ fn saves_replace_by_provider_and_id_and_survive_reload() {
         ConnectTarget::Cloud {
             provider: CloudProvider::Coder,
             account: "https://coder.example.com".into(),
+            id: "w1".into(),
             machine: "herdr-dev-box".into(),
             session: "default".into(),
         }

@@ -21,6 +21,17 @@ fn coder_ssh_carries_the_token_only_in_the_child_environment() {
         .collect();
     assert_eq!(envs["CODER_SESSION_TOKEN"], "token-fixture");
     assert_eq!(envs["CODER_URL"], "https://coder.example.com");
+    // Workspaces created outside this app may use uppercase.
+    assert!(
+        ssh_command(
+            Path::new("coder"),
+            &settings(),
+            &"t".into(),
+            "DevBox",
+            "main"
+        )
+        .is_ok()
+    );
     for (workspace, agent) in [("-oops", "main"), ("herdr-box", "a.b"), ("herdr-box", "")] {
         assert!(
             ssh_command(

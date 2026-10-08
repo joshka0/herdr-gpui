@@ -1,6 +1,17 @@
 use super::*;
 
 #[test]
+fn existing_names_may_use_uppercase_but_keep_the_other_rules() {
+    for name in ["DevBox", "A", "my-Box-2"] {
+        assert!(existing(name), "{name}");
+        assert!(!valid(name), "new names stay lowercase: {name}");
+    }
+    for name in ["", "-A", "A-", "A--B", "A_B", "A.B", &"A".repeat(LIMIT + 1)] {
+        assert!(!existing(name), "{name}");
+    }
+}
+
+#[test]
 fn names_follow_coder_rules() {
     for name in ["a", "herdr-1", "a1-b2-c3", &"a".repeat(LIMIT)] {
         assert!(valid(name), "{name}");

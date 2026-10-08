@@ -27,7 +27,8 @@ pub(crate) struct SavedDevice {
     pub(crate) label: String,
     /// The provider account or deployment the machine belongs to.
     pub(crate) account: String,
-    /// The provider's own name for the machine, as its connect command takes it.
+    /// The provider's name for the machine when it was saved, for display;
+    /// connecting goes by `id`, so a rename or a reused name cannot misdirect it.
     pub(crate) machine: String,
     pub(crate) session: String,
     pub(crate) enabled: bool,
@@ -60,6 +61,7 @@ impl SavedDevice {
         ConnectTarget::Cloud {
             provider: self.provider,
             account: self.account.clone(),
+            id: self.id.clone(),
             machine: self.machine.clone(),
             session: self.session.clone(),
         }

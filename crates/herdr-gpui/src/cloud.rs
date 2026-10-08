@@ -79,14 +79,15 @@ pub(crate) fn connect(target: &ConnectTarget, stop: &AtomicBool) -> io::Result<T
     let ConnectTarget::Cloud {
         provider,
         account,
-        machine,
+        id,
         session,
+        ..
     } = target
     else {
         return Err(io::Error::other(Error::Invalid("cloud target")));
     };
     match provider {
-        CloudProvider::Coder => crate::coder::connect(account, machine, session, stop),
+        CloudProvider::Coder => crate::coder::connect(account, id, session, stop),
     }
 }
 

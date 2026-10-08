@@ -57,7 +57,7 @@ pub(crate) fn ssh_command(
     workspace: &str,
     agent: &str,
 ) -> Result<Command> {
-    if !super::names::valid(workspace)
+    if !super::names::existing(workspace)
         || agent.is_empty()
         || agent.len() > 64
         || !agent
@@ -75,35 +75,18 @@ pub(crate) fn ssh_command(
     Ok(command)
 }
 
-/// The workspace ID for `name`, owned by the signed-in user.
-fn find(
-    settings: &Settings,
-    tokens: &impl Fn(bool) -> Result<SecretString>,
-    name: &str,
-) -> Result<String> {
-    store::with_token(tokens, |token| {
-        api::Client::new(settings, token)
-            .workspaces()
-            .map(|workspaces| {
-                workspaces
-                    .into_iter()
-                    .find(|w| w.name == name)
-                    .map(|w| w.id)
-            })
-    })?
-    .ok_or(Error::Deleted)
-}
-
+/// The saved workspace is reached by its ID, and `coder ssh` gets its current
+/// name: a renamed workspace still connects, and one deleted and replaced
+/// under the same name is reported deleted instead of opening the newcomer.
 fn connect_workspace(
     settings: &Settings,
-    workspace: &str,
+    id: &str,
     session: &str,
     stop: &AtomicBool,
 ) -> Result<herdr_client::Bridge> {
     let tokens = |rejected| store::current_token(settings, rejected);
     let cancelled = || stop.load(Ordering::Acquire);
-    let id = find(settings, &tokens, workspace)?;
-    let (_, agent) = api::wait_ready(settings, &tokens, &id, cancelled, |progress| {
+    let (workspace, agent) = api::wait_ready(settings, &tokens, id, cancelled, |progress| {
         tracing::info!(
             category = "coder_connect",
             ?progress,
@@ -114,18 +97,18 @@ fn connect_workspace(
         &cli(settings)?,
         settings,
         &tokens(false)?,
-        workspace,
+        &workspace.name,
         &agent,
     )?;
     herdr_client::connect_command(command, session, stop).map_err(Error::Bridge)
 }
 
-/// Reach the Coder workspace `workspace` on `deployment` for `cloud::connect`.
+/// Reach the Coder workspace with `id` on `deployment` for `cloud::connect`.
 /// Configuration is read here, on the worker, so a deployment changed in the
 /// config file applies on retry.
 pub(crate) fn connect(
     deployment: &str,
-    workspace: &str,
+    id: &str,
     session: &str,
     stop: &AtomicBool,
 ) -> io::Result<Transport> {
@@ -142,7 +125,7 @@ pub(crate) fn connect(
             if settings.base != deployment {
                 return Err(Error::Deployment);
             }
-            connect_workspace(&settings, workspace, session, stop)
+            connect_workspace(&settings, id, session, stop)
         });
     match result {
         Ok(bridge) => Ok(bridge.into()),

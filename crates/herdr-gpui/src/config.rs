@@ -612,10 +612,10 @@ impl Config {
         };
         settings.github.client_id_with_override(None)?;
         config.github = settings.github;
-        // Resolve without the environment so a bad file is reported at load,
-        // while a later environment override still applies when signing in.
+        // Check what the file says so a bad value is reported at load; the
+        // environment may still fill or override keys when Coder is used.
         #[cfg(feature = "coder")]
-        settings.coder.settings_with(|_| None)?;
+        settings.coder.check()?;
         config.coder = settings.coder;
         config.features = settings.features;
         config.notification_overrides = settings.notifications;

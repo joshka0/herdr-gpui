@@ -11,6 +11,12 @@ pub(crate) fn valid(name: &str) -> bool {
         })
 }
 
+/// Whether `name` can be an existing workspace's name. Coder accepts
+/// uppercase in names it did not get from this app, so attaching one must too.
+pub(crate) fn existing(name: &str) -> bool {
+    valid(&name.to_ascii_lowercase())
+}
+
 /// A suggested name for a new workspace: the prefix, then the label slugged.
 pub(crate) fn suggest(prefix: &str, label: &str) -> String {
     let mut name = prefix.to_owned();

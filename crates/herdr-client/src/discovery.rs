@@ -71,11 +71,14 @@ pub enum ConnectTarget {
     /// A machine a cloud provider created, reached through the application's
     /// connector, which holds the provider's credential and builds the command
     /// that runs the bridge there. `account` names the provider account or
-    /// deployment; `machine` is the provider's own name for the machine.
+    /// deployment; `id` is the provider's stable ID for the machine, which the
+    /// connector reaches it by, and `machine` its name when it was saved, for
+    /// display: a machine can be renamed, or deleted and its name reused.
     #[cfg(feature = "cloud")]
     Cloud {
         provider: CloudProvider,
         account: String,
+        id: String,
         machine: String,
         session: String,
     },

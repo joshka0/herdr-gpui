@@ -106,3 +106,40 @@ fn unsafe_or_ambiguous_values_are_rejected() {
         assert!(!error.to_string().contains("fixture-secret"));
     }
 }
+
+#[test]
+fn a_file_may_leave_keys_to_the_environment() {
+    let partial = CoderConfig {
+        oauth_client_id: None,
+        oauth_redirect_uri: None,
+        ..config()
+    };
+    // Each value present is fine, so loading accepts it…
+    assert!(Settings::check(&partial).is_ok());
+    // …and the environment completes it when Coder is used.
+    let settings = Settings::resolve(&partial, |name| match name {
+        "HERDR_CODER_OAUTH_CLIENT_ID" => Some("env-client".into()),
+        "HERDR_CODER_OAUTH_REDIRECT_URI" => Some("http://127.0.0.1:47823/callback".into()),
+        _ => None,
+    })
+    .unwrap()
+    .unwrap();
+    assert_eq!(settings.client_id, "env-client");
+    // A bad value is still reported, whether or not the set is complete.
+    for broken in [
+        CoderConfig {
+            url: Some("http://coder.example.com".into()),
+            ..partial.clone()
+        },
+        CoderConfig {
+            oauth_redirect_uri: Some("http://127.0.0.1/callback".into()),
+            ..partial.clone()
+        },
+        CoderConfig {
+            workspace_prefix: Some("Bad_Prefix".into()),
+            ..partial.clone()
+        },
+    ] {
+        assert!(Settings::check(&broken).is_err(), "{broken:?}");
+    }
+}

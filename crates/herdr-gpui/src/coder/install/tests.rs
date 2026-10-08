@@ -64,10 +64,14 @@ fn a_missing_curl_is_named_and_cancellation_kills_the_child() {
         panic!("expected an install failure");
     };
     assert!(text.contains("curl"));
+    // `sleep` is not the script's last command, so every shell forks it: a
+    // grandchild that still holds the output pipes after the child is
+    // killed. Cancelling only once it has had time to start makes that so.
     let mut slow = Command::new("/bin/sh");
-    slow.args(["-c", "sleep 30; #"]);
+    slow.args(["-c", "sleep 30; exit 0; #"]);
     let started = Instant::now();
-    assert!(matches!(install(slow, &|| true), Err(Error::Cancelled)));
+    let cancelled = || started.elapsed() >= Duration::from_millis(500);
+    assert!(matches!(install(slow, &cancelled), Err(Error::Cancelled)));
     assert!(started.elapsed() < Duration::from_secs(5));
 }
 

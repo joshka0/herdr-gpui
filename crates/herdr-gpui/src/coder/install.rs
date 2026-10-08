@@ -90,14 +90,20 @@ fn run(mut command: Command, timeout: Duration, cancelled: &impl Fn() -> bool) -
         }
         thread::sleep(Duration::from_millis(100));
     };
-    if status.is_err() {
-        let _ = child.kill();
-        let _ = child.wait();
-    }
+    let status = match status {
+        Ok(status) => status,
+        Err(error) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            // A grandchild may still hold the pipes open; the readers end
+            // when it does, and their output is not needed here, so waiting
+            // for them would stall cancellation on that process's lifetime.
+            return Err(error);
+        }
+    };
     for reader in readers.into_iter().flatten() {
         let _ = reader.join();
     }
-    let status = status?;
     let bytes = output.lock().unwrap_or_else(|error| error.into_inner());
     Ok(Finished {
         code: status.code(),

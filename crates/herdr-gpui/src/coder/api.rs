@@ -348,9 +348,15 @@ impl<'a> Client<'a> {
         Ok(list.workspaces)
     }
 
+    /// The workspace with `id`; one that no longer exists is `Error::Deleted`.
     pub(crate) fn workspace(&self, id: &str) -> Result<Workspace> {
         let path = format!("/api/v2/workspaces/{}", segment(id)?);
-        http::get("workspace", self.token, &self.url(&path))
+        http::get("workspace", self.token, &self.url(&path)).map_err(|error| match error {
+            Error::Status(super::Status {
+                code: 404 | 410, ..
+            }) => Error::Deleted,
+            error => error,
+        })
     }
 
     pub(crate) fn create(
