@@ -23,6 +23,7 @@ mod refresh;
 #[cfg(unix)]
 mod remote_hosts;
 mod shown_providers;
+mod status_bar_room;
 
 fn at(seconds: u64) -> SystemTime {
     SystemTime::UNIX_EPOCH + Duration::from_secs(seconds)
