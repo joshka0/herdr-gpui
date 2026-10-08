@@ -563,7 +563,7 @@ impl HerdrWindow {
         };
         let local = &self.endpoints[0];
         let result = (|| {
-            let command = setup::terminal_command(&request)?;
+            let setup = setup::terminal_command(&request)?;
             let boot = local
                 .live
                 .snapshot
@@ -574,12 +574,16 @@ impl HerdrWindow {
             let id = local.connection.request_dialog(
                 &boot,
                 Method::WorkspaceCreate,
-                serde_json::json!({"focus": true, "label": format!("Set up {}", request.label())}),
+                serde_json::json!({
+                    "focus": true,
+                    "label": format!("Set up {}", request.label()),
+                    "env": setup.environment,
+                }),
             )?;
             Ok::<_, crate::Error>(LocalSpace {
                 request: id,
                 boot,
-                command,
+                command: setup.command,
             })
         })();
         let Some(form) = &mut self.menu.device_setup else {
