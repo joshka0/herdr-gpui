@@ -330,6 +330,9 @@ impl HerdrWindow {
         if self.review_files_width.chosen().is_none() {
             self.review_files_width.restore(chrome.review_files_width);
         }
+        if self.code_width.chosen().is_none() {
+            self.code_width.restore(chrome.code_width);
+        }
         if !self.agent_sort_modified
             && let Some(sort) = chrome.agent_sort
         {
