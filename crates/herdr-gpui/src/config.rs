@@ -7,6 +7,7 @@ use crate::{
     contrast::Contrast,
     keymap::{Binding, DaemonKeys, Keymap, PaneKeys},
 };
+mod bitmap_fonts;
 mod files;
 mod fonts;
 mod layout;

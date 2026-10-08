@@ -37,6 +37,7 @@ serde_ignored.workspace        = true
 serde_json.workspace           = true
 sha1.workspace                 = true
 sha2.workspace                 = true
+skrifa.workspace               = true
 sysinfo.workspace              = true
 syntect.workspace              = true
 tar.workspace                  = true
@@ -81,6 +82,7 @@ gpui-wry.workspace = true
 wry.workspace      = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
+fontdb.workspace       = true
 futures-lite.workspace = true
 oo7.workspace          = true
 
