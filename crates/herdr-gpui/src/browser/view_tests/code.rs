@@ -102,6 +102,10 @@ fn a_failed_vs_code_page_stays_failed_when_another_page_fails(cx: &mut gpui::Tes
         })
         .unwrap()
     });
+    // The window takes the address, which starts its pages over, and the
+    // server answers.
+    run(&view, cx, Command::ToggleCode);
+    cx.run_until_parked();
     cx.update(|_, cx| {
         view.update(cx, |view, _| {
             view.browser.failed.insert(tab, "no web view".into());
@@ -112,9 +116,7 @@ fn a_failed_vs_code_page_stays_failed_when_another_page_fails(cx: &mut gpui::Tes
                 .insert(other, "no web view either".into());
         })
     });
-    run(&view, cx, Command::ToggleCode);
     // The server answers, so only the failure keeps the page from retrying.
-    cx.run_until_parked();
     cx.update(|window, cx| view.update(cx, |view, cx| view.ensure_code_page(window, cx)));
     view.read_with(cx, |view, _| {
         assert!(matches!(view.browser.code_server.state, Reach::Ready(_)));
@@ -228,4 +230,25 @@ fn a_new_server_address_closes_pages_on_the_old_one(cx: &mut gpui::TestAppContex
     // The pages are not created: the server never answers here.
     show_with(&view, cx, "http://127.0.0.1:9000/?tkn=y", refuses);
     cx.update(|_, cx| assert!(cx.global::<Store>().get(old).is_none()));
+}
+
+/// A new token for the same server keeps each workspace's tab, and with it
+/// the folder the page went to; only its page is created anew.
+#[gpui::test]
+fn a_new_token_on_the_same_server_keeps_the_tabs(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = window(cx);
+    let kept = cx.update(|_, cx| {
+        let tab_scope = scope(&view.read(cx).endpoints[0]);
+        Store::update(cx, |store| {
+            store.open_code_tab(tab_scope, "w1", url("http://127.0.0.1:8000/?folder=/x"))
+        })
+        .unwrap()
+    });
+    show_with(&view, cx, "http://127.0.0.1:8000/?tkn=new", refuses);
+    cx.update(|_, cx| {
+        assert_eq!(
+            cx.global::<Store>().get(kept).unwrap().location,
+            Some(url("http://127.0.0.1:8000/?folder=/x"))
+        );
+    });
 }

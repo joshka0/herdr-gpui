@@ -1701,7 +1701,9 @@ belongs to one address.
 - The app asks the server whether it answers before it opens a page, since a
   page that cannot load stays blank. While the server does not answer, the
   panel says so and why, and asks again every 5 seconds. Setting a new address
-  closes the pages still on the old server, so they reopen on the new one.
+  closes the pages still on the old server, so they reopen on the new one. A
+  new token for the same server reopens each page where it was, with the new
+  token, and so does a restart.
 - Drag the panel's left edge to resize it; double-click the edge to return to
   the default width. The width is one for the window, saved with the
   sidebar's, and the panel takes at most 60% of the window.

@@ -10,7 +10,7 @@
 //! window first asks the server whether it is there, and creates pages only
 //! once it answers. Until then the panel says why it is empty.
 #[cfg(any(target_os = "macos", windows))]
-use super::{Location, TabId, view::store};
+use super::{Location, TabId, store::Place, view::store};
 use super::{Store, WebUrl};
 use crate::{
     HerdrWindow,
@@ -19,6 +19,10 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 use std::time::{Duration, Instant};
+
+/// The query parameter that carries `code serve-web`'s connection token.
+#[cfg(any(target_os = "macos", windows, test))]
+const TOKEN: &str = "tkn";
 
 /// How long an unreachable server is left before it is asked again.
 const RETRY: Duration = Duration::from_secs(5);
@@ -84,6 +88,21 @@ impl HerdrWindow {
         cx.notify();
     }
 
+    /// Closes this window's panel pages, keeping their tabs, and forgets why
+    /// any could not be created, so each is created anew.
+    #[cfg(any(target_os = "macos", windows))]
+    fn close_code_pages(&mut self, cx: &App) {
+        let Some(store) = store(cx) else {
+            return;
+        };
+        let code = |id: TabId| store.get(id).is_some_and(|tab| tab.place == Place::Code);
+        let pages: Vec<TabId> = self.browser.pages.ids().filter(|id| code(*id)).collect();
+        for id in pages {
+            self.browser.pages.close(id);
+        }
+        self.browser.failed.retain(|id, _| !code(*id));
+    }
+
     /// The focused workspace's panel page, when the panel shows and the
     /// page exists, for the window to present.
     #[cfg(any(target_os = "macos", windows))]
@@ -125,7 +144,7 @@ impl HerdrWindow {
             let opened = match store(cx).and_then(|store| store.code_tab(&scope, &workspace)) {
                 Some(tab) => Some(tab.id),
                 None => Store::update(cx, |store| {
-                    store.open_code_tab(scope, &workspace, Location::Web { url })
+                    store.open_code_tab(scope, &workspace, Location::Web { url: url.clone() })
                 }),
             };
             let Some(id) = opened else {
@@ -138,9 +157,14 @@ impl HerdrWindow {
             if self.browser.pages.contains(id) || self.browser.failed.contains_key(&id) {
                 return;
             }
-            let Some(tab) = store(cx).and_then(|store| store.get(id)).cloned() else {
+            let Some(mut tab) = store(cx).and_then(|store| store.get(id)).cloned() else {
                 return;
             };
+            if let Some(Location::Web { url: page }) = &tab.location {
+                tab.location = Some(Location::Web {
+                    url: with_token(page, &url),
+                });
+            }
             if let Err(error) = self.browser.pages.ensure(&tab, window, cx) {
                 tracing::warn!(%error, "Cannot create the VS Code page");
                 self.browser.failed.insert(id, error.to_string().into());
@@ -150,8 +174,9 @@ impl HerdrWindow {
     }
 
     /// Whether the server at `url` has answered, asking it when nothing is
-    /// known or it last failed a while ago. A new address starts over and
-    /// closes the pages still on the old server, so they reopen on this one.
+    /// known or it last failed a while ago. A new address starts over: it
+    /// closes the tabs still on another server, so they reopen on this one,
+    /// and the pages of the rest, so they reopen with its token.
     fn code_server_ready(&mut self, url: &WebUrl, cx: &mut Context<Self>) -> bool {
         if self.browser.code_server.url.as_ref() != Some(url) {
             let server = &mut self.browser.code_server;
@@ -163,6 +188,8 @@ impl HerdrWindow {
             if !gone.is_empty() {
                 self.forget_browser_tabs(|id| gone.contains(&id));
             }
+            #[cfg(any(target_os = "macos", windows))]
+            self.close_code_pages(cx);
         }
         match &self.browser.code_server.state {
             Reach::Ready(_) => return true,
@@ -199,3 +226,39 @@ impl HerdrWindow {
         false
     }
 }
+
+/// The address a panel page loads: where its tab last was, carrying the
+/// token of the configured address `configured`, in place of any it had.
+/// The server takes the token, sets its cookie, and redirects to the same
+/// path and query without it, so a page keeps its folder across a restart
+/// or a new token. An address on another server is left as it is.
+#[cfg(any(target_os = "macos", windows, test))]
+fn with_token(page: &WebUrl, configured: &WebUrl) -> WebUrl {
+    // The raw query text, so the rest of the page's address stays exactly
+    // as the server wrote it.
+    let is_token = |pair: &&str| pair.split('=').next() == Some(TOKEN);
+    let Some(token) = configured
+        .0
+        .query()
+        .and_then(|query| query.split('&').find(is_token))
+    else {
+        return page.clone();
+    };
+    if page.origin() != configured.origin() {
+        return page.clone();
+    }
+    let query: Vec<&str> = page
+        .0
+        .query()
+        .unwrap_or_default()
+        .split('&')
+        .filter(|pair| !pair.is_empty() && !is_token(pair))
+        .chain([token])
+        .collect();
+    let mut url = page.0.clone();
+    url.set_query(Some(&query.join("&")));
+    WebUrl::try_from(url.as_str()).unwrap_or_else(|_| page.clone())
+}
+
+#[cfg(test)]
+mod tests;
