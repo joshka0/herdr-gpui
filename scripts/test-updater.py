@@ -152,10 +152,10 @@ def generate(root, temporary):
     # Result alias and does not need the GPUI/config-dependent crate error module.
     for child in source.with_suffix("").iterdir():
         (modules / child.name).symlink_to(child, target_is_directory=child.is_dir())
-    # The updater reads the app's identity from constants.rs, which holds only
-    # plain constants, so the original file is compiled here as well.
+    # Unused UI entry points are expected in this updater-only binary.
+    # The updater reads build identities such as the app ID from constants.rs,
+    # plain values with no GPUI dependency, compiled here as the app does.
     constants = root / "crates/herdr-gpui/src/constants.rs"
-    # Unused UI entry points and constants are expected in this updater-only binary.
     (temporary / "src/main.rs").write_text(
         f"#[allow(dead_code)]\n#[path = {json.dumps(str(modules / 'mod.rs'), ensure_ascii=False)}]\n"
         "mod updater;\n"

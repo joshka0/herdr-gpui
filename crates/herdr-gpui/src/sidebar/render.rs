@@ -14,7 +14,7 @@ use super::{
     row::{RowIcon, RowLift, RowTree},
     sidebar_width, sticky,
     tokens::{self, SpaceContext},
-    visible_workspace_entries,
+    visible_workspace_entries, wash,
     workspaces::{displayed_workspace_status, workspace_badge, workspace_label},
 };
 use crate::{
@@ -35,7 +35,7 @@ impl HerdrWindow {
     ) -> Stateful<Div> {
         let width = sidebar_width(self.sidebar_width, f32::from(window.viewport_size().width));
         let split = self.sidebar_split.unwrap_or(0.5).clamp(0.1, 0.9);
-        let look = layout::for_mode(self.config.layout.mode);
+        let look = layout::for_config(&self.config);
         let rows = layout_for(self.config.layout.mode);
         // The row a workspace menu was opened for keeps looking hovered while
         // the pointer is over the menu.
@@ -89,6 +89,12 @@ impl HerdrWindow {
             }
             let selected = endpoint_index == self.selected_endpoint;
             let endpoint_id = endpoint.id.clone();
+            let mark = wash::HostMark::resolve(
+                &self.config.sidebar_style,
+                &endpoint.label,
+                selected,
+                theme,
+            );
             if multi {
                 host_rows.push((endpoint_index, space_rows));
                 spaces = spaces.child(self.host_row(endpoint, selected, look, width, false, cx));
@@ -100,6 +106,8 @@ impl HerdrWindow {
                 theme,
                 look,
                 width,
+                nest: if multi { look.nest_indent() } else { 0. },
+                mark,
                 host: (multi && endpoint_id != crate::endpoint::LOCAL)
                     .then_some(endpoint.label.as_str()),
             };
@@ -263,11 +271,12 @@ impl HerdrWindow {
                     .flatten()
                     .map(|listed| {
                         // Under the label column, clear of the status dot.
-                        let indent = if indented {
-                            layout.child_indent() + indicators.width(font) - STATUS_WIDTH
-                        } else {
-                            0.
-                        };
+                        let indent = row_cx.nest
+                            + if indented {
+                                layout.child_indent() + indicators.width(font) - STATUS_WIDTH
+                            } else {
+                                0.
+                            };
                         div()
                             .debug_selector(|| format!("ports-{endpoint_id}-{id}"))
                             .h(px(line_height(font)))

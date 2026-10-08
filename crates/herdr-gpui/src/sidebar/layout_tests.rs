@@ -29,6 +29,10 @@ mod host_agents;
 #[cfg(test)]
 mod host_groups;
 #[cfg(test)]
+mod host_nesting;
+#[cfg(test)]
+mod host_wash;
+#[cfg(test)]
 mod layouts;
 #[cfg(test)]
 mod listening_ports;
@@ -45,11 +49,15 @@ mod selection_scroll;
 #[cfg(test)]
 mod sidebar_cache;
 #[cfg(test)]
+mod spacing_overrides;
+#[cfg(test)]
 mod split_pane;
 #[cfg(test)]
 mod status_bar;
 #[cfg(test)]
 mod sticky_hosts;
+#[cfg(test)]
+mod superset_dots;
 #[cfg(test)]
 mod text_width;
 #[cfg(test)]
