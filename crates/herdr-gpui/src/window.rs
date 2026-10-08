@@ -65,7 +65,8 @@ use std::time::Duration;
 pub(crate) use server_keys::ActiveServerKeymap;
 
 pub(crate) struct HerdrWindow {
-    pub(crate) sound: crate::sound::Service,
+    /// Shared by every window; see `app::shared_sound`.
+    pub(crate) sound: std::rc::Rc<crate::sound::Service>,
     pub(crate) bell: crate::bell::Bell,
     pub(crate) updater: updater::Updater,
     pub(crate) update_preview: Option<updater::State>,
@@ -663,7 +664,7 @@ impl HerdrWindow {
             error,
         } = appearance;
         let mut this = Self {
-            sound: crate::sound::Service::default(),
+            sound: Default::default(),
             bell: crate::bell::Bell::default(),
             updater: updater::Updater::default(),
             update_preview: None,
