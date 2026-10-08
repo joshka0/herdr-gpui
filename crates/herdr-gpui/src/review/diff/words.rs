@@ -125,33 +125,27 @@ fn pair(old: &str, new: &str) -> Option<(Words, Words)> {
 }
 
 /// The changed words of each line of `lines` in `range`, by its place in
-/// the range: removed lines paired in order with the added lines after
-/// them.
+/// the range, each removed line compared with the added line that replaced
+/// it, as the side-by-side view pairs them, wherever that line is.
 pub(crate) fn emphasis(lines: &Lines, range: Range<usize>) -> Vec<Words> {
-    let start = range.start;
-    let mut emphasis = vec![Vec::new(); range.len()];
-    let (mut removed, mut added) = (Vec::new(), Vec::new());
-    let mut flush = |removed: &mut Vec<usize>, added: &mut Vec<usize>| {
-        for (&old, &new) in removed.iter().zip(added.iter()) {
-            if let Some((left, right)) = pair(lines.text(old), lines.text(new)) {
-                emphasis[old - start] = left;
-                emphasis[new - start] = right;
+    range
+        .map(|index| {
+            let Some(partner) = lines.partner(index) else {
+                return Vec::new();
+            };
+            let removed = lines
+                .get(index)
+                .is_some_and(|line| line.kind == Kind::Removed);
+            let (old, new) = if removed {
+                (index, partner)
+            } else {
+                (partner, index)
+            };
+            match pair(lines.text(old), lines.text(new)) {
+                Some((left, _)) if removed => left,
+                Some((_, right)) => right,
+                None => Vec::new(),
             }
-        }
-        removed.clear();
-        added.clear();
-    };
-    for index in range {
-        match lines.get(index).map(|line| line.kind) {
-            Some(Kind::Removed) if !added.is_empty() => {
-                flush(&mut removed, &mut added);
-                removed.push(index);
-            }
-            Some(Kind::Removed) => removed.push(index),
-            Some(Kind::Added) => added.push(index),
-            _ => flush(&mut removed, &mut added),
-        }
-    }
-    flush(&mut removed, &mut added);
-    emphasis
+        })
+        .collect()
 }
