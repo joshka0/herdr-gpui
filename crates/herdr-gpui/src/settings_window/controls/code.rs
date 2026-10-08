@@ -125,6 +125,10 @@ impl SettingsWindow {
     /// is in progress, or one still waiting to be saved. An address whose
     /// save failed stays in the field as an edit, for Enter to try again.
     pub(in crate::settings_window) fn sync_code_field(&mut self, cx: &mut Context<Self>) {
+        // A save still running is judged only by the reload that ends it.
+        if self.code.saving.is_some() && self.busy() {
+            return;
+        }
         let saved = self.saved_code_url().to_owned();
         let pending = self.code.pending.is_some();
         let failed = self

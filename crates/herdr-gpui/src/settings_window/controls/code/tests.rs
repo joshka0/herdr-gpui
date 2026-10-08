@@ -234,3 +234,38 @@ fn an_address_whose_save_failed_stays_in_the_field(cx: &mut TestAppContext) {
     cx.run_until_parked();
     assert_eq!(*tries.lock().unwrap(), 2);
 }
+
+/// Showing the page again while an address save runs leaves the field and
+/// the save alone; the reload that ends a successful save then has the
+/// field follow the file again.
+#[gpui::test]
+fn showing_the_page_during_a_save_leaves_it_to_finish(cx: &mut TestAppContext) {
+    let (view, cx, _) = page(cx);
+    let address = "http://127.0.0.1:9000/?tkn=x";
+    let url = WebUrl::try_from(address).unwrap();
+    let text = |view: &Entity<SettingsWindow>, cx: &mut VisualTestContext| {
+        view.read_with(cx, |view, cx| {
+            let field = view.code.field.as_ref().unwrap();
+            field.input.read(cx).text().to_owned()
+        })
+    };
+    // The save of `address` is on its way.
+    view.update(cx, |view, cx| {
+        view.code.field.as_mut().unwrap().show(address, cx);
+        view.code.saving = Some(Some(url.clone()));
+        view.saving = true;
+    });
+    cx.update(|window, cx| view.update(cx, |view, cx| view.open_code_page(window, cx)));
+    assert_eq!(text(&view, cx), address);
+    view.read_with(cx, |view, _| assert!(view.code.saving.is_some()));
+
+    // It succeeds, and later changes to the file show in the field.
+    view.update(cx, |view, cx| {
+        view.saving = false;
+        view.config.code.url = Some(url);
+        view.sync_code_field(cx);
+        view.config.code.url = Some(WebUrl::try_from("http://127.0.0.1:9000/?tkn=new").unwrap());
+        view.sync_code_field(cx);
+    });
+    assert_eq!(text(&view, cx), "http://127.0.0.1:9000/?tkn=new");
+}
