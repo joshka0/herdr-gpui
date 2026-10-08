@@ -6,6 +6,10 @@ pub enum Command {
     NewWindow,
     Workspace,
     NewWorktree,
+    /// Go To, listing only the checkouts that have a note.
+    WorktreeNotes,
+    /// The focused checkout's note.
+    EditWorktreeNote,
     Tab,
     SplitRight,
     SplitDown,
@@ -107,6 +111,18 @@ pub const COMMANDS: &[CommandInfo] = &[
         name: "new_worktree",
         label: "New Worktree",
         shortcuts: &["cmd-n"],
+    },
+    CommandInfo {
+        command: Command::WorktreeNotes,
+        name: "worktree_notes",
+        label: "Worktree Notes",
+        shortcuts: &[],
+    },
+    CommandInfo {
+        command: Command::EditWorktreeNote,
+        name: "edit_worktree_note",
+        label: "Edit Worktree Note",
+        shortcuts: &[],
     },
     CommandInfo {
         command: Command::PreviousWorkspace,
@@ -738,6 +754,8 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         }
         Command::NewWindow
         | Command::NewWorktree
+        | Command::WorktreeNotes
+        | Command::EditWorktreeNote
         | Command::Find
         | Command::CopyMode
         | Command::ToggleSidebar

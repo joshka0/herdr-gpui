@@ -232,6 +232,10 @@ impl HerdrWindow {
         let Some(Page::Dialog(action)) = self.menu.page else {
             return;
         };
+        if action == WorkspaceAction::Note {
+            self.save_worktree_note(window, cx);
+            return;
+        }
         if action == WorkspaceAction::OpenWorktree
             && self
                 .menu

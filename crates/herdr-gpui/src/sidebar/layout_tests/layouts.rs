@@ -43,6 +43,17 @@ fn check_layouts(modes: &[crate::config::LayoutMode], cx: &mut gpui::TestAppCont
                 workspace_id: "w9".into(),
             },
         });
+        // And a note, marked and read under the row.
+        crate::worktree_notes::Notes::update(cx, |notes| {
+            notes.set(
+                crate::worktree_notes::Checkout {
+                    endpoint: crate::endpoint::LOCAL.into(),
+                    repo_key: REPO_KEY.into(),
+                    branch: "worktree/sidebar-child".into(),
+                },
+                "wait for the FX rates PR before rebasing onto main",
+            )
+        });
         view
     });
     cx.simulate_resize(size(px(800.), px(900.)));
@@ -111,6 +122,13 @@ fn check_layouts(modes: &[crate::config::LayoutMode], cx: &mut gpui::TestAppCont
                     );
                     assert!(cx.debug_bounds("dirty-sidebar-child").is_some());
                 }
+                // Every layout reads the note on a line under its row.
+                let row = cx.debug_bounds("row-sidebar-child").unwrap();
+                let line = cx
+                    .debug_bounds("note-line-local-w4")
+                    .unwrap_or_else(|| panic!("{context}: no note line"));
+                assert_eq!(line.top(), row.bottom(), "{context}: note line");
+                assert!(line.right() <= sidebar.right(), "{context}: note line");
                 // Minimal rows leave upstream counts off too; the rest keep
                 // them inside the row, and never on a branch in sync.
                 if mode != LayoutMode::Minimal {

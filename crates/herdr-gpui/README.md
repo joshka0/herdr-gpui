@@ -1151,6 +1151,26 @@ scripts, so a team shares them and they follow the branch, as Conductor's
 `.conductor/settings.toml` and Superset's `.superset/config.json` do. Only
 the trust decision is local.
 
+## Worktree Notes
+
+Right-click a Git checkout and choose Note... to keep a reminder on it, such as
+what it is waiting on. A row with a note carries a note icon beside the
+uncommitted-work icon, and the note's first line reads under the row, cut off
+when it is too long; click that line to edit it. Card layouts (Superset, Orca)
+show the line only. Saving the note empty removes it.
+
+The Worktree Notes command opens the palette on its Notes filter, which lists every
+open checkout with a note on any connected host, most recently edited first;
+the whole palette also finds a workspace by its note's text. Edit Worktree
+Note opens the focused checkout's note. Neither has a default shortcut;
+`worktree_notes` and `edit_worktree_note` bind them under `[keybindings]`.
+
+A note is one line of at most 500 characters. Notes stay in this client, in
+`worktree-notes.json` in its state directory: they never reach the daemon or the
+repository, and every window shows the same ones. Like teleport marks they
+belong to a host, repository and branch, so a note survives a daemon restart
+and follows its branch, and it does not travel with a teleported worktree.
+
 ## Teleport
 
 Right-click a linked worktree and choose Teleport... to move it to another

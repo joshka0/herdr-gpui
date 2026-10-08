@@ -21,7 +21,7 @@ mod projects;
 mod render;
 mod search;
 
-use go_to::{destination_exists, go_to_entries};
+use go_to::{destination_exists, go_to_entries, note_entries};
 
 #[derive(Clone, Debug, serde::Deserialize, PartialEq, Eq)]
 #[serde(default)]
@@ -59,10 +59,18 @@ pub(crate) enum Filter {
     Navigation,
     Commands,
     Projects,
+    /// Checkouts the user keeps a note on.
+    Notes,
 }
 
 impl Filter {
-    const ALL: [Self; 4] = [Self::All, Self::Navigation, Self::Commands, Self::Projects];
+    const ALL: [Self; 5] = [
+        Self::All,
+        Self::Navigation,
+        Self::Commands,
+        Self::Projects,
+        Self::Notes,
+    ];
 
     fn label(self) -> &'static str {
         match self {
@@ -70,6 +78,7 @@ impl Filter {
             Self::Navigation => "Navigation",
             Self::Commands => "Commands",
             Self::Projects => "Projects",
+            Self::Notes => "Notes",
         }
     }
 
@@ -80,6 +89,7 @@ impl Filter {
                     Action::Native(_) | Action::Configured(..) => Self::Commands,
                     Action::Go { .. } => Self::Navigation,
                     Action::Project(_) => Self::Projects,
+                    Action::Note { .. } => Self::Notes,
                 }
     }
 }
@@ -95,6 +105,12 @@ enum Action {
     },
     Configured(String, ClientShellCommandAction),
     Project(projects::Project),
+    /// A workspace whose checkout has a note, gone to as Go To goes to it.
+    Note {
+        endpoint: String,
+        boot: String,
+        workspace: String,
+    },
 }
 
 struct Entry {
@@ -152,6 +168,7 @@ enum Identity {
     Go(String, OwnedNavigationTarget),
     Configured(String),
     Project(std::path::PathBuf),
+    Note(String, String),
 }
 
 impl Action {
@@ -163,6 +180,11 @@ impl Action {
             } => Identity::Go(endpoint.clone(), target.clone()),
             Self::Configured(id, _) => Identity::Configured(id.clone()),
             Self::Project(project) => Identity::Project(project.path.clone()),
+            Self::Note {
+                endpoint,
+                workspace,
+                ..
+            } => Identity::Note(endpoint.clone(), workspace.clone()),
         }
     }
 }
@@ -475,7 +497,7 @@ impl HerdrWindow {
             supports_edit_scrollback: self.live.supports_edit_scrollback,
             _subscription: subscription,
         };
-        self.prepare_palette_entries(&mut palette);
+        self.prepare_palette_entries(&mut palette, crate::worktree_notes::Notes::of(cx));
         self.menu.palette = Some(palette);
         self.rank_palette(Selection::Keep, cx);
         self.load_palette_projects(window, cx);
@@ -504,9 +526,16 @@ impl HerdrWindow {
 
     /// Rebuilds the entries; the caller ranks them once the palette is back
     /// in the menu.
-    fn prepare_palette_entries(&self, palette: &mut Palette) {
+    fn prepare_palette_entries(
+        &self,
+        palette: &mut Palette,
+        notes: Option<&crate::worktree_notes::Notes>,
+    ) {
         let mut entries = Vec::new();
         let sources = self.palette_sources();
+        if let Some(notes) = notes {
+            note_entries(notes, &sources, &self.endpoints, &mut entries);
+        }
         for source in &sources {
             let Some(snapshot) = source.snapshot.as_ref().filter(|_| source.enabled) else {
                 continue;
@@ -626,7 +655,7 @@ impl HerdrWindow {
                 palette.configuration = self.config.palette.clone();
                 palette.projects = projects::Collection::default();
                 palette.loading_projects = !self.config.palette.project_roots.is_empty();
-                self.prepare_palette_entries(&mut palette);
+                self.prepare_palette_entries(&mut palette, crate::worktree_notes::Notes::of(cx));
                 self.menu.palette = Some(palette);
                 self.rank_palette(Selection::Keep, cx);
                 self.load_palette_projects(window, cx);
@@ -650,13 +679,25 @@ impl HerdrWindow {
                     }
             });
         if changed && let Some(mut palette) = self.menu.palette.take() {
-            self.prepare_palette_entries(&mut palette);
+            self.prepare_palette_entries(&mut palette, crate::worktree_notes::Notes::of(cx));
             self.menu.palette = Some(palette);
             self.rank_palette(Selection::Keep, cx);
         }
     }
 
     fn activate_palette(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
+        let action = match action {
+            Action::Note {
+                endpoint,
+                boot,
+                workspace,
+            } => Action::Go {
+                endpoint,
+                boot,
+                target: NavigationTarget::Workspace(workspace),
+            },
+            action => action,
+        };
         if self.menu.palette.as_ref().is_none_or(Palette::busy) {
             return;
         }
@@ -713,7 +754,10 @@ impl HerdrWindow {
                 .ok_or(Error::NoPaletteSession)?;
             match &action {
                 Action::Configured(id, action) => target.invocation(snapshot, id, *action),
-                Action::Native(_) | Action::Go { .. } | Action::Project(_) => unreachable!(),
+                Action::Native(_)
+                | Action::Go { .. }
+                | Action::Project(_)
+                | Action::Note { .. } => unreachable!(),
             }
         })();
         match result {
