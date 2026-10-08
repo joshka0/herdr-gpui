@@ -44,12 +44,7 @@ impl HerdrWindow {
                     self.reconcile_catalog(update.hosts, update.wsl, cx);
                 }
                 Err(error) => {
-                    let message = format!("Host catalog: {error}");
-                    // The catalog is retried every two seconds; warn once per failure.
-                    if self.local_error.as_deref() != Some(message.as_str()) {
-                        crate::storage_warning::warn_storage_failure("Host catalog", &error);
-                    }
-                    self.local_error = Some(message);
+                    self.local_error = Some(format!("Host catalog: {error}"));
                     cx.notify();
                 }
             }

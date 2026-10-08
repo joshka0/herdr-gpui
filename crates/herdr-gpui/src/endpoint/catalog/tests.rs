@@ -82,4 +82,5 @@ fn desired_selection_is_client_local_and_catalog_changes_cancel_stale_restore() 
     assert_eq!(second.desired, None);
 }
 
+mod storage_warning;
 mod wsl;
