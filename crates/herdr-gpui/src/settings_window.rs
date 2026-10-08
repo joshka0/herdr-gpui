@@ -48,18 +48,20 @@ pub(super) enum Section {
     Indicators,
     Sound,
     Notifications,
+    StatusBar,
     Integrations,
     Code,
     General,
 }
 
 impl Section {
-    const ALL: [Self; 8] = [
+    const ALL: [Self; 9] = [
         Self::Appearance,
         Self::Fonts,
         Self::Indicators,
         Self::Sound,
         Self::Notifications,
+        Self::StatusBar,
         Self::Integrations,
         Self::Code,
         Self::General,
@@ -72,6 +74,7 @@ impl Section {
             Self::Indicators => "Indicators",
             Self::Sound => "Sound",
             Self::Notifications => "Notifications",
+            Self::StatusBar => "Status bar",
             Self::Integrations => "Integrations",
             Self::Code => "Code",
             Self::General => "General",
@@ -85,6 +88,7 @@ impl Section {
             Self::Indicators => "icons/pulse.svg",
             Self::Sound => "icons/chart.svg",
             Self::Notifications => "icons/bell.svg",
+            Self::StatusBar => "icons/status-bar.svg",
             Self::Integrations => "icons/agent-generic.svg",
             Self::Code => "icons/vscode.svg",
             Self::General => "icons/settings.svg",
@@ -98,6 +102,7 @@ impl Section {
             Self::Indicators => "See what your agents are doing at a glance.",
             Self::Sound => "A little signal when something needs you.",
             Self::Notifications => "Stay informed without losing your place.",
+            Self::StatusBar => "Keep the bottom bar to what you use.",
             Self::Integrations => "Connect the agents you work with.",
             Self::Code => {
                 "Review code and diffs beside your terminals by connecting to a Visual Studio Code server."

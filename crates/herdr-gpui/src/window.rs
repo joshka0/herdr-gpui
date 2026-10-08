@@ -28,6 +28,7 @@ mod regions;
 mod render;
 mod selection;
 mod server_keys;
+mod status_bar;
 pub(crate) mod system_notifications;
 mod tab_drag;
 mod tab_strip;

@@ -7,6 +7,7 @@ use std::{
     thread::ThreadId,
 };
 
+mod hidden_cup;
 mod toggle;
 
 /// Where a stand-in hold was made and released, in order.
