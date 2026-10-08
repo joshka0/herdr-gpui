@@ -63,7 +63,4 @@ fn random_names_are_valid_and_vary() {
     for _ in 0..64 {
         assert!(valid(&random(&"p".repeat(16))));
     }
-    for (adjective, noun) in ADJECTIVES.iter().zip(NOUNS) {
-        assert!(valid(adjective) && valid(noun));
-    }
 }

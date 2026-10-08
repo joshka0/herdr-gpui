@@ -3,7 +3,7 @@ use super::*;
 
 fn device(id: &str) -> SavedDevice {
     SavedDevice {
-        provider: CloudProvider::Coder,
+        provider: CloudProvider::ALL[0],
         id: id.into(),
         label: "Dev box".into(),
         account: "https://coder.example.com".into(),
@@ -26,11 +26,14 @@ fn saves_replace_by_provider_and_id_and_survive_reload() {
     let saved = read(&path).unwrap();
     assert_eq!(saved.len(), 2);
     assert_eq!(saved[0], renamed);
-    assert_eq!(saved[0].endpoint_id(), "coder:w1");
+    assert_eq!(
+        saved[0].endpoint_id(),
+        format!("{}:w1", CloudProvider::ALL[0].key())
+    );
     assert_eq!(
         saved[0].target(),
         ConnectTarget::Cloud {
-            provider: CloudProvider::Coder,
+            provider: CloudProvider::ALL[0],
             account: "https://coder.example.com".into(),
             id: "w1".into(),
             machine: "herdr-dev-box".into(),
@@ -38,7 +41,13 @@ fn saves_replace_by_provider_and_id_and_survive_reload() {
         }
     );
     let text = fs::read_to_string(&path).unwrap();
-    assert!(text.contains("\"provider\": \"coder\""), "{text}");
+    assert!(
+        text.contains(&format!(
+            "\"provider\": \"{}\"",
+            CloudProvider::ALL[0].key()
+        )),
+        "{text}"
+    );
 }
 
 #[test]

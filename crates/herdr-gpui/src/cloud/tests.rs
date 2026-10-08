@@ -1,6 +1,8 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 
+pub(crate) mod server;
+
 #[test]
 fn steps_read_as_short_status_words() {
     assert_eq!(Step::Creating.text(), "Creating…");

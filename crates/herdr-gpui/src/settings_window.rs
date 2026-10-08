@@ -1,6 +1,8 @@
 //! Independent native preferences window. Disk work never owns a window or a socket.
 #[cfg(feature = "cloud")]
 mod cloud_devices;
+#[cfg(feature = "daytona")]
+pub(crate) use cloud_devices::open as open_cloud;
 mod controls;
 mod layouts;
 pub(crate) use layouts::{apply_loaded_layout, layout_load_revision};
@@ -229,8 +231,13 @@ struct SettingsWindow {
     layout_io: Option<layouts::LayoutIo>,
     remote_history: remote_history::RemoteHistory,
     /// The Coder card, built when Cloud Devices is first shown.
+    /// The provider whose tab Cloud Devices shows.
+    #[cfg(feature = "cloud")]
+    cloud_tab: crate::cloud::CloudProvider,
     #[cfg(feature = "coder")]
     coder_card: Option<cloud_devices::CoderCard>,
+    #[cfg(feature = "daytona")]
+    daytona_card: Option<cloud_devices::DaytonaCard>,
     theme_loading: bool,
     theme_waiting: bool,
     theme_light: bool,
@@ -313,8 +320,12 @@ impl SettingsWindow {
             #[cfg(test)]
             layout_io: None,
             remote_history: Default::default(),
+            #[cfg(feature = "cloud")]
+            cloud_tab: cloud_devices::first_tab(),
             #[cfg(feature = "coder")]
             coder_card: None,
+            #[cfg(feature = "daytona")]
+            daytona_card: None,
             theme_loading: false,
             theme_waiting: false,
             theme_light: false,

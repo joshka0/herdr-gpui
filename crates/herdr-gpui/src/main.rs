@@ -17,8 +17,10 @@ mod checkpoint;
 mod cli;
 mod close_modal;
 // `cloud` is the machinery every provider shares; alone it offers nothing to add.
-#[cfg(all(feature = "cloud", not(feature = "coder")))]
-compile_error!("the `cloud` feature is enabled through a provider feature, such as `coder`");
+#[cfg(all(feature = "cloud", not(any(feature = "coder", feature = "daytona"))))]
+compile_error!(
+    "the `cloud` feature is enabled through a provider feature, such as `coder` or `daytona`"
+);
 #[cfg(feature = "cloud")]
 mod cloud;
 #[cfg(feature = "coder")]
@@ -32,6 +34,8 @@ mod control;
 mod controls;
 mod copy_mode;
 mod daemon;
+#[cfg(feature = "daytona")]
+mod daytona;
 mod diagnostics;
 mod dialog_input;
 mod endpoint;

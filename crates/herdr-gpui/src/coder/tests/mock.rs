@@ -7,82 +7,17 @@ use crate::coder::{
     oauth,
 };
 use secrecy::{ExposeSecret, SecretString};
-use std::{
-    io::{Read, Write},
-    net::TcpListener,
-    sync::{Arc, Mutex},
-    thread,
-};
+use std::sync::{Arc, Mutex};
 
-#[derive(Debug, Clone)]
-struct Request {
-    method: String,
-    target: String,
-    authorization: Option<String>,
-    body: String,
-}
+type Request = crate::cloud::tests::server::Request;
 
-/// Serve `handler` until the test ends, recording every request.
+/// Serve `handler` as the deployment until the test ends.
 fn serve(
     handler: impl Fn(&Request) -> (u16, String) + Send + 'static,
 ) -> (Settings, Arc<Mutex<Vec<Request>>>) {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let (base, log) = crate::cloud::tests::server::serve(handler);
     let mut settings = super::settings();
-    settings.base = format!("http://{}", listener.local_addr().unwrap());
-    let log = Arc::new(Mutex::new(Vec::new()));
-    let seen = log.clone();
-    thread::spawn(move || {
-        for stream in listener.incoming() {
-            let Ok(mut stream) = stream else { return };
-            let mut bytes = Vec::new();
-            let mut chunk = [0; 4096];
-            let header_end = loop {
-                let read = stream.read(&mut chunk).unwrap();
-                if read == 0 {
-                    break None;
-                }
-                bytes.extend_from_slice(&chunk[..read]);
-                if let Some(end) = bytes.windows(4).position(|w| w == b"\r\n\r\n") {
-                    break Some(end + 4);
-                }
-            };
-            let Some(header_end) = header_end else {
-                continue;
-            };
-            let head = String::from_utf8_lossy(&bytes[..header_end]).to_string();
-            let length = head
-                .lines()
-                .find_map(|line| {
-                    let (name, value) = line.split_once(':')?;
-                    name.eq_ignore_ascii_case("content-length")
-                        .then(|| value.trim().parse::<usize>().ok())?
-                })
-                .unwrap_or(0);
-            while bytes.len() < header_end + length {
-                let read = stream.read(&mut chunk).unwrap();
-                bytes.extend_from_slice(&chunk[..read]);
-            }
-            let mut words = head.split(' ');
-            let request = Request {
-                method: words.next().unwrap().into(),
-                target: words.next().unwrap().into(),
-                authorization: head.lines().find_map(|line| {
-                    let (name, value) = line.split_once(':')?;
-                    name.eq_ignore_ascii_case("authorization")
-                        .then(|| value.trim().to_owned())
-                }),
-                body: String::from_utf8_lossy(&bytes[header_end..]).to_string(),
-            };
-            let (status, body) = handler(&request);
-            seen.lock().unwrap().push(request);
-            write!(
-                stream,
-                "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                body.len()
-            )
-            .unwrap();
-        }
-    });
+    settings.base = base;
     (settings, log)
 }
 

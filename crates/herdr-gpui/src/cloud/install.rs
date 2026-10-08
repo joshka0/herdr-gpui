@@ -1,8 +1,9 @@
-//! Checking for, and on explicit approval installing, Herdr inside a Coder
-//! workspace the user just created or attached. This is the one place the GUI
+//! Checking for, and on explicit approval installing, Herdr on a cloud
+//! machine the user just created or attached. This is the one place the GUI
 //! installs anything remotely: it runs Herdr's published installer, which
-//! verifies the release checksum, through `coder ssh`. Background reconnects
-//! never call it. Output is bounded and kept only for the failure message.
+//! verifies the release checksum, through the provider's remote command (such
+//! as `coder ssh`). Background reconnects never call it. Output is bounded and
+//! kept only for the failure message.
 
 use super::{Error, Result};
 use std::{
@@ -135,8 +136,9 @@ fn tail(bytes: &[u8]) -> String {
     lines[lines.len().saturating_sub(TAIL_LINES)..].join("\n")
 }
 
-/// Whether the workspace already has a Herdr the bridge can run.
-/// `ssh` is a `coder ssh … <workspace>` command; the probe is appended.
+/// Whether the machine already has a Herdr the bridge can run. `ssh` is the
+/// provider's remote command, such as `coder ssh … <workspace>`; the probe is
+/// appended.
 pub(crate) fn installed(mut ssh: Command, cancelled: &impl Fn() -> bool) -> Result<bool> {
     ssh.arg(remote(PROBE));
     let finished = run(ssh, PROBE_TIMEOUT, cancelled)?;
@@ -144,26 +146,25 @@ pub(crate) fn installed(mut ssh: Command, cancelled: &impl Fn() -> bool) -> Resu
         Some(0) => Ok(true),
         Some(3) => Ok(false),
         _ => Err(Error::Install(if finished.output.is_empty() {
-            "coder ssh could not reach the workspace".into()
+            "the remote command could not reach the machine".into()
         } else {
             finished.output
         })),
     }
 }
 
-/// Run Herdr's installer in the workspace. Only called after the user approved it.
+/// Run Herdr's installer on the machine. Only called after the user approved it.
 pub(crate) fn install(mut ssh: Command, cancelled: &impl Fn() -> bool) -> Result<()> {
     tracing::info!(
-        category = "coder_install",
-        "Installing Herdr in Coder workspace"
+        category = "cloud_install",
+        "Installing Herdr on a cloud machine"
     );
     ssh.arg(remote(INSTALL));
     let finished = run(ssh, INSTALL_TIMEOUT, cancelled)?;
     match finished.code {
         Some(0) => Ok(()),
         Some(NO_CURL) => Err(Error::Install(
-            "the workspace has no curl; add it to the template or install Herdr there manually"
-                .into(),
+            "the machine has no curl; add it to its image or install Herdr there manually".into(),
         )),
         _ => Err(Error::Install(if finished.output.is_empty() {
             "the installer did not finish".into()

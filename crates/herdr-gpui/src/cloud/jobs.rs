@@ -43,6 +43,7 @@ impl Jobs {
     }
 
     /// Whether a job already adds a machine of this provider with this name.
+    #[cfg(feature = "coder")]
     pub(crate) fn contains(&self, provider: CloudProvider, name: &str) -> bool {
         self.jobs
             .iter()

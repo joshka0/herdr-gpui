@@ -7,7 +7,6 @@ mod api;
 mod connect;
 mod error;
 mod http;
-mod install;
 mod names;
 mod oauth;
 mod settings;

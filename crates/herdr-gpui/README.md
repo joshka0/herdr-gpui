@@ -341,10 +341,32 @@ before expiry and on rejection. File drops are refused on Coder panes, and
 restoring the last selected device at startup covers SSH devices only. Coder
 devices are unavailable on Windows.
 
+### Daytona sandboxes (experimental)
+
+Settings > **Cloud Devices** > **Daytona** holds a Daytona account: the API URL
+(`https://app.daytona.io/api` for Daytona's cloud), an optional organization,
+region, and snapshot, saved to `[daytona]`, and an API key saved to the
+credential store (`HERDR_DAYTONA_API_KEY` takes precedence). **Create sandbox**
+creates one with a generated name and, when the **Install Herdr** switch is on
+(the default), installs Herdr in it if it is missing; the device picker shows
+its progress and a toast says when it is ready. The picker's **Add Daytona
+Sandbox…** row opens this tab. Removing a device leaves its sandbox in Daytona.
+
+Each connection starts a stopped sandbox, asks the API for a 10-minute SSH
+token for it, and runs Herdr's remote bridge through Daytona's SSH gateway.
+The token goes in a private temporary `ssh` config file that also replaces your
+own, never on the command line. Daytona publishes no host key for its gateway,
+so the first key seen is pinned in `daytona_known_hosts` in the GUI's state
+directory and a changed key is refused. Daytona devices need `ssh` on the PATH
+and are unavailable on Windows. This provider is a proof of concept: the API
+path is covered by tests against a scripted server, but not yet exercised
+against a live Daytona account.
+
 Each provider is a Cargo feature of `herdr-gpui`, on by default: `coder` for
-Coder. A build with `--no-default-features` has no Cloud Devices section and no
-provider rows in the device picker; it still accepts a `[coder]` table, so one
-config file serves every build, but never reads it.
+Coder and `daytona` for Daytona. A build with `--no-default-features` has no
+Cloud Devices section and no provider rows in the device picker; it still
+accepts the `[coder]` and `[daytona]` tables, so one config file serves every
+build, but never reads them.
 
 Switching revokes the old host's focus before releasing its surface, then resizes
 and activates the selected host. Input waits for the activation acknowledgement

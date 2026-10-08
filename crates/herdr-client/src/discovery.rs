@@ -38,6 +38,8 @@ fn config_root(var: &impl Fn(&str) -> Option<OsString>) -> PathBuf {
 pub enum CloudProvider {
     #[cfg(feature = "coder")]
     Coder,
+    #[cfg(feature = "daytona")]
+    Daytona,
 }
 
 #[cfg(feature = "cloud")]
@@ -46,6 +48,8 @@ impl CloudProvider {
     pub const ALL: &[Self] = &[
         #[cfg(feature = "coder")]
         Self::Coder,
+        #[cfg(feature = "daytona")]
+        Self::Daytona,
     ];
 
     /// The stable key used in saved files and endpoint IDs.
@@ -53,6 +57,8 @@ impl CloudProvider {
         match self {
             #[cfg(feature = "coder")]
             Self::Coder => "coder",
+            #[cfg(feature = "daytona")]
+            Self::Daytona => "daytona",
         }
     }
 }

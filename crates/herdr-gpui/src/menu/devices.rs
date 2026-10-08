@@ -72,6 +72,9 @@ impl HerdrWindow {
             .filter(|provider| match provider {
                 #[cfg(feature = "coder")]
                 crate::cloud::CloudProvider::Coder => self.coder_configured(),
+                // The row opens Daytona's Settings tab, which sets it up.
+                #[cfg(feature = "daytona")]
+                crate::cloud::CloudProvider::Daytona => true,
             })
             .collect()
     }
@@ -585,6 +588,11 @@ impl HerdrWindow {
                 match provider {
                     #[cfg(feature = "coder")]
                     crate::cloud::CloudProvider::Coder => self.open_coder_setup(window, cx),
+                    #[cfg(feature = "daytona")]
+                    crate::cloud::CloudProvider::Daytona => {
+                        self.dismiss_menu(window, cx);
+                        crate::settings_window::open_cloud(cx.weak_entity(), provider, cx);
+                    }
                 }
             }
             #[cfg(not(feature = "cloud"))]

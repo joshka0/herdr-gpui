@@ -2,13 +2,13 @@
 //! A build without the `coder` feature still parses the table, so one config
 //! file serves every build, but never reads it.
 #[cfg(feature = "coder")]
-use super::{Config, LOCAL_CONFIG, write_config};
+use super::Config;
 #[cfg(feature = "coder")]
-use crate::{Error, Result};
+use crate::Result;
 use serde::Deserialize;
 use std::path::PathBuf;
 #[cfg(feature = "coder")]
-use std::{env, ffi::OsString, fs, io::ErrorKind, path::Path};
+use std::{env, ffi::OsString, path::Path};
 
 /// A self-hosted Coder deployment whose workspaces can be added as devices.
 /// Coder's OAuth2 provider requires a confidential client. Its secret may be
@@ -121,36 +121,7 @@ impl Config {
     }
 
     fn save_coder_path(fields: &CoderFields, path: &Path) -> Result<()> {
-        let result = (|| -> Result<()> {
-            let text = match fs::read_to_string(path) {
-                Ok(text) => text,
-                Err(error) if error.kind() == ErrorKind::NotFound => LOCAL_CONFIG.into(),
-                Err(error) => return Err(error.into()),
-            };
-            let mut document = text.parse::<toml_edit::DocumentMut>()?;
-            let table = document
-                .entry("coder")
-                .or_insert(toml_edit::Item::Table(toml_edit::Table::new()))
-                .as_table_like_mut()
-                .ok_or(crate::herdr_settings::Error::Table("coder"))?;
-            for (key, value) in fields.entries() {
-                let value = value.trim();
-                if value.is_empty() {
-                    table.remove(key);
-                    continue;
-                }
-                let mut value = toml_edit::Value::from(value);
-                if let Some(previous) = table.get(key).and_then(toml_edit::Item::as_value) {
-                    *value.decor_mut() = previous.decor().clone();
-                }
-                table.insert(key, toml_edit::Item::Value(value));
-            }
-            if table.is_empty() {
-                document.remove("coder");
-            }
-            write_config(path, &document.to_string())
-        })();
-        result.map_err(|error: Error| error.at_path(path))
+        super::table::save_keys(path, "coder", &fields.entries())
     }
 }
 

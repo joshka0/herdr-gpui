@@ -3,7 +3,10 @@
 //! credential store. Sign-in, status, and device removal run through
 //! `cloud::worker`, never on the UI thread.
 
-use super::super::{Section, SettingsWindow};
+use super::{
+    super::{Section, SettingsWindow},
+    input,
+};
 use crate::{
     cloud::{
         SavedDevice,
@@ -13,7 +16,7 @@ use crate::{
         Settings,
         setup::{self, Overview, Session},
     },
-    config::{CoderConfig, CoderFields, Config, corners},
+    config::{CoderConfig, CoderFields, Config},
     github::Store,
     search_input::SearchInput,
 };
@@ -58,24 +61,6 @@ pub(in crate::settings_window) struct CoderCard {
     devices: Vec<SavedDevice>,
     message: Option<String>,
     job: Option<Worker>,
-}
-
-fn input(
-    placeholder: &str,
-    text: &str,
-    config: &Config,
-    theme: &crate::config::Theme,
-    cx: &mut Context<SettingsWindow>,
-) -> Entity<SearchInput> {
-    let input = cx.new(SearchInput::new);
-    input.update(cx, |input, cx| {
-        input.set_appearance(config.ui.clone(), theme.clone(), cx);
-        input.set_placeholder(placeholder, cx);
-        if !text.is_empty() {
-            input.set_text_selected(text, cx);
-        }
-    });
-    input
 }
 
 impl CoderCard {
@@ -293,42 +278,6 @@ impl SettingsWindow {
         }
     }
 
-    fn cloud_button(
-        &self,
-        id: impl Into<ElementId>,
-        label: impl Into<SharedString>,
-        enabled: bool,
-    ) -> Stateful<Div> {
-        let theme = &self.theme;
-        div()
-            .id(id.into())
-            .flex_none()
-            .px(px(12.))
-            .py(px(6.))
-            .rounded(px(corners::CONTROL))
-            .border_1()
-            .border_color(rgb(theme.active))
-            .bg(rgb(theme.background))
-            .when(enabled, |button| {
-                button
-                    .cursor_pointer()
-                    .hover(|style| style.bg(rgb(theme.active)))
-            })
-            .when(!enabled, |button| button.opacity(0.5))
-            .child(label.into())
-    }
-
-    /// A label over its input; the input draws its own field.
-    fn cloud_field(&self, label: &'static str, input: AnyView) -> Div {
-        div()
-            .flex()
-            .flex_col()
-            .gap(px(6.))
-            .min_w_0()
-            .child(div().text_color(rgb(self.theme.muted)).child(label))
-            .child(input)
-    }
-
     pub(super) fn render_coder_card(&self, cx: &mut Context<Self>) -> Div {
         let Some(cloud) = &self.coder_card else {
             return div();
@@ -451,34 +400,14 @@ impl SettingsWindow {
                 ));
         }
         for (index, device) in cloud.devices.iter().enumerate() {
-            let id = device.id.clone();
-            devices = devices.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(12.))
-                    .child(
-                        div()
-                            .min_w_0()
-                            .child(div().truncate().child(device.label.clone()))
-                            .child(
-                                div()
-                                    .truncate()
-                                    .text_color(rgb(theme.muted))
-                                    .child(format!("{} · {}", device.machine, device.session)),
-                            ),
-                    )
-                    .child(
-                        self.cloud_button(("cloud-coder-remove", index), "Remove", ready)
-                            .debug_selector(move || format!("cloud-coder-remove-{index}"))
-                            .when(ready, |button| {
-                                button.on_click(cx.listener(move |this, _, _, cx| {
-                                    this.cloud_forget(id.clone(), cx)
-                                }))
-                            }),
-                    ),
-            );
+            devices = devices.child(self.cloud_device_row(
+                crate::cloud::CloudProvider::Coder,
+                index,
+                device,
+                ready,
+                Self::cloud_forget,
+                cx,
+            ));
         }
         div()
             .flex()

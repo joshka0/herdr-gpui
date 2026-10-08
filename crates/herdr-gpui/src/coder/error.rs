@@ -59,12 +59,6 @@ pub enum Error {
         "This device belongs to a Coder deployment that is no longer configured in [coder] url."
     )]
     Deployment,
-    #[error("Could not run the coder CLI.")]
-    Process(#[source] io::Error),
-    #[error("Installing Herdr failed: {0}")]
-    Install(String),
-    #[error("Installing Herdr did not finish within 5 minutes.")]
-    InstallTimeout,
     #[error("{0}")]
     Bridge(#[source] herdr_client::Error),
     #[error("Could not update {}: {source}", path.display())]

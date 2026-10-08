@@ -5,9 +5,9 @@
 use super::{
     Error, Result, Settings,
     api::{self, Client, Preset, Progress, Template, User, Workspace},
-    connect, install, oauth, store,
+    connect, oauth, store,
 };
-use crate::cloud::{self, CloudProvider, SavedDevice};
+use crate::cloud::{self, CloudProvider, SavedDevice, install};
 use secrecy::SecretString;
 
 pub(crate) use oauth::Pending;
@@ -174,9 +174,10 @@ pub(crate) fn install(
     install::install(ssh(settings, ready)?, &cancelled)?;
     // The installer's own success is not proof the bridge will find it.
     if !install::installed(ssh(settings, ready)?, &cancelled)? {
-        return Err(Error::Install(
+        return Err(cloud::Error::Install(
             "the installer finished but Herdr is not on the expected paths".into(),
-        ));
+        )
+        .into());
     }
     Ok(())
 }
@@ -248,7 +249,7 @@ pub(crate) fn add_device(
     let (ready, installed) = provision(&settings, source, cancelled, |s| report(step(s)))?;
     if !installed {
         if !install {
-            return Err(Error::Install(format!(
+            return Err(cloud::Error::Install(format!(
                 "Herdr is not installed in {}; add it and try again",
                 ready.name
             ))

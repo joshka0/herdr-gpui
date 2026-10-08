@@ -6,7 +6,9 @@
 //! machine; supporting another one adds a `CloudProvider` variant and a module.
 
 mod catalog;
+pub(crate) mod install;
 mod jobs;
+pub(crate) mod names;
 pub(crate) mod worker;
 
 pub(crate) use catalog::{SavedDevice, load, remove, save};
@@ -34,6 +36,14 @@ pub enum Error {
     StateDirectory,
     #[error("The cloud {0} worker stopped.")]
     Worker(&'static str),
+    #[error("Could not run the command that reaches the machine.")]
+    Process(#[source] io::Error),
+    #[error("Cancelled.")]
+    Cancelled,
+    #[error("Installing Herdr failed: {0}")]
+    Install(String),
+    #[error("Installing Herdr did not finish within 5 minutes.")]
+    InstallTimeout,
 }
 
 /// What a job reports while it adds a machine, in words every provider shares.
@@ -62,14 +72,20 @@ impl Step {
 /// The provider's name, as the UI shows it.
 pub(crate) fn name(provider: CloudProvider) -> &'static str {
     match provider {
+        #[cfg(feature = "coder")]
         CloudProvider::Coder => "Coder",
+        #[cfg(feature = "daytona")]
+        CloudProvider::Daytona => "Daytona",
     }
 }
 
 /// What the provider calls one machine.
 pub(crate) fn noun(provider: CloudProvider) -> &'static str {
     match provider {
+        #[cfg(feature = "coder")]
         CloudProvider::Coder => "workspace",
+        #[cfg(feature = "daytona")]
+        CloudProvider::Daytona => "sandbox",
     }
 }
 
@@ -87,9 +103,12 @@ pub(crate) fn connect(target: &ConnectTarget, stop: &AtomicBool) -> io::Result<T
         return Err(io::Error::other(Error::Invalid("cloud target")));
     };
     match provider {
+        #[cfg(feature = "coder")]
         CloudProvider::Coder => crate::coder::connect(account, id, session, stop),
+        #[cfg(feature = "daytona")]
+        CloudProvider::Daytona => crate::daytona::connect(account, id, session, stop),
     }
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
