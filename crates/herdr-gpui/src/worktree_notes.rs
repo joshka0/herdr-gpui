@@ -12,7 +12,14 @@ use std::path::PathBuf;
 const MAX_NOTES: usize = 512;
 /// Characters in one note. A note is a reminder, not a document.
 pub(crate) const MAX_CHARS: usize = 500;
-const MAX_FILE_BYTES: u64 = 1024 * 1024;
+/// Bytes in each part of a checkout's key. A longer key gets no note, so
+/// every note the store accepts fits in the file it reads back.
+const MAX_FIELD_BYTES: usize = 1024;
+/// Room for the most notes the store keeps, each as large as it accepts:
+/// JSON escapes at most double a string's bytes (quotes and backslashes are
+/// one byte each), plus the field names and punctuation.
+const MAX_FILE_BYTES: u64 =
+    (MAX_NOTES * (2 * (MAX_CHARS * 4 + 3 * MAX_FIELD_BYTES) + 128) + 64) as u64;
 const FILE: &str = "worktree-notes.json";
 
 /// The checkout a note is about.
@@ -24,6 +31,12 @@ pub(crate) struct Checkout {
 }
 
 impl Checkout {
+    fn valid(&self) -> bool {
+        [&self.endpoint, &self.repo_key, &self.branch]
+            .iter()
+            .all(|field| !field.is_empty() && field.len() <= MAX_FIELD_BYTES)
+    }
+
     fn is(&self, endpoint: &str, repo_key: &str, branch: &str) -> bool {
         self.endpoint == endpoint && self.repo_key == repo_key && self.branch == branch
     }
@@ -38,16 +51,7 @@ pub(crate) struct Note {
 
 impl Note {
     fn valid(&self) -> bool {
-        let Checkout {
-            endpoint,
-            repo_key,
-            branch,
-        } = &self.checkout;
-        [endpoint, repo_key, branch]
-            .iter()
-            .all(|field| !field.is_empty() && field.len() <= 4096)
-            && clean(&self.text) == self.text
-            && !self.text.is_empty()
+        self.checkout.valid() && clean(&self.text) == self.text && !self.text.is_empty()
     }
 }
 
@@ -89,6 +93,8 @@ pub(crate) struct Notes {
     notes: Vec<Note>,
     writer: Option<state_file::Writer<Saved>>,
     quitting: bool,
+    /// Counts changes, so a prepared list can tell it is out of date.
+    revision: u64,
 }
 
 impl Global for Notes {}
@@ -131,6 +137,7 @@ impl Notes {
             notes,
             writer,
             quitting: false,
+            revision: 0,
         }
     }
 
@@ -170,6 +177,10 @@ impl Notes {
             .map(|note| note.text.as_str())
     }
 
+    pub(crate) fn revision(&self) -> u64 {
+        self.revision
+    }
+
     /// Every note, most recently edited first.
     pub(crate) fn recent(&self) -> impl Iterator<Item = &Note> {
         self.notes.iter().rev()
@@ -178,6 +189,9 @@ impl Notes {
     /// Writes `text` as the checkout's note, or removes the note when the
     /// cleaned text is empty. Returns whether anything changed.
     pub(crate) fn set(&mut self, checkout: Checkout, text: &str) -> bool {
+        if !checkout.valid() {
+            return false;
+        }
         let text = clean(text);
         let position = self.notes.iter().position(|note| note.checkout == checkout);
         if position.is_some_and(|index| self.notes[index].text == text) {
@@ -195,6 +209,7 @@ impl Notes {
                 self.notes.drain(..excess);
             }
         }
+        self.revision += 1;
         self.save();
         true
     }

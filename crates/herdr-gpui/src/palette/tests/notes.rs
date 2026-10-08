@@ -108,3 +108,21 @@ fn the_note_text_is_searchable_from_the_whole_palette(cx: &mut TestAppContext) {
         assert!(matches!(rows.first(), Some((_, _, Action::Note { .. }))));
     });
 }
+
+#[gpui::test]
+fn an_open_palette_lists_a_note_added_after_it_opened(cx: &mut TestAppContext) {
+    let (view, cx) = cx.add_window_view(fixture_window);
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| view.open_palette(Filter::Notes, window, cx))
+    });
+    cx.run_until_parked();
+    view.read_with(cx, |view, _| assert!(listed(view).is_empty()));
+    // As another window's dialog would: only the shared notes change.
+    cx.update(|_, cx| note(cx, crate::endpoint::LOCAL, "main", "added elsewhere"));
+    cx.run_until_parked();
+    view.read_with(cx, |view, _| {
+        let rows = listed(view);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].1, "added elsewhere");
+    });
+}

@@ -307,6 +307,8 @@ pub(super) struct Palette {
     keymap: crate::keymap::Keymap,
     supports_clear: bool,
     supports_edit_scrollback: bool,
+    /// The notes revision the entries were prepared from.
+    notes_revision: Option<u64>,
     _subscription: Subscription,
 }
 
@@ -495,6 +497,7 @@ impl HerdrWindow {
             keymap: self.keymap().clone(),
             supports_clear: self.live.supports_pane_clear,
             supports_edit_scrollback: self.live.supports_edit_scrollback,
+            notes_revision: None,
             _subscription: subscription,
         };
         self.prepare_palette_entries(&mut palette, crate::worktree_notes::Notes::of(cx));
@@ -635,6 +638,7 @@ impl HerdrWindow {
         palette.keymap = self.keymap().clone();
         palette.supports_clear = self.live.supports_pane_clear;
         palette.supports_edit_scrollback = self.live.supports_edit_scrollback;
+        palette.notes_revision = notes.map(crate::worktree_notes::Notes::revision);
     }
 
     pub(crate) fn refresh_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -664,7 +668,9 @@ impl HerdrWindow {
             return;
         }
         let sources = self.palette_sources();
-        let changed = palette.keymap != *self.keymap()
+        let notes = crate::worktree_notes::Notes::of(cx);
+        let changed = palette.notes_revision != notes.map(crate::worktree_notes::Notes::revision)
+            || palette.keymap != *self.keymap()
             || palette.supports_clear != self.live.supports_pane_clear
             || palette.supports_edit_scrollback != self.live.supports_edit_scrollback
             || sources.len() != palette.sources.len()
@@ -679,7 +685,7 @@ impl HerdrWindow {
                     }
             });
         if changed && let Some(mut palette) = self.menu.palette.take() {
-            self.prepare_palette_entries(&mut palette, crate::worktree_notes::Notes::of(cx));
+            self.prepare_palette_entries(&mut palette, notes);
             self.menu.palette = Some(palette);
             self.rank_palette(Selection::Keep, cx);
         }

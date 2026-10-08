@@ -73,3 +73,39 @@ fn saved_notes_load_back_and_damaged_files_are_rejected() {
     std::fs::write(&path, b"{not json").unwrap();
     assert_eq!(Notes::at(Some(path)).recent().count(), 0);
 }
+
+#[test]
+fn the_largest_collection_the_store_accepts_reads_back() {
+    // Quotes double when escaped, and the text is all four-byte characters.
+    let field = "\"".repeat(MAX_FIELD_BYTES);
+    let mut notes = Notes::default();
+    for index in 0..MAX_NOTES {
+        let mut endpoint = field.clone();
+        endpoint.replace_range(..8, &format!("{index:08}"));
+        let checkout = Checkout {
+            endpoint,
+            repo_key: field.clone(),
+            branch: field.clone(),
+        };
+        assert!(notes.set(checkout, &"\u{1F4DD}".repeat(MAX_CHARS)));
+    }
+    let bytes = serde_json::to_vec(&Saved {
+        notes: notes.notes.clone(),
+    })
+    .unwrap();
+    assert!(
+        bytes.len() as u64 <= MAX_FILE_BYTES,
+        "{} bytes",
+        bytes.len()
+    );
+    assert_eq!(parse(&bytes).unwrap().len(), MAX_NOTES);
+
+    // A key too long to bound is refused rather than saved unreadable.
+    let long = Checkout {
+        branch: "b".repeat(MAX_FIELD_BYTES + 1),
+        ..checkout("x")
+    };
+    let revision = notes.revision();
+    assert!(!notes.set(long, "note"));
+    assert_eq!(notes.revision(), revision);
+}
