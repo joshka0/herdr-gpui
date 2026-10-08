@@ -592,18 +592,6 @@ pub(crate) fn describe(error: &Error) -> String {
     text
 }
 
-/// "+12 −3 in 4 files", or that nothing changed.
-pub(crate) fn summary(diff: Diff) -> String {
-    if diff.files == 0 {
-        return "No changes".to_owned();
-    }
-    let files = if diff.files == 1 { "file" } else { "files" };
-    format!(
-        "+{} \u{2212}{} in {} {files}",
-        diff.additions, diff.deletions, diff.files
-    )
-}
-
 /// How long ago `created` was, coarsely, from `now` (both Unix seconds).
 pub(crate) fn age(created: i64, now: i64) -> String {
     let seconds = now.saturating_sub(created).max(0);
