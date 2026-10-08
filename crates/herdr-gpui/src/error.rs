@@ -539,6 +539,9 @@ pub enum Error {
     #[cfg(any(target_os = "macos", windows))]
     #[error("Could not reach the native window for the page: {0}")]
     WindowHandle(#[from] WindowHandleError),
+    #[cfg(target_os = "macos")]
+    #[error("The page that opened a popup is no longer in a window")]
+    PopupOpener,
     #[error("Could not install the agent skill at {}: {source}", path.display())]
     SkillInstall {
         path: PathBuf,
