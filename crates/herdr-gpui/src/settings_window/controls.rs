@@ -178,6 +178,7 @@ impl SettingsWindow {
         if !self.busy() {
             self.controls.saving_sizes.clear();
             self.flush_control_sizes(cx);
+            self.flush_code_url(cx);
         }
     }
 

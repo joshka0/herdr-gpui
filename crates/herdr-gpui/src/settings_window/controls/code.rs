@@ -11,6 +11,9 @@ pub(in crate::settings_window) struct CodeSettings {
     /// Made when the page first shows, which is when a window is at hand
     /// for its blur subscription.
     field: Option<UrlField>,
+    /// An address submitted while another save or a reload ran, saved once
+    /// the window is free; `Some(None)` removes the address.
+    pending: Option<Option<WebUrl>>,
     test: Test,
     /// Fences out a test answer once the address has changed since.
     generation: u64,
@@ -24,6 +27,7 @@ impl Default for CodeSettings {
     fn default() -> Self {
         Self {
             field: None,
+            pending: None,
             test: Test::Idle,
             generation: 0,
             probe: code_server::probe,
@@ -114,14 +118,15 @@ impl SettingsWindow {
 
     /// Shows the saved address in the field, unless it is being edited:
     /// a reload, after a save or a change to the file, keeps an edit that
-    /// is in progress.
+    /// is in progress, or one still waiting to be saved.
     pub(in crate::settings_window) fn sync_code_field(&mut self, cx: &mut Context<Self>) {
         let saved = self.saved_code_url().to_owned();
+        let pending = self.code.pending.is_some();
         let Some(field) = &mut self.code.field else {
             return;
         };
         let editing = field.invalid || field.input.read(cx).text() != field.shown;
-        if editing || field.shown == saved {
+        if editing || pending || field.shown == saved {
             return;
         }
         field.show(&saved, cx);
@@ -145,6 +150,8 @@ impl SettingsWindow {
         }
         let text = input.text().trim().to_owned();
         if !save || text == saved {
+            // The saved address back, so nothing waits to replace it.
+            self.code.pending = None;
             field.invalid = false;
             field.show(&saved, cx);
             cx.notify();
@@ -166,9 +173,25 @@ impl SettingsWindow {
         field.show(url.as_ref().map_or("", WebUrl::as_str), cx);
         self.code.test = Test::Idle;
         self.code.generation += 1;
-        self.save_code_url(url, cx);
+        self.code.pending = Some(url);
+        self.flush_code_url(cx);
         cx.notify();
         true
+    }
+
+    /// Saves the address waiting to be saved, unless another save or a
+    /// reload runs; that one's end calls this again.
+    pub(in crate::settings_window) fn flush_code_url(&mut self, cx: &mut Context<Self>) {
+        if self.busy() {
+            return;
+        }
+        let Some(url) = self.code.pending.take() else {
+            return;
+        };
+        if self.config.code.url == url {
+            return;
+        }
+        self.save_code_url(url, cx);
     }
 
     fn save_code_url(&mut self, url: Option<WebUrl>, cx: &mut Context<Self>) {

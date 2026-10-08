@@ -165,3 +165,35 @@ fn a_reload_keeps_an_address_edit_in_progress(cx: &mut TestAppContext) {
     reload(&view, cx, "http://127.0.0.1:8000/?tkn=changed");
     assert_eq!(text(&view, cx), "http://127.0.0.1:8000/?tkn=changed");
 }
+
+/// An address submitted while another save runs waits for it, rather than
+/// being dropped and then replaced by the older saved address.
+#[gpui::test]
+fn an_address_submitted_during_a_save_is_saved_after_it(cx: &mut TestAppContext) {
+    let (view, cx, saves) = page(cx);
+    view.update(cx, |view, _| view.saving = true);
+    type_address(&view, cx, "127.0.0.1:9000/?tkn=later");
+    cx.simulate_keystrokes("enter");
+    cx.run_until_parked();
+    assert!(saves.lock().unwrap().is_empty());
+
+    // The earlier save ends: its reload keeps the field, then the address
+    // waiting is saved.
+    view.update(cx, |view, cx| {
+        view.saving = false;
+        view.sync_code_field(cx);
+        let field = view.code.field.as_ref().unwrap();
+        assert_eq!(
+            field.input.read(cx).text(),
+            "http://127.0.0.1:9000/?tkn=later"
+        );
+        view.sync_controls(cx);
+    });
+    cx.run_until_parked();
+    assert_eq!(
+        saves.lock().unwrap().as_slice(),
+        [Some(
+            WebUrl::try_from("http://127.0.0.1:9000/?tkn=later").unwrap()
+        )]
+    );
+}
