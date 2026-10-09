@@ -1266,6 +1266,47 @@ each host. Remote hosts use the terminal's SSH trust and authentication policy,
 and the UI thread never blocks. The GUI connection's API does not expose layouts,
 process details or agent sessions, which is why Teleport uses the CLI.
 
+## Smart Dispatch
+
+When more than one host is connected, the New worktree dialog (its branch form)
+and the New workspace dialog for a Git checkout offer a host for the new
+checkout. The three hosts with the most room are tiles, best first; every other
+host, offline ones last, opens from the Other field below them. The host the
+window shows stays chosen until you pick another, so pressing Enter still
+creates where it always did.
+
+Hosts rank by spare cores: cores less the 5 minute load average (or the CPU
+share where there is none), from the same samples as the CPU and memory
+display. While a picker is open every connected host is sampled, even with
+that display off. Each agent working there takes half a core off, a host that
+would have to clone the repository first takes one, memory above 90% halves
+its room, and each of the repository's last eight new checkouts that went
+there adds half a core, up to three. The ranking follows the samples for a few
+seconds, then holds still so the tiles do not move under the pointer.
+
+Choosing another host creates the checkout there through the same scripts as
+Teleport: the repository is found by remote (or opened, or cloned, as Teleport
+does), the base commit is resolved here and shipped as a Git bundle only when
+that host lacks it, and that host's own daemon creates the worktree from it.
+Closing the dialog does not stop it; the result arrives as a flash, and the
+window switches to the new workspace. Once it is shown, a new worktree runs the
+repository's setup script there, asking for trust as a local creation does.
+Setups of several such worktrees wait their turn; one whose host is not shown
+within two minutes is given up on, with a warning. A
+new workspace opens the repository's main checkout on that host.
+
+The fan-out dialog offers Spread agents across hosts. Each lane then goes to
+the host with the most room left, a lane counting as a core, and its host chip
+opens every host, best first, to move that lane. Each other host is set up once
+before its lanes, and a lane whose agent is not installed there fails with a
+reason. Lanes on another host show it next to their status, and Open, Keep and
+the comparison work across hosts; a host that cannot be read marks only its
+own lanes, keeping the changes read before.
+
+Where new checkouts went is kept in `dispatch-history.json` in the state
+directory, by repository name and host. Like Teleport, dispatch needs a Linux
+or macOS client and the local session or a saved SSH host on both ends.
+
 ## Images
 
 On a selected SSH endpoint, drop one PNG, JPEG, GIF, WebP, or BMP image onto a pane

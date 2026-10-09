@@ -63,7 +63,7 @@ pub(crate) struct MenuState {
     pub(super) merge_target: Option<crate::pr_actions::Target>,
     pub(super) target: Option<WorkspaceTarget>,
     pub input: Option<DialogInput>,
-    pub(super) error: Option<String>,
+    pub(crate) error: Option<String>,
     pub(super) deletion: Option<Deletion>,
     pub(super) close_check: Option<super::workspace_close::CloseCheck>,
     /// The correlated `worktree.create` or `worktree.open` request, so the dialog
@@ -89,6 +89,8 @@ pub(crate) struct MenuState {
     pub(crate) pane: Option<crate::pane_menu::PaneMenu>,
     /// The new worktree dialog's tabs and the GitHub listing behind them.
     pub(crate) worktree: Option<super::WorktreeSource>,
+    /// The host a new worktree or workspace goes to, when another one could.
+    pub(crate) dispatch: Option<crate::dispatch::Picker>,
     pub(crate) pr: crate::pull_request::Lookup,
     /// Also read by the sidebar, which paints each worktree's cached PR badge.
     pub(crate) pr_cache: crate::pull_request::Cache,
@@ -181,6 +183,15 @@ impl Submission {
 }
 
 impl MenuState {
+    /// The repository the open dialog's host picker ranks hosts for.
+    pub(crate) fn dispatch_repo(&self) -> Option<String> {
+        self.target
+            .as_ref()?
+            .worktree
+            .as_ref()
+            .map(|tree| tree.label.clone())
+    }
+
     pub(super) fn apply_deletion_response(
         &mut self,
         id: &str,
@@ -290,6 +301,7 @@ impl MenuState {
             host: None,
             pane: None,
             worktree: None,
+            dispatch: None,
         }
     }
 
@@ -333,6 +345,7 @@ impl MenuState {
         self.worktree_open = None;
         self.close = None;
         self.worktree = None;
+        self.dispatch = None;
         self.pr.clear();
         self.pr_connection = None;
     }
