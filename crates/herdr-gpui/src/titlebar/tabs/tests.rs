@@ -60,7 +60,11 @@ fn the_tab_row_stands_in_for_the_header(cx: &mut TestAppContext) {
     let toggle = cx.debug_bounds("toggle-sidebar").unwrap();
     assert_eq!(toggle.left(), px(LEADING));
     assert!(header.contains(&toggle.center()));
-    assert!(cx.debug_bounds("strip-titlebar-leading").is_none());
+    // Back and Forward open the strip beside the sidebar, ahead of the tabs.
+    let leading = cx.debug_bounds("strip-titlebar-leading").unwrap();
+    let navigation = cx.debug_bounds("titlebar-navigation").unwrap();
+    assert!(leading.left() >= sidebar.right());
+    assert!(leading.contains(&navigation.center()));
     // The strip ends with the account at the window's right edge.
     let new_tab = cx.debug_bounds("new-tab").unwrap();
     assert_eq!(new_tab.top(), px(0.));
@@ -100,6 +104,9 @@ fn a_collapsed_sidebar_hands_the_toggle_to_the_leftmost_strip(cx: &mut TestAppCo
         let toggle = cx.debug_bounds("toggle-sidebar").unwrap();
         let leading = cx.debug_bounds("strip-titlebar-leading").unwrap();
         assert!(leading.contains(&toggle.center()), "{mode}");
+        let back = cx.debug_bounds("titlebar-back").unwrap();
+        assert!(leading.contains(&back.center()), "{mode}");
+        assert!(back.left() >= toggle.right(), "{mode}");
         assert_eq!(leading.top(), px(0.), "{mode}");
         // Clear of the traffic lights, whatever the column beside it covers.
         assert!(toggle.left() >= px(LEADING), "{mode}");

@@ -434,7 +434,7 @@ impl HerdrWindow {
             })
             .children(
                 ends.filter(|ends| ends.leading)
-                    .and_then(|_| self.strip_leading(window, cx)),
+                    .map(|_| self.strip_leading(window, cx)),
             )
             // Tabs size to their content and shrink when the row is full, so
             // the button sits after the last tab instead of at the far right

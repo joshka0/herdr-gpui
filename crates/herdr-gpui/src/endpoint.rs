@@ -16,10 +16,12 @@ use std::{
 };
 
 mod catalog;
+mod history;
 mod polling;
 mod wake;
 
 pub(super) use catalog::Catalog;
+pub(crate) use history::Step;
 pub(super) use wake::WakeClock;
 
 pub(super) const LOCAL: &str = "local";
@@ -141,6 +143,8 @@ pub(super) struct Endpoint {
     pub collapsed: bool,
     pub collapsed_repos: HashSet<String>,
     pub live: LiveState,
+    /// Back and Forward through the panes `live` has focused.
+    pub(crate) history: history::History,
     pub generation: u64,
     pub(crate) toasts: crate::notifications::Toasts,
     /// Derived from `live.snapshot`; refreshed by `sync_live` whenever `live` changes.
@@ -181,6 +185,7 @@ impl Endpoint {
 
     /// Refreshes state derived from `live` after it is replaced.
     pub(crate) fn sync_live(&mut self) {
+        self.history.observe(self.live.snapshot.as_deref());
         self.config_diagnostic.sync(
             self.live
                 .snapshot
@@ -198,6 +203,7 @@ impl Endpoint {
             collapsed: false,
             collapsed_repos: HashSet::new(),
             live: LiveState::default(),
+            history: Default::default(),
             generation: 0,
             toasts: Default::default(),
             config_diagnostic: Default::default(),

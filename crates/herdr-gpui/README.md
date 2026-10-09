@@ -1001,6 +1001,18 @@ the full-width header described below, and so does a window with no strips.
 The worktree banner moves to the window's foot in this layout so it never sits
 under the traffic lights.
 
+Back and Forward follow the sidebar toggle in the header, or open the leftmost
+strip beside an expanded sidebar. They walk the panes this connection has
+focused, across tabs and workspaces, the way a browser walks its pages: going
+somewhere new drops what was ahead, closed panes are stepped over, and the
+trail (at most 100 panes) starts over when the daemon restarts. `back`
+(Cmd-[) and `forward` (Cmd-]) do the same from the keyboard, and so do a
+mouse's side buttons anywhere in the window. Each platform draws the pair its
+own way: macOS joins two chevrons in one segmented bezel as Finder and Xcode
+do, Windows uses Fluent's subtle arrow buttons as File Explorer does, and
+Linux uses GNOME's flat rounded header bar buttons. A header narrower than
+320px leaves them out so the account and window controls stay reachable.
+
 macOS keeps `Some(TitlebarOptions)` and the native Herdr window title/traffic lights,
 with transparent chrome and lights positioned at (9, 9) logical pixels. A full-width
 34px header blends `theme.surface` roughly 10% toward white, subtly lifting dark

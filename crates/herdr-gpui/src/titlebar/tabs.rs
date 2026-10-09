@@ -92,31 +92,33 @@ impl HerdrWindow {
     }
 
     /// What leads the leftmost strip: whatever clearance the sidebar column
-    /// leaves the traffic lights, and the toggle when the sidebar header does
-    /// not show it.
-    pub(crate) fn strip_leading(&self, window: &Window, cx: &mut Context<Self>) -> Option<Div> {
+    /// leaves the traffic lights, the toggle when the sidebar header does not
+    /// show it, then Back and Forward.
+    pub(crate) fn strip_leading(&self, window: &Window, cx: &mut Context<Self>) -> Div {
+        let leading = div()
+            .debug_selector(|| "strip-titlebar-leading".into())
+            .flex()
+            .flex_none()
+            .items_center();
         let mode = self.sidebar_mode();
+        // An expanded sidebar's header keeps the toggle, and Back and Forward
+        // open the content beside it, as Finder's toolbar does.
         if mode == SidebarMode::Expanded {
-            return None;
+            return leading.pl(px(6.)).child(self.navigation(cx));
         }
         let column = mode
             .width(self.sidebar_width, f32::from(window.viewport_size().width))
             .unwrap_or(0.);
-        Some(
-            div()
-                .debug_selector(|| "strip-titlebar-leading".into())
-                .flex()
-                .flex_none()
-                .items_center()
-                .child(movable(
-                    div()
-                        .flex_none()
-                        .self_stretch()
-                        .w(px((LEADING - column).max(0.))),
-                    window,
-                ))
-                .child(self.sidebar_toggle(cx)),
-        )
+        leading
+            .child(movable(
+                div()
+                    .flex_none()
+                    .self_stretch()
+                    .w(px((LEADING - column).max(0.))),
+                window,
+            ))
+            .child(self.sidebar_toggle(cx))
+            .child(self.navigation(cx))
     }
 
     /// What ends the rightmost strip: the same controls the header ends with.
