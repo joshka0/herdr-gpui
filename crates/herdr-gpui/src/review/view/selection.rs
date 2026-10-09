@@ -252,16 +252,18 @@ impl Review {
         }
     }
 
-    /// Selects the code of the file being read: the selection's, or the
-    /// file at the top; whether there was code to select.
+    /// Selects the code of the file at the top, in the column last selected
+    /// in when that was this file, as a click in the old column means to read
+    /// that side; whether there was code to select. A selection left in a
+    /// file scrolled away does not choose the file.
     pub(super) fn select_file(&mut self) -> bool {
-        let (file, side) = match self.selection {
-            Some(selection) => (selection.file, selection.side),
-            None => match self.top_file() {
-                Some(file) => (file, self.whole_file_side()),
-                None => return false,
-            },
+        let Some(file) = self.top_file() else {
+            return false;
         };
+        let side = self
+            .selection
+            .filter(|selection| selection.file == file)
+            .map_or_else(|| self.whole_file_side(), |selection| selection.side);
         let all = self
             .file_lines(file)
             .and_then(|lines| Selection::all(file, side, lines));
@@ -271,10 +273,11 @@ impl Review {
         all.is_some()
     }
 
-    /// The selected code, if any is selected.
+    /// The selected code, if any is selected. A selection of lines without
+    /// code, such as a "No newline at end of file" marker, has none.
     pub(super) fn selected_code(&self) -> Option<String> {
         let selection = self.selection.filter(|selection| !selection.is_empty())?;
-        Some(selection.text(self.file_lines(selection.file)?))
+        Some(selection.text(self.file_lines(selection.file)?)).filter(|text| !text.is_empty())
     }
 }
 

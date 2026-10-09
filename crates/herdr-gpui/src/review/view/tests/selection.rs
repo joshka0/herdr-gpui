@@ -1,7 +1,7 @@
 //! Selecting and copying the diff's code with the pointer and keys, and
 //! noting a line from its gutter.
-use super::{changes, line, the, window};
-use crate::review::view::Layout;
+use super::{changes, files::many_files, line, the, window};
+use crate::review::{diff::RowId, view::Layout};
 use gpui::{Modifiers, MouseButton, point, px};
 
 fn draw(cx: &mut gpui::VisualTestContext) {
@@ -103,6 +103,50 @@ fn select_all_takes_the_file_s_new_side_side_by_side(cx: &mut gpui::TestAppConte
 }
 
 #[gpui::test]
+fn select_all_keeps_to_the_column_last_clicked(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = window(cx, None);
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.seed_review(changes(), window, cx);
+            view.set_review_layout(the(view), Layout::Split, cx);
+        })
+    });
+    draw(cx);
+    draw(cx);
+    // A click on the old column's code, then Select All.
+    let old = cx.debug_bounds("review-gutter-left-0-2").unwrap();
+    let code = point(old.right() + px(2.), old.center().y);
+    cx.simulate_click(code, Modifiers::default());
+    draw(cx);
+    cx.simulate_keystrokes("cmd-a cmd-c");
+    assert_eq!(clipboard(cx).as_deref(), Some("fn a() {}\nfn b() {}"));
+}
+
+#[gpui::test]
+fn select_all_takes_the_file_at_the_top_not_one_scrolled_away(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = window(cx, None);
+    cx.update(|window, cx| view.update(cx, |view, cx| view.seed_review(many_files(), window, cx)));
+    draw(cx);
+    draw(cx);
+    // A word selected in README, then src/a.rs brought to the top.
+    let readme = cx.debug_bounds("review-gutter-line-0-1").unwrap();
+    let code = point(readme.right() + px(2.), readme.center().y);
+    cx.simulate_click(code, Modifiers::default());
+    cx.update(|_, cx| {
+        view.update(cx, |view, _| {
+            let review = view.reviews.values_mut().next().unwrap();
+            assert!(review.selection.is_some());
+            review.scroll_to_row(RowId::Header(1));
+        })
+    });
+    draw(cx);
+    draw(cx);
+    cx.simulate_keystrokes("cmd-a cmd-c");
+    let copied = clipboard(cx).unwrap();
+    assert!(copied.starts_with("line 0\nline 1\n"), "{copied:?}");
+}
+
+#[gpui::test]
 fn headers_copy_the_path_and_the_hunk(cx: &mut gpui::TestAppContext) {
     let (view, cx) = window(cx, None);
     cx.update(|window, cx| view.update(cx, |view, cx| view.seed_review(changes(), window, cx)));
@@ -121,4 +165,44 @@ fn headers_copy_the_path_and_the_hunk(cx: &mut gpui::TestAppContext) {
     view.read_with(cx, |view, _| {
         assert!(view.reviews.values().next().unwrap().draft.is_none());
     });
+}
+
+#[gpui::test]
+fn a_line_without_code_copies_nothing(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = window(cx, None);
+    let marker = crate::review::view::Loaded::of(crate::review::diff::Diff::parse(
+        "diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1 +1 @@\n-a\n+b\n\\ No newline at end of file\n",
+    ));
+    cx.update(|window, cx| view.update(cx, |view, cx| view.seed_review(marker, window, cx)));
+    draw(cx);
+    draw(cx);
+    // Triple-click the marker, then Cmd-C: the clipboard keeps what it had.
+    let gutter = cx.debug_bounds("review-gutter-line-0-3").unwrap();
+    let at = point(gutter.right() + px(2.), gutter.center().y);
+    cx.write_to_clipboard(gpui::ClipboardItem::new_string("kept".into()));
+    for count in 1..=3 {
+        cx.simulate_event(gpui::MouseDownEvent {
+            position: at,
+            button: MouseButton::Left,
+            modifiers: Modifiers::default(),
+            click_count: count,
+            first_mouse: false,
+        });
+        cx.simulate_event(gpui::MouseUpEvent {
+            position: at,
+            button: MouseButton::Left,
+            modifiers: Modifiers::default(),
+            click_count: count,
+        });
+    }
+    view.read_with(cx, |view, _| {
+        let review = view.reviews.values().next().unwrap();
+        assert!(
+            review
+                .selection
+                .is_some_and(|selection| !selection.is_empty())
+        );
+    });
+    cx.simulate_keystrokes("cmd-c");
+    assert_eq!(clipboard(cx).as_deref(), Some("kept"));
 }
