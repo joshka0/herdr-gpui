@@ -103,6 +103,14 @@ impl HerdrWindow {
         }
     }
 
+    /// Whether something the window draws may cover pages, so those it
+    /// covers step aside and show their picture: an open menu, or a status
+    /// bar tooltip.
+    #[cfg(any(target_os = "macos", windows))]
+    pub(in crate::browser) fn pages_covered(&self) -> bool {
+        self.menu.page.is_some() || self.browser.tooltip_band.is_some()
+    }
+
     /// Notes whether the pointer is over the status bar, whose tooltips show
     /// in the band above it.
     pub(crate) fn hover_status_bar(&mut self, hovered: bool, cx: &mut Context<Self>) {
@@ -178,12 +186,12 @@ impl HerdrWindow {
         .detach();
     }
 
-    /// The picture a covered page left, while a menu is open.
+    /// The picture a covered page left, while a menu or a tooltip is open.
     #[cfg(any(target_os = "macos", windows))]
     pub(super) fn frozen_picture(&self, id: TabId) -> Option<std::sync::Arc<RenderImage>> {
         match self.browser.frozen.get(&id)? {
             #[cfg(target_os = "macos")]
-            Freeze::Ready(image) if self.menu.page.is_some() => Some(image.clone()),
+            Freeze::Ready(image) if self.pages_covered() => Some(image.clone()),
             _ => None,
         }
     }

@@ -29,5 +29,8 @@ fn hovering_the_status_bar_covers_the_band_above_it(cx: &mut gpui::TestAppContex
 
     cx.simulate_mouse_move(point(bar.center().x, px(100.)), None, Modifiers::default());
     draw(cx);
-    view.read_with(cx, |view, _| assert!(view.browser.tooltip_band.is_none()));
+    view.read_with(cx, |view, _| {
+        assert!(view.browser.tooltip_band.is_none());
+        assert!(!view.pages_covered());
+    });
 }
