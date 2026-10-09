@@ -13,6 +13,7 @@ mod file_drop;
 mod file_links;
 mod find;
 mod flash;
+pub(crate) use commands::run_window_command;
 pub(crate) use flash::Flash;
 mod image_source;
 mod images;

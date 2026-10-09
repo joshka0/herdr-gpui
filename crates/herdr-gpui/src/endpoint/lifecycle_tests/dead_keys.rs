@@ -110,3 +110,27 @@ fn a_connection_change_drops_the_platform_composition(cx: &mut gpui::TestAppCont
         });
     });
 }
+
+/// Opening a menu mid-composition drops it in the input method too, so the
+/// menu's field does not inherit the terminal's half-typed text.
+#[cfg(feature = "integration-test")]
+#[gpui::test]
+fn opening_a_menu_drops_the_platform_composition(cx: &mut gpui::TestAppContext) {
+    let (fixture, cx) = cx.add_window_view(|window, cx| {
+        Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
+    });
+    let view = fixture.update(cx, |fixture, _| fixture.0.clone());
+    let (endpoint, _server) = connected_endpoint("dead-keys-menu");
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            prepare_mouse(view, endpoint, cx);
+            let before = view.input_probe.compositions_discarded;
+            view.marked = "\u{b4}".into();
+            view.marked_selection = Some(1..1);
+            assert!(view.open_menu(window, cx));
+            assert!(view.marked.is_empty());
+            assert_eq!(view.marked_selection, None);
+            assert_eq!(view.input_probe.compositions_discarded, before + 1);
+        });
+    });
+}

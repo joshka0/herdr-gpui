@@ -34,7 +34,7 @@ impl HerdrWindow {
             self.endpoints[self.selected_endpoint].generation,
         );
         self.menu.page = Some(Page::Menu);
-        self.marked.clear();
+        self.discard_composition(cx);
         window.focus(&self.menu.focus, cx);
         cx.notify();
         true
