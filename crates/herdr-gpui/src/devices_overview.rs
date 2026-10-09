@@ -38,12 +38,20 @@ pub(crate) struct Page {
     _changed: Subscription,
 }
 
+/// The search field over the sidebar's Devices layout.
+pub(crate) struct TreeSearch {
+    pub(crate) input: Entity<SearchInput>,
+    _changed: Subscription,
+}
+
 /// The overview's state in a window: the activity history, kept whether or
-/// not a tab shows it so a newly opened one has a past, and each tab's page.
+/// not a tab shows it so a newly opened one has a past, each tab's page, and
+/// the Devices layout's search while that layout is in use.
 #[derive(Default)]
 pub(crate) struct Overview {
     pub(crate) history: history::History,
     pub(crate) pages: HashMap<TabId, Page>,
+    pub(crate) tree_search: Option<TreeSearch>,
 }
 
 impl HerdrWindow {
@@ -78,18 +86,32 @@ impl HerdrWindow {
         cx.notify();
     }
 
-    fn ensure_overview_page(&mut self, id: TabId, cx: &mut Context<Self>) {
-        if self.devices_overview.pages.contains_key(&id) {
-            return;
-        }
-        let (font, theme) = (self.config.ui.clone(), self.theme.clone());
+    fn device_search(
+        &self,
+        font: crate::config::FontConfig,
+        placeholder: &str,
+        cx: &mut Context<Self>,
+    ) -> (Entity<SearchInput>, Subscription) {
+        let theme = self.theme.clone();
         let search = cx.new(|cx| {
             let mut input = SearchInput::new(cx);
-            input.set_placeholder("Search devices, agents, workspaces", cx);
+            input.set_placeholder(placeholder, cx);
             input.set_appearance(font, theme, cx);
             input
         });
         let changed = cx.subscribe(&search, |_, _, _: &search_input::Changed, cx| cx.notify());
+        (search, changed)
+    }
+
+    fn ensure_overview_page(&mut self, id: TabId, cx: &mut Context<Self>) {
+        if self.devices_overview.pages.contains_key(&id) {
+            return;
+        }
+        let (search, changed) = self.device_search(
+            self.config.ui.clone(),
+            "Search devices, agents, workspaces",
+            cx,
+        );
         self.devices_overview.pages.insert(
             id,
             Page {
@@ -117,6 +139,7 @@ impl HerdrWindow {
             now,
             counts.iter().map(|(id, counts)| (id.as_str(), *counts)),
         );
+        self.sync_tree_search(cx);
         let Some(store) = cx.try_global::<Store>() else {
             self.devices_overview.pages.clear();
             return;
@@ -146,6 +169,34 @@ impl HerdrWindow {
                     input.set_appearance(font, theme, cx);
                 }
             });
+        }
+    }
+
+    /// Gives the Devices layout its search field while it is in use, in the
+    /// sidebar's face, and drops it, with what it held, otherwise.
+    fn sync_tree_search(&mut self, cx: &mut Context<Self>) {
+        if self.config.layout.mode != crate::config::LayoutMode::Devices {
+            self.devices_overview.tree_search = None;
+            return;
+        }
+        let font = self.config.sidebar.clone();
+        match &self.devices_overview.tree_search {
+            Some(search) => {
+                let theme = self.theme.clone();
+                search.input.update(cx, |input, cx| {
+                    if !input.appearance_matches(&font, &theme) {
+                        input.set_appearance(font, theme, cx);
+                    }
+                });
+            }
+            None => {
+                let (input, changed) = self.device_search(font, "Search devices and agents", cx);
+                self.devices_overview.tree_search = Some(TreeSearch {
+                    input,
+                    _changed: changed,
+                });
+                cx.notify();
+            }
         }
     }
 

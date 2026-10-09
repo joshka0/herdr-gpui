@@ -25,6 +25,7 @@ use crate::{
 use gpui::{prelude::*, *};
 
 mod agent_rows;
+mod device_tree;
 
 impl HerdrWindow {
     pub(crate) fn render_sidebar(
@@ -66,6 +67,16 @@ impl HerdrWindow {
         spaces = spaces.track_scroll(&self.sidebar_scroll[0]);
         agents = agents.track_scroll(&self.sidebar_scroll[1]);
         let multi = self.endpoints.len() > 1;
+        // The Devices layout heads every device, even a lone one, and lists
+        // its agents under it in place of its workspaces.
+        let devices = !self.config.layout.mode.lists_workspaces();
+        let headed = multi || devices;
+        let agents_panel = self.config.show_agents && !devices;
+        let query = if devices {
+            self.device_tree_query(cx)
+        } else {
+            String::new()
+        };
         let mut agent_count = 0;
         // A plugin view hid every agent, rather than there being none.
         let mut filtered = false;
@@ -84,7 +95,9 @@ impl HerdrWindow {
         let now = std::time::Instant::now();
         let mut sliding = false;
         for (endpoint_index, endpoint) in self.endpoints.iter().enumerate() {
-            if !self.device_visible(&endpoint.id) {
+            if !self.device_visible(&endpoint.id)
+                || (devices && !self.device_listed(endpoint_index, &query))
+            {
                 continue;
             }
             let selected = endpoint_index == self.selected_endpoint;
@@ -95,10 +108,20 @@ impl HerdrWindow {
                 selected,
                 theme,
             );
-            if multi {
+            if headed {
                 host_rows.push((endpoint_index, space_rows));
                 spaces = spaces.child(self.host_row(endpoint, selected, look, width, false, cx));
                 space_rows += 1;
+            }
+            if devices {
+                let (list, rows, focused) =
+                    self.append_device_agents(spaces, endpoint_index, indicators, look, width, cx);
+                spaces = list;
+                if let Some(row) = focused {
+                    highlighted[0] = Some(space_rows + row);
+                }
+                space_rows += rows;
+                continue;
             }
             let row_cx = RowContext {
                 indicators,
@@ -501,14 +524,14 @@ impl HerdrWindow {
                 filtered |= snapshot.agent_view_label.is_some();
             }
         }
-        if self.config.show_agents {
+        if agents_panel {
             (agents, agent_count, highlighted[1]) =
                 self.append_agent_rows(agents, indicators, look, width, cx);
         }
         if sliding {
             window.request_animation_frame();
         }
-        let mut headers = if multi {
+        let mut headers = if headed {
             self.host_headers(&host_rows)
         } else {
             Vec::new()
@@ -546,7 +569,7 @@ impl HerdrWindow {
                     // header for the old offset, and puts a row from above at
                     // the top edge, under the pinned header. Another frame pins
                     // for the new offset and moves the row out from under it.
-                    if list == 0 && multi {
+                    if list == 0 && headed {
                         window.request_animation_frame();
                         self.sidebar_pin_reveal.set(Some(row));
                     }
@@ -593,13 +616,18 @@ impl HerdrWindow {
                     .flex_col()
                     .flex_1()
                     .map(|mut section| {
-                        section.style().flex_grow =
-                            Some(if self.config.show_agents { split } else { 1. });
+                        section.style().flex_grow = Some(if agents_panel { split } else { 1. });
                         section
                     })
                     .min_h_0()
                     .overflow_hidden()
-                    .child(header("spaces", font, theme, look))
+                    .child(header(
+                        if devices { "devices" } else { "spaces" },
+                        font,
+                        theme,
+                        look,
+                    ))
+                    .children(devices.then(|| self.device_tree_search(look)).flatten())
                     // The wrapper clips the pinned header as the next host's
                     // pushes it up, so it never paints over the title above.
                     .child(
@@ -650,7 +678,7 @@ impl HerdrWindow {
                             ),
                     ),
             )
-            .when(self.config.show_agents, |sidebar| {
+            .when(agents_panel, |sidebar| {
                 sidebar
                     .child(
                         div()

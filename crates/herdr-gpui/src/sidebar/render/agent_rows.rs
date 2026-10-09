@@ -12,6 +12,7 @@ use crate::{
     },
 };
 use gpui::{prelude::*, *};
+use herdr_client::protocol::{ClientShellAgent, ClientShellSnapshot};
 
 impl HerdrWindow {
     /// Appends a row for each agent `panel_agents` lists, in that order, and
@@ -26,7 +27,6 @@ impl HerdrWindow {
         width: f32,
         cx: &mut Context<Self>,
     ) -> (Stateful<Div>, usize, Option<usize>) {
-        let rows = layout_for(self.config.layout.mode);
         let font = &self.config.sidebar;
         let theme = &self.theme;
         let multi = self.endpoints.len() > 1;
@@ -83,41 +83,63 @@ impl HerdrWindow {
                 0.
             };
             count += 1;
-            let endpoint_id = &endpoint.id;
-            let id = agent.pane_id.clone();
-            let navigate_endpoint = endpoint_id.clone();
-            list = list.child(
-                Cell::new(
-                    rows,
-                    RowData::Agent(AgentRow {
-                        key: format!("agent-{id}"),
-                        name: agent_name(agent),
-                        icon: crate::icons::AgentIcon::from_identity(agent.agent.as_deref()),
-                        status: agent.agent_status,
-                        place: agent_place(agent, snapshot),
-                        status_text: self
-                            .config
-                            .sidebar_layout
-                            .agents
-                            .shows_status_text(agent.agent.as_deref())
-                            .then(|| state_label(agent, status_text(agent.agent_status))),
-                        lines,
-                    }),
-                    &row_cx,
-                )
-                .selected(selected && agent.focused)
-                .row()
-                .when(gap > 0., |row| row.mt(px(gap)))
-                .id(SharedString::from(format!("agent-{endpoint_id}-{id}")))
-                .when(multi, |row| {
-                    row.debug_selector(|| format!("agent-{endpoint_id}-{id}"))
-                })
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.navigate_endpoint(&navigate_endpoint, NavigationTarget::Pane(&id), cx);
-                    window.focus(&this.focus, cx);
-                })),
-            );
+            list = list.child(self.agent_cell(index, agent, snapshot, &row_cx, lines, gap, cx));
         }
         (list, count, focused)
+    }
+
+    /// One agent's row, for the agents list or under its device's header:
+    /// the agent of endpoint `index`, drawn in `row_cx`, that shows its pane
+    /// when clicked.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn agent_cell(
+        &self,
+        index: usize,
+        agent: &ClientShellAgent,
+        snapshot: &ClientShellSnapshot,
+        row_cx: &RowContext,
+        lines: Vec<Vec<tokens::ResolvedToken>>,
+        gap: f32,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        let rows = layout_for(self.config.layout.mode);
+        let multi = self.endpoints.len() > 1;
+        let selected = index == self.selected_endpoint;
+        let endpoint_id = self
+            .endpoints
+            .get(index)
+            .map(|endpoint| endpoint.id.clone())
+            .unwrap_or_default();
+        let id = agent.pane_id.clone();
+        let navigate_endpoint = endpoint_id.clone();
+        Cell::new(
+            rows,
+            RowData::Agent(AgentRow {
+                key: format!("agent-{id}"),
+                name: agent_name(agent),
+                icon: crate::icons::AgentIcon::from_identity(agent.agent.as_deref()),
+                status: agent.agent_status,
+                place: agent_place(agent, snapshot),
+                status_text: self
+                    .config
+                    .sidebar_layout
+                    .agents
+                    .shows_status_text(agent.agent.as_deref())
+                    .then(|| state_label(agent, status_text(agent.agent_status))),
+                lines,
+            }),
+            row_cx,
+        )
+        .selected(selected && agent.focused)
+        .row()
+        .when(gap > 0., |row| row.mt(px(gap)))
+        .id(SharedString::from(format!("agent-{endpoint_id}-{id}")))
+        .when(multi, |row| {
+            row.debug_selector(|| format!("agent-{endpoint_id}-{id}"))
+        })
+        .on_click(cx.listener(move |this, _, window, cx| {
+            this.navigate_endpoint(&navigate_endpoint, NavigationTarget::Pane(&id), cx);
+            window.focus(&this.focus, cx);
+        }))
     }
 }

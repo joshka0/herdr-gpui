@@ -93,7 +93,7 @@ fn view_menu_lists_every_layout_in_groups_and_checks_the_current_one() {
                 _ => None,
             })
             .unwrap();
-        // Densities, their rounded versions, then the other designs.
+        // Densities, their rounded versions, the other designs, then Devices.
         let separators: Vec<usize> = layout
             .items
             .iter()
@@ -101,7 +101,7 @@ fn view_menu_lists_every_layout_in_groups_and_checks_the_current_one() {
             .filter(|(_, item)| matches!(item, MenuItem::Separator))
             .map(|(index, _)| index)
             .collect();
-        assert_eq!(separators, vec![3, 7]);
+        assert_eq!(separators, vec![3, 7, 11]);
         let actions: Vec<_> = layout
             .items
             .iter()
