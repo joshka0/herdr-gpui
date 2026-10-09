@@ -1736,7 +1736,10 @@ come back after a restart; closing a workspace in Herdr removes its tabs.
   fall over it, and for a dialog, which dims the whole window. A page the menu
   does not reach keeps showing. On macOS a page that steps aside leaves a
   picture of itself, taken as the menu opens; on Windows its place is empty
-  until the menu closes. Toasts that fall over a page are hidden behind it.
+  until the menu closes. A page also steps aside while a toast or the
+  file-transfer card falls over it, as when a page or VS Code fills the
+  right-hand group or the whole editor area, so they stay visible and
+  clickable; a page they do not reach keeps showing.
 - Linux has no embedded pages yet: browser tab requests open the system
   browser, and local files and annotations are unavailable.
 

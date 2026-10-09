@@ -80,5 +80,10 @@ mod code_start;
 #[cfg(any(target_os = "macos", windows))]
 mod status_tooltip;
 
+/// Pages step aside for toasts and the file-transfer card, which they
+/// would hide; only builds that show pages have any.
+#[cfg(any(target_os = "macos", windows))]
+mod overlays;
+
 /// What closing a workspace does to its browser tabs.
 mod workspace_close;
