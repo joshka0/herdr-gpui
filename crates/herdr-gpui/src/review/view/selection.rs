@@ -255,18 +255,33 @@ impl Review {
     /// Selects the code of the file at the top, in the column last selected
     /// in when that was this file, as a click in the old column means to read
     /// that side; whether there was code to select. A selection left in a
-    /// file scrolled away does not choose the file.
+    /// file scrolled away does not choose the file, and a folded file shows
+    /// no code to select. A side without code, as the new side of a deleted
+    /// file, gives way to the other.
     pub(super) fn select_file(&mut self) -> bool {
         let Some(file) = self.top_file() else {
             return false;
         };
+        if self
+            .loaded()
+            .and_then(|loaded| loaded.diff.files.get(file))
+            .is_none_or(|entry| entry.folded)
+        {
+            return false;
+        }
         let side = self
             .selection
             .filter(|selection| selection.file == file)
             .map_or_else(|| self.whole_file_side(), |selection| selection.side);
-        let all = self
-            .file_lines(file)
-            .and_then(|lines| Selection::all(file, side, lines));
+        let other = match side {
+            Numbers::Both => None,
+            Numbers::Old => Some(Numbers::New),
+            Numbers::New => Some(Numbers::Old),
+        };
+        let all = self.file_lines(file).and_then(|lines| {
+            Selection::all(file, side, lines)
+                .or_else(|| other.and_then(|other| Selection::all(file, other, lines)))
+        });
         if all.is_some() {
             self.selection = all;
         }

@@ -322,12 +322,8 @@ impl HerdrWindow {
                 }
                 return;
             }
-            Command::ToggleFullScreen => {
-                window.toggle_fullscreen();
-                return;
-            }
-            Command::CycleWindows => {
-                cycle_windows(window, cx);
+            Command::ToggleFullScreen | Command::CycleWindows => {
+                run_window_command(command, window, cx);
                 return;
             }
             Command::CopyMode => {
@@ -606,10 +602,26 @@ impl HerdrWindow {
     }
 }
 
-/// Brings the app's next window forward, in the order the windows opened,
-/// as macOS's Cmd-` does: a front-to-back order would only ever swap the two
-/// most recent. Deferred, since activating a window updates it.
-fn cycle_windows(window: &Window, cx: &mut Context<HerdrWindow>) {
+/// Runs a command that acts on the window itself rather than its content,
+/// for every kind of window, so the Settings and Log windows do not swallow
+/// it; whether `command` was one.
+pub(crate) fn run_window_command(
+    command: Command,
+    window: &mut Window,
+    cx: &mut gpui::App,
+) -> bool {
+    match command {
+        Command::ToggleFullScreen => window.toggle_fullscreen(),
+        Command::CycleWindows => cycle_windows(window, cx),
+        _ => return false,
+    }
+    true
+}
+
+/// Brings the app's next window forward, in the stable order the app lists
+/// its windows, as macOS's Cmd-` does: a front-to-back order would only ever
+/// swap the two most recent. Deferred, since activating a window updates it.
+fn cycle_windows(window: &Window, cx: &mut gpui::App) {
     let Some(next) = next_window(&cx.windows(), window.window_handle()) else {
         return;
     };

@@ -206,3 +206,54 @@ fn a_line_without_code_copies_nothing(cx: &mut gpui::TestAppContext) {
     cx.simulate_keystrokes("cmd-c");
     assert_eq!(clipboard(cx).as_deref(), Some("kept"));
 }
+
+/// Seeds a split review of `diff` with its keys on the review, so Cmd-A and
+/// Cmd-C reach it without a click.
+fn split_review<'a>(
+    diff: &str,
+    cx: &'a mut gpui::TestAppContext,
+) -> &'a mut gpui::VisualTestContext {
+    let (view, cx) = window(cx, None);
+    let loaded = crate::review::view::Loaded::of(crate::review::diff::Diff::parse(diff));
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.seed_review(loaded, window, cx);
+            view.set_review_layout(the(view), Layout::Split, cx);
+            let focus = view.reviews.values().next().unwrap().focus.clone();
+            window.focus(&focus, cx);
+        })
+    });
+    draw(cx);
+    cx
+}
+
+#[gpui::test]
+fn select_all_of_a_deleted_file_side_by_side_takes_the_old_side(cx: &mut gpui::TestAppContext) {
+    let cx = split_review(
+        "diff --git a/gone.rs b/gone.rs\ndeleted file mode 100644\n--- a/gone.rs\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-fn a() {}\n-fn b() {}\n",
+        cx,
+    );
+    cx.simulate_keystrokes("cmd-a cmd-c");
+    assert_eq!(clipboard(cx).as_deref(), Some("fn a() {}\nfn b() {}"));
+}
+
+#[gpui::test]
+fn select_all_leaves_a_folded_file_s_hidden_code_alone(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = window(cx, None);
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.seed_review(changes(), window, cx);
+            let review = view.reviews.values_mut().next().unwrap();
+            review.set_folded(0, true);
+            let focus = review.focus.clone();
+            window.focus(&focus, cx);
+        })
+    });
+    draw(cx);
+    cx.write_to_clipboard(gpui::ClipboardItem::new_string("kept".into()));
+    cx.simulate_keystrokes("cmd-a cmd-c");
+    assert_eq!(clipboard(cx).as_deref(), Some("kept"));
+    view.read_with(cx, |view, _| {
+        assert!(view.reviews.values().next().unwrap().selection.is_none());
+    });
+}
