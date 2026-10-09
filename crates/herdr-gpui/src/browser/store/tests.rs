@@ -3,7 +3,7 @@ use super::*;
 
 fn url(value: &str) -> Option<Location> {
     Some(Location::Web {
-        url: super::super::WebUrl::try_from(value).unwrap(),
+        url: WebUrl::try_from(value).unwrap(),
     })
 }
 

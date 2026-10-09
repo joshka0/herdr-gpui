@@ -23,7 +23,6 @@ use gpui::{prelude::*, *};
 use std::time::{Duration, Instant};
 
 /// The query parameter that carries `code serve-web`'s connection token.
-#[cfg(any(target_os = "macos", windows, test))]
 const TOKEN: &str = "tkn";
 
 /// The query parameter naming the folder `code serve-web` opens.
@@ -164,6 +163,7 @@ impl HerdrWindow {
         if !super::EMBEDDED {
             return;
         }
+        Launcher::sync(cx, &self.config.code);
         let wanted = self.code_page_wanted(cx);
         if wanted {
             Launcher::want(cx, &self.config.code);
@@ -247,17 +247,19 @@ impl HerdrWindow {
         self.browser.failed.contains_key(&id)
     }
 
-    /// Starts over when `url` is a new address: it closes the tabs still on
-    /// another server, so they reopen on this one, and the pages of the
-    /// rest, so they reopen with its token.
+    /// Starts over when `url` is a new address: it closes the panel tabs
+    /// still on another server, so they reopen on this one, moves the tabs in
+    /// the groups to it, where they stay, and closes the pages of the rest,
+    /// so they reopen with its token.
     fn follow_code_address(&mut self, url: &WebUrl, cx: &mut Context<Self>) {
         if self.browser.code_server.url.as_ref() != Some(url) {
             let server = &mut self.browser.code_server;
             server.url = Some(url.clone());
             server.state = Reach::Unknown;
             server.generation += 1;
-            let origin = url.origin();
-            let gone = Store::update(cx, |store| store.close_code_tabs_off(&origin));
+            let gone = Store::update(cx, |store| {
+                store.follow_code_server(url, |page| on_server(page, url))
+            });
             if !gone.is_empty() {
                 self.forget_browser_tabs(|id| gone.contains(&id));
             }
@@ -375,6 +377,24 @@ fn with_token(page: &WebUrl, configured: &WebUrl) -> WebUrl {
     let mut url = page.0.clone();
     url.set_query(Some(&query.join("&")));
     WebUrl::try_from(url.as_str()).unwrap_or_else(|_| page.clone())
+}
+
+/// Where `page`, on another server, is on `server`: the same path and
+/// query, less any old token, which [`with_token`] adds back as the page
+/// loads.
+fn on_server(page: &WebUrl, server: &WebUrl) -> WebUrl {
+    let is_token = |pair: &&str| pair.split('=').next() == Some(TOKEN);
+    let query: Vec<&str> = page
+        .0
+        .query()
+        .unwrap_or_default()
+        .split('&')
+        .filter(|pair| !pair.is_empty() && !is_token(pair))
+        .collect();
+    let mut url = server.0.clone();
+    url.set_path(page.0.path());
+    url.set_query((!query.is_empty()).then(|| query.join("&")).as_deref());
+    WebUrl::try_from(url.as_str()).unwrap_or_else(|_| server.clone())
 }
 
 /// `url` opening `folder`, which `code serve-web` takes as its `folder`

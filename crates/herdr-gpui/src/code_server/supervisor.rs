@@ -111,6 +111,9 @@ impl Backoff {
 #[derive(Default)]
 struct Slot {
     stopped: bool,
+    /// The worker is starting the child, which is not in `child` yet. A
+    /// shutdown waits for it rather than finish with the child unseen.
+    spawning: bool,
     child: Option<Child>,
     status: Option<Status>,
     address: Option<Address>,
@@ -160,8 +163,22 @@ impl Shared {
     /// left and reaps it. `None` when there is no child, or another caller
     /// is already ending it.
     fn end(&self, grace: Duration) -> Option<std::io::Result<ExitStatus>> {
-        process::terminate(self.lock().child.as_ref()?);
         let deadline = Instant::now() + grace;
+        {
+            let mut slot = self.lock();
+            while slot.spawning {
+                let left = deadline.saturating_duration_since(Instant::now());
+                if left.is_zero() {
+                    break;
+                }
+                slot = self
+                    .wake
+                    .wait_timeout(slot, left)
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .0;
+            }
+            process::terminate(slot.child.as_ref()?);
+        }
         loop {
             {
                 let mut slot = self.lock();
@@ -412,10 +429,29 @@ where
     }
 
     fn serve(&self, address: &Address) -> Ended {
+        {
+            let mut slot = self.shared.lock();
+            if slot.stopped {
+                return Ended::Stopped;
+            }
+            slot.spawning = true;
+        }
         let mut command = (self.command)(&self.plan, address.port);
         process::isolate(&mut command);
-        let child = match command.spawn() {
-            Ok(child) => child,
+        let spawned = command.spawn();
+        let stdout = {
+            let mut slot = self.shared.lock();
+            slot.spawning = false;
+            let stdout = spawned.map(|mut child| {
+                let stdout = child.stdout.take();
+                slot.child = Some(child);
+                stdout
+            });
+            self.shared.wake.notify_all();
+            stdout
+        };
+        let stdout = match stdout {
+            Ok(stdout) => stdout,
             Err(source) => {
                 return failed(Error::Spawn {
                     program: self.plan.program.clone(),
@@ -423,11 +459,8 @@ where
                 });
             }
         };
-        let mut child = child;
-        let listening = child.stdout.take().map(process::listening);
         tracing::info!(port = address.port.get(), "Started VS Code");
-        self.shared.lock().child = Some(child);
-        let listening = match listening {
+        let listening = match stdout.map(process::listening) {
             Some(Ok(flag)) => flag,
             Some(Err(source)) => {
                 self.shared.end(self.timing.grace);

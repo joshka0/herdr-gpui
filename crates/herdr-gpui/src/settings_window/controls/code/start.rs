@@ -28,16 +28,16 @@ impl SettingsWindow {
         if self.code_mode(cx) == Some(mode) && self.config.code.mode == Some(mode) {
             return;
         }
-        // The server the app started is not needed for an address.
-        if mode == CodeMode::Address {
-            Launcher::stop(cx);
-        }
-        self.save_code_edit(CodeEdit::Mode(mode), cx);
+        // Shown chosen at once; the reload after the save confirms it, and
+        // the windows stop or start VS Code as their config then says.
+        self.config.code.mode = Some(mode);
+        self.queue_code_edit(CodeEdit::Mode(mode), cx);
         cx.notify();
     }
 
     pub(in crate::settings_window) fn accept_code_license(&mut self, cx: &mut Context<Self>) {
-        self.save_code_edit(CodeEdit::AcceptLicense, cx);
+        self.config.code.license_accepted = true;
+        self.queue_code_edit(CodeEdit::AcceptLicense, cx);
         cx.notify();
     }
 

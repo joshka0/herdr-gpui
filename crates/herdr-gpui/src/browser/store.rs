@@ -1,7 +1,7 @@
 //! The app's browser tabs: which page each one shows and the workspace it
 //! belongs to. Herdr has no browser panes, so these live only in this client;
 //! every window shows the same tabs for a workspace, each with its own page.
-use super::Location;
+use super::{Location, WebUrl};
 use crate::{reorder::Beside, state_file};
 use gpui::{App, Global};
 use serde::{Deserialize, Serialize};
@@ -419,14 +419,32 @@ impl Store {
         changed
     }
 
-    /// Closes the VS Code tabs, of every workspace, that are not on
-    /// `origin`, so each opens anew on the server now configured. Returns
+    /// Moves the VS Code tabs, of every workspace, that are not on
+    /// `server`'s origin to it. A tab in the groups keeps its place there,
+    /// and `retarget` gives its address on the new server; a tab in the
+    /// panel is closed, so it opens anew on its workspace's folder. Returns
     /// the tabs closed.
-    pub(crate) fn close_code_tabs_off(&mut self, origin: &str) -> Vec<TabId> {
+    pub(crate) fn follow_code_server(
+        &mut self,
+        server: &WebUrl,
+        retarget: impl Fn(&WebUrl) -> WebUrl,
+    ) -> Vec<TabId> {
+        let origin = server.origin();
         let off = |tab: &Tab| {
             tab.place.is_code()
                 && !matches!(&tab.location, Some(Location::Web { url }) if url.origin() == origin)
         };
+        let mut changed = false;
+        for tab in &mut self.tabs {
+            if tab.place == Place::CodeGroup && off(tab) {
+                let url = match &tab.location {
+                    Some(Location::Web { url }) => retarget(url),
+                    _ => server.clone(),
+                };
+                tab.location = Some(Location::Web { url });
+                changed = true;
+            }
+        }
         let gone: Vec<TabId> = self
             .tabs
             .iter()
@@ -435,6 +453,9 @@ impl Store {
             .collect();
         if !gone.is_empty() {
             self.tabs.retain(|tab| !off(tab));
+            changed = true;
+        }
+        if changed {
             self.save();
         }
         gone

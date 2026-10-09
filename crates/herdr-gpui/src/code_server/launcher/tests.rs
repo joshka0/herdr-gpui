@@ -277,3 +277,30 @@ fn a_start_that_fails_is_tried_again_after_a_while(cx: &mut gpui::TestAppContext
         assert!(Launcher::running(cx));
     });
 }
+
+/// A config that no longer starts VS Code stops it, however it changed.
+#[cfg(any(target_os = "macos", windows))]
+#[gpui::test]
+fn a_config_that_no_longer_starts_vs_code_stops_it(cx: &mut gpui::TestAppContext) {
+    cx.update(|cx| {
+        Launcher::fixture(cx, found());
+        let code = accepted();
+        Launcher::want(cx, &code);
+        Launcher::sync(cx, &code);
+        assert!(Launcher::running(cx), "still asked for");
+        let address = CodeConfig {
+            mode: Some(CodeMode::Address),
+            ..code.clone()
+        };
+        Launcher::sync(cx, &address);
+        assert!(!Launcher::running(cx));
+
+        Launcher::want(cx, &code);
+        let declined = CodeConfig {
+            license_accepted: false,
+            ..code
+        };
+        Launcher::sync(cx, &declined);
+        assert!(!Launcher::running(cx));
+    });
+}

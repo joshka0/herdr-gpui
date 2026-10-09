@@ -289,6 +289,38 @@ mod process {
         assert_eq!(fake.runs(), 1);
     }
 
+    /// Quitting while the worker starts the child waits for it, rather
+    /// than finish before the child is there to stop.
+    #[test]
+    fn shutdown_during_a_start_stops_the_child_it_waited_for() {
+        let fake = Fake::new("exec sleep 60");
+        let (starting, started) = std::sync::mpsc::channel();
+        let supervisor = Supervisor::start_with(
+            fake.plan(None),
+            move |plan, port| {
+                let _ = starting.send(());
+                thread::sleep(Duration::from_millis(300));
+                serve_web(plan, port)
+            },
+            fake.probe(),
+            |_| Ok(()),
+            fast(),
+        )
+        .unwrap();
+        started.recv_timeout(Duration::from_secs(10)).unwrap();
+        let asked = Instant::now();
+        supervisor.shutdown(Duration::from_secs(5));
+        // It waited for the child to exist, then it, or the worker that saw
+        // the stop, ended and reaped it.
+        assert!(
+            asked.elapsed() >= Duration::from_millis(200),
+            "returned early"
+        );
+        until("the child to be reaped", || {
+            supervisor.shared.lock().child.is_none()
+        });
+    }
+
     #[test]
     fn dropping_the_supervisor_stops_its_child_without_waiting() {
         let fake = Fake::new("sleep 60 &\necho $! > \"$DIR/server\"\ntouch \"$DIR/ready\"\nwait");

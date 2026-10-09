@@ -321,8 +321,21 @@ impl Launcher {
         cx.refresh_windows();
     }
 
-    /// Stops VS Code, as when the user chose to use an address instead.
-    /// Returns at once; the worker stops the child.
+    /// Stops VS Code once `code`, as loaded, no longer asks for it: a mode
+    /// other than starting it, chosen in Settings or written in the config
+    /// file, or a license no longer accepted. Returns at once.
+    pub(crate) fn sync(cx: &mut App, code: &CodeConfig) {
+        let Some(launcher) = cx.try_global::<Self>() else {
+            return;
+        };
+        let wanted = code.license_accepted && mode(code, &launcher.cli) == Some(CodeMode::Start);
+        if launcher.server.is_some() && !wanted {
+            tracing::info!("Stopping VS Code: the config no longer starts it");
+            Self::stop(cx);
+        }
+    }
+
+    /// Stops VS Code. Returns at once; the worker stops the child.
     pub(crate) fn stop(cx: &mut App) {
         if cx.has_global::<Self>() {
             let launcher = cx.global_mut::<Self>();

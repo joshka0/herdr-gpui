@@ -75,3 +75,33 @@ fn the_token_is_never_printed() {
     assert!(message.contains(FILE));
     assert!(!message.contains(token.as_str()));
 }
+
+/// App instances starting together all get the one token that ends up in
+/// the file, even when what was there held none.
+#[test]
+fn instances_making_the_token_together_share_one() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join(FILE);
+    for before in [None, Some("has space")] {
+        if let Some(text) = before {
+            fs::write(&path, text).unwrap();
+        } else {
+            let _ = fs::remove_file(&path);
+        }
+        let start = std::sync::Arc::new(std::sync::Barrier::new(8));
+        let tokens: Vec<String> = (0..8)
+            .map(|_| {
+                let (start, path) = (start.clone(), path.clone());
+                std::thread::spawn(move || {
+                    start.wait();
+                    Token::load_or_create(&path).unwrap().as_str().to_owned()
+                })
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|thread| thread.join().unwrap())
+            .collect();
+        let kept = fs::read_to_string(&path).unwrap();
+        assert!(tokens.iter().all(|token| *token == kept), "{before:?}");
+    }
+}

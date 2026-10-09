@@ -75,6 +75,15 @@ fn choosing_an_address_saves_it_and_stops_vs_code(cx: &mut TestAppContext) {
         edits.lock().unwrap().as_slice(),
         [CodeEdit::Mode(CodeMode::Address)]
     );
+    // The windows stop it once their config says so.
+    cx.update(|_, cx| {
+        let code = crate::config::CodeConfig {
+            mode: Some(CodeMode::Address),
+            license_accepted: true,
+            ..Default::default()
+        };
+        Launcher::sync(cx, &code);
+    });
     assert!(!cx.update(|_, cx| Launcher::running(cx)));
     // Shown as chosen while the save reloads.
     view.update(cx, |view, cx| {
@@ -133,4 +142,28 @@ fn the_server_state_names_its_port_and_never_its_token(cx: &mut TestAppContext) 
         },
     );
     assert_eq!(shown, "Running on 127.0.0.1:51234");
+}
+
+/// A choice made while another save runs is saved after it, not dropped.
+#[gpui::test]
+fn choices_made_during_another_save_are_saved_after_it(cx: &mut TestAppContext) {
+    let (view, cx, edits) = start_page(cx, found());
+    view.update(cx, |view, cx| {
+        view.saving = true;
+        view.choose_code_mode(CodeMode::Address, cx);
+        view.choose_code_mode(CodeMode::Start, cx);
+        view.accept_code_license(cx);
+    });
+    assert!(edits.lock().unwrap().is_empty(), "waiting");
+    view.update(cx, |view, cx| {
+        view.saving = false;
+        view.flush_code_url(cx);
+    });
+    cx.run_until_parked();
+    // The later mode replaced the earlier one; each save ends with a reload
+    // that flushes the next.
+    assert_eq!(
+        edits.lock().unwrap().as_slice(),
+        [CodeEdit::Mode(CodeMode::Start), CodeEdit::AcceptLicense]
+    );
 }

@@ -21,6 +21,9 @@ pub(in crate::settings_window) struct CodeSettings {
     /// The address a running save writes, checked against the reload that
     /// ends it.
     saving: Option<Option<WebUrl>>,
+    /// Choices of mode and license made while another save or a reload ran,
+    /// saved in order once the window is free, after any address.
+    queued: Vec<CodeEdit>,
     test: Test,
     /// Fences out a test answer once the address has changed since.
     generation: u64,
@@ -36,6 +39,7 @@ impl Default for CodeSettings {
             field: None,
             pending: None,
             saving: None,
+            queued: Vec::new(),
             test: Test::Idle,
             generation: 0,
             probe: code_server::probe,
@@ -212,14 +216,34 @@ impl SettingsWindow {
         if self.busy() {
             return;
         }
-        let Some(url) = self.code.pending.take() else {
-            return;
-        };
-        if self.config.code.url == url {
+        if let Some(url) = self.code.pending.take()
+            && self.config.code.url != url
+        {
+            self.code.saving = Some(url.clone());
+            self.save_code_edit(CodeEdit::Url(url), cx);
             return;
         }
-        self.code.saving = Some(url.clone());
-        self.save_code_edit(CodeEdit::Url(url), cx);
+        // One save at a time: the end of each calls this again.
+        if !self.code.queued.is_empty() {
+            let edit = self.code.queued.remove(0);
+            self.save_code_edit(edit, cx);
+        }
+    }
+
+    /// Saves a choice of mode or license now, or once the window is free,
+    /// rather than drop it while another save or a reload runs. A later
+    /// choice of mode replaces one still waiting.
+    pub(in crate::settings_window) fn queue_code_edit(
+        &mut self,
+        edit: CodeEdit,
+        cx: &mut Context<Self>,
+    ) {
+        let same = std::mem::discriminant(&edit);
+        self.code
+            .queued
+            .retain(|queued| std::mem::discriminant(queued) != same);
+        self.code.queued.push(edit);
+        self.flush_code_url(cx);
     }
 
     /// The address still waiting for another save to finish, as a write for
@@ -228,15 +252,27 @@ impl SettingsWindow {
     pub(in crate::settings_window) fn take_shutdown_code_url(
         &mut self,
     ) -> Option<impl FnOnce() -> crate::Result<()> + Send + 'static + use<>> {
-        let url = self.code.pending.take()?;
+        let edits: Vec<CodeEdit> = self
+            .code
+            .pending
+            .take()
+            .map(CodeEdit::Url)
+            .into_iter()
+            .chain(std::mem::take(&mut self.code.queued))
+            .collect();
+        if edits.is_empty() {
+            return None;
+        }
         #[cfg(test)]
         let io = self.code.io.as_ref().map(|io| io.write.clone());
         Some(move || {
-            #[cfg(test)]
-            if let Some(write) = io {
-                return write(CodeEdit::Url(url));
-            }
-            Config::save_code(CodeEdit::Url(url))
+            edits.into_iter().try_for_each(|edit| {
+                #[cfg(test)]
+                if let Some(write) = &io {
+                    return write(edit);
+                }
+                Config::save_code(edit)
+            })
         })
     }
 

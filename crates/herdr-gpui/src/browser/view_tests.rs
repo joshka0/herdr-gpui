@@ -60,6 +60,9 @@ mod code;
 /// The VS Code tab moved between its panel and the groups.
 mod code_group;
 
+/// A new VS Code server moves the tabs in the groups to it.
+mod code_group_server;
+
 /// A new VS Code page opens on its workspace's folder, once its server
 /// answers, which only builds that show pages ask.
 #[cfg(any(target_os = "macos", windows))]

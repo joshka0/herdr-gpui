@@ -23,18 +23,33 @@ impl Token {
     }
 
     /// The token kept at `path`, made and written there first if there is
-    /// none, or what is there is no token.
+    /// none, or what is there is no token. Another instance of the app may
+    /// do the same at once, so the whole of it holds an exclusive lock on a
+    /// file beside the token: both then use the one token the first wrote,
+    /// and neither replaces the other's.
     pub(super) fn load_or_create(path: &Path) -> Result<Self> {
         let failed = |source| Error::TokenFile {
             path: path.to_owned(),
             source,
         };
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(failed)?;
+        }
+        let lock_path = path.with_extension("lock");
+        let lock_failed = |source| Error::TokenFile {
+            path: lock_path.clone(),
+            source,
+        };
+        let mut options = OpenOptions::new();
+        options.read(true).write(true).create(true).truncate(false);
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+        let lock = options.open(&lock_path).map_err(lock_failed)?;
+        lock.lock().map_err(lock_failed)?;
+        // Released when `lock` is dropped, on every return below.
         if let Some(token) = read(path).map_err(failed)? {
             restrict(path).map_err(failed)?;
             return Ok(token);
-        }
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(failed)?;
         }
         let token = Self::random()?;
         // A file that is there but holds no token is replaced.
@@ -53,10 +68,6 @@ impl Token {
                 file.sync_all().map_err(failed)?;
                 Ok(token)
             }
-            // Another instance of the app wrote one first; both use it.
-            Err(error) if error.kind() == ErrorKind::AlreadyExists => read(path)
-                .map_err(failed)?
-                .ok_or_else(|| failed(ErrorKind::InvalidData.into())),
             Err(error) => Err(failed(error)),
         }
     }
