@@ -227,17 +227,16 @@ impl HerdrWindow {
 
     /// Reports why `target` did not open in the editor. A path no shell
     /// line can carry opens in the system's default app instead, as
-    /// [`crate::Error::EditorPath`] says.
+    /// [`crate::Error::EditorPath`] says, under the rule a clicked path
+    /// follows, so a listed file is never run.
     fn editor_failed(
         &mut self,
         target: &EditorTarget,
         error: crate::Error,
         cx: &mut Context<Self>,
     ) {
-        if matches!(error, crate::Error::EditorPath)
-            && let Ok(url) = url::Url::from_file_path(&target.path)
-        {
-            cx.open_url(url.as_str());
+        if matches!(error, crate::Error::EditorPath) {
+            self.open_in_system_app(target.path.clone(), cx);
         }
         self.show_flash(crate::window::Flash::warning(error.to_string()), cx);
     }

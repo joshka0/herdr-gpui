@@ -407,3 +407,33 @@ fn a_listening_neovim_opens_files_at_their_line() {
         Err(crate::Error::EditorRemote)
     ));
 }
+
+/// A path the shell line cannot carry opens in the system's app under the
+/// clicked-path rule: a document itself, an executable only by its folder.
+#[cfg(unix)]
+#[gpui::test]
+fn an_untypable_path_opens_in_the_system_app_but_is_never_run(cx: &mut gpui::TestAppContext) {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let real = dir.path().canonicalize().unwrap();
+    let document = real.join("it's.txt");
+    std::fs::write(&document, "text\n").unwrap();
+    let script = real.join("it's.command");
+    std::fs::write(&script, "#!/bin/sh\n").unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let (view, cx) = cx.add_window_view(crate::sidebar::layout_tests::fixture_window);
+    for (path, opened) in [(&document, &document), (&script, &real)] {
+        let target = EditorTarget {
+            path: path.clone(),
+            line: Some(1),
+        };
+        cx.update(|_, cx| view.update(cx, |view, cx| view.open_in_editor(&target, None, cx)));
+        cx.run_until_parked();
+        let url = url::Url::from_file_path(opened).unwrap();
+        assert_eq!(cx.opened_url().as_deref(), Some(url.as_str()));
+        view.read_with(cx, |view, _| {
+            let (flash, _) = view.flash.as_ref().unwrap();
+            assert_eq!(flash.text.as_ref(), crate::Error::EditorPath.to_string());
+        });
+    }
+}
