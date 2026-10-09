@@ -10,6 +10,11 @@
 //! them only as single-quoted words without a quote, backslash, or control
 //! character: POSIX shells, fish, and nushell all read such a word literally.
 //! Anything else opens in the system's default application instead.
+//!
+//! When the editor is Neovim it listens on a private socket, and later
+//! files for the same tab open in that pane (see [`nvim`]).
+
+mod nvim;
 
 use crate::{HerdrWindow, NavigationTarget};
 use gpui::Context;
@@ -32,7 +37,7 @@ const MEDIA: [&str; 13] = [
 
 /// Whether `text` reads the same as a single-quoted word in every shell the
 /// typed line may reach.
-fn quotable(text: &str) -> bool {
+pub(crate) fn quotable(text: &str) -> bool {
     !text.is_empty()
         && text.len() <= 4096
         && !text
@@ -62,19 +67,28 @@ impl TryFrom<String> for EditorCommand {
 }
 
 impl EditorCommand {
-    /// The `sh` script that runs the editor, reading the file from `$0` and
-    /// the line from `$1`.
+    /// The `sh` script that runs the editor, reading the file from `$0`, the
+    /// line from `$1`, and the socket a Neovim listens on from `$2`. A
+    /// command with placeholders is run as written.
     fn script(&self) -> String {
         let command = &self.0;
         if command.contains("{file}") || command.contains("{line}") {
-            command
+            let placed = command
                 .replace("{file}", "\"$0\"")
-                .replace("{line}", "\"$1\"")
+                .replace("{line}", "\"$1\"");
+            format!("exec {placed}")
+        } else if nvim::is_nvim(command) {
+            format!(
+                "[ -n \"$2\" ] && exec {command} --listen \"$2\" \"+$1\" \"$0\"; exec {command} \"+$1\" \"$0\""
+            )
         } else {
-            format!("{command} \"+$1\" \"$0\"")
+            format!("exec {command} \"+$1\" \"$0\"")
         }
     }
 }
+
+/// The pane's own editor, which listens on `$2` when it is Neovim.
+const DEFAULT_SCRIPT: &str = r#"e=${VISUAL:-${EDITOR:-vi}}; case "${e##*/}" in nvim*) [ -n "$2" ] && exec $e --listen "$2" "+$1" "$0";; esac; exec $e "+$1" "$0""#;
 
 /// A file to open, at a line when one is known.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -99,10 +113,12 @@ impl EditorTarget {
 /// The line typed into the new pane's shell. A leading space keeps it out of
 /// the history of shells that honor that, and `exec` hands the pane to the
 /// editor, so quitting the editor closes the pane. Without a configured
-/// command, the pane's own `$VISUAL` or `$EDITOR` is used, then `vi`.
+/// command, the pane's own `$VISUAL` or `$EDITOR` is used, then `vi`. A
+/// Neovim listens on `socket`, whose private folder the line makes.
 pub(crate) fn command_line(
     target: &EditorTarget,
     command: Option<&EditorCommand>,
+    socket: Option<&Path>,
 ) -> crate::Result<String> {
     if !SUPPORTED {
         return Err(crate::Error::EditorUnsupported);
@@ -113,12 +129,30 @@ pub(crate) fn command_line(
         .filter(|path| quotable(path) && target.path.is_absolute())
         .ok_or(crate::Error::EditorPath)?;
     let line = target.line.unwrap_or(1).max(1);
-    let script = command.map_or_else(
-        || r#"${VISUAL:-${EDITOR:-vi}} "+$1" "$0""#.to_owned(),
-        EditorCommand::script,
-    );
-    Ok(format!(" exec sh -c 'exec {script}' '{path}' {line}"))
+    let script = command.map_or_else(|| DEFAULT_SCRIPT.to_owned(), EditorCommand::script);
+    let Some(socket) = socket
+        .and_then(Path::to_str)
+        .filter(|socket| quotable(socket))
+    else {
+        return Ok(format!(" exec sh -c '{script}' '{path}' {line}"));
+    };
+    Ok(format!(
+        " exec sh -c 'mkdir -p -m 700 \"${{2%/*}}\" || set -- \"$1\" \"\"; {script}' '{path}' {line} '{socket}'"
+    ))
 }
+
+/// An editor pane this window started with a Neovim socket, which later
+/// files for its tab open in while the pane lives.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct EditorPane {
+    endpoint_id: String,
+    boot: String,
+    pane_id: String,
+    socket: PathBuf,
+}
+
+/// Editor panes remembered at most; the oldest is forgotten first.
+const MAX_EDITOR_PANES: usize = 16;
 
 /// One editor pane being opened: the split it waits on and what to type
 /// into the pane the split makes. Fenced like a worktree script, so a reply
@@ -129,6 +163,7 @@ pub(crate) struct Job {
     boot: String,
     request: String,
     line: String,
+    socket: Option<PathBuf>,
 }
 
 /// The new pane a `pane.split` response names.
@@ -152,17 +187,98 @@ impl HerdrWindow {
         beside: Option<&str>,
         cx: &mut Context<Self>,
     ) {
+        if let Some(reused) = self.reusable_editor(beside) {
+            self.reuse_editor(reused, target.clone(), beside.map(str::to_owned), cx);
+            return;
+        }
         if let Err(error) = self.start_editor(target, beside) {
             self.show_flash(crate::window::Flash::warning(error.to_string()), cx);
         }
         cx.notify();
     }
 
+    /// The editor pane started for the tab of `beside`, or of the focused
+    /// pane, while it is still open. Panes that closed are forgotten.
+    fn reusable_editor(&mut self, beside: Option<&str>) -> Option<EditorPane> {
+        let snapshot = self
+            .live
+            .snapshot
+            .clone()
+            .filter(|_| self.live.status.is_connected())?;
+        let endpoint = &self.endpoints[self.selected_endpoint].id;
+        self.editor_panes.retain(|editor| {
+            editor.boot != snapshot.boot_id
+                || &editor.endpoint_id != endpoint
+                || snapshot
+                    .panes
+                    .iter()
+                    .any(|pane| pane.pane_id == editor.pane_id)
+        });
+        let tab = beside
+            .or(snapshot.focused_pane_id.as_deref())
+            .and_then(|id| snapshot.panes.iter().find(|pane| pane.pane_id == id))?
+            .tab_id
+            .clone();
+        self.editor_panes
+            .iter()
+            .rev()
+            .find(|editor| {
+                &editor.endpoint_id == endpoint
+                    && editor.boot == snapshot.boot_id
+                    && snapshot
+                        .panes
+                        .iter()
+                        .any(|pane| pane.pane_id == editor.pane_id && pane.tab_id == tab)
+            })
+            .cloned()
+    }
+
+    /// Sends `target` to the Neovim in `editor` off the UI thread and brings
+    /// its pane forward; if that Neovim no longer answers, the pane is
+    /// forgotten and the file opens in a new one.
+    fn reuse_editor(
+        &mut self,
+        editor: EditorPane,
+        target: EditorTarget,
+        beside: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let socket = editor.socket.clone();
+        let opened = cx.background_executor().spawn({
+            let target = target.clone();
+            async move { nvim::open(&socket, &target) }
+        });
+        cx.spawn(async move |this, cx| {
+            let opened = opened.await;
+            let _ = this.update(cx, |this, cx| {
+                if opened.is_ok() {
+                    this.navigate_endpoint(
+                        &editor.endpoint_id,
+                        NavigationTarget::Pane(&editor.pane_id),
+                        cx,
+                    );
+                    return;
+                }
+                this.editor_panes.retain(|kept| *kept != editor);
+                if let Err(error) = this.start_editor(&target, beside.as_deref()) {
+                    this.show_flash(crate::window::Flash::warning(error.to_string()), cx);
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
     fn start_editor(&mut self, target: &EditorTarget, beside: Option<&str>) -> crate::Result<()> {
         if self.editor_open.is_some() && self.editor_current() {
             return Err(crate::Error::EditorBusy);
         }
-        let line = command_line(target, self.config.editor_command.as_ref())?;
+        let socket = nvim::new_socket();
+        let line = command_line(
+            target,
+            self.config.editor_command.as_ref(),
+            socket.as_deref(),
+        )?;
         if self.selected_is_remote() {
             return Err(crate::Error::EditorNoPane);
         }
@@ -206,6 +322,7 @@ impl HerdrWindow {
             boot,
             request,
             line,
+            socket,
         });
         Ok(())
     }
@@ -279,6 +396,19 @@ impl HerdrWindow {
             });
         match typed {
             Ok(pane) => {
+                // Remembered whatever the editor turns out to be: a socket
+                // nothing listens on is found out, and forgotten, on reuse.
+                if let Some(socket) = job.socket {
+                    if self.editor_panes.len() == MAX_EDITOR_PANES {
+                        self.editor_panes.remove(0);
+                    }
+                    self.editor_panes.push(EditorPane {
+                        endpoint_id: job.endpoint_id.clone(),
+                        boot: job.boot.clone(),
+                        pane_id: pane.clone(),
+                        socket,
+                    });
+                }
                 self.navigate_endpoint(&job.endpoint_id, NavigationTarget::Pane(&pane), cx);
             }
             Err(error) => {

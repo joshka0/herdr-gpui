@@ -226,7 +226,7 @@ impl HerdrWindow {
                     path: path.clone(),
                     line: link.line,
                 };
-                if crate::editor::command_line(&target, None).is_ok() {
+                if crate::editor::command_line(&target, None, None).is_ok() {
                     return Some(Opened::Editor(target));
                 }
             }

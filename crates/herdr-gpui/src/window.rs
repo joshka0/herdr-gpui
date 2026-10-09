@@ -160,6 +160,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) worktree_script: Option<crate::worktree_scripts::Job>,
     /// The editor pane being opened, if any.
     pub(crate) editor_open: Option<crate::editor::Job>,
+    /// Editor panes whose Neovim later files open in.
+    pub(crate) editor_panes: Vec<crate::editor::EditorPane>,
     /// A teleport being set up or under way; a move outlives its dialog.
     pub(crate) teleport: Option<crate::teleport::Teleport>,
     /// Checkouts this client teleported away from, marked in the sidebar.
@@ -762,6 +764,7 @@ impl HerdrWindow {
             removal: None,
             worktree_script: None,
             editor_open: None,
+            editor_panes: Vec::new(),
             teleport: None,
             teleport_marks: crate::teleport::Marks::start(),
             teleport_follow: None,

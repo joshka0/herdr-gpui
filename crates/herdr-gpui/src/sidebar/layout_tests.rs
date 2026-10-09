@@ -425,6 +425,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         removal: None,
         worktree_script: None,
         editor_open: None,
+        editor_panes: Vec::new(),
         teleport: None,
         teleport_marks: crate::teleport::Marks::detached(),
         teleport_follow: None,

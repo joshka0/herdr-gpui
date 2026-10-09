@@ -516,6 +516,8 @@ pub enum Error {
     EditorPath,
     #[error("Opening a terminal editor needs a Unix shell in the pane")]
     EditorUnsupported,
+    #[error("The Neovim in the editor pane did not answer")]
+    EditorRemote,
     #[error("Another file is still opening in the editor")]
     EditorBusy,
     #[error("No local pane to open the editor beside")]
