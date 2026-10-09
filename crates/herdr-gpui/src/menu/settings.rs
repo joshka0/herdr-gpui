@@ -232,8 +232,8 @@ impl HerdrWindow {
                                 endpoint.toasts.enabled_since = Some(cutoff);
                             }
                         }
-                        if config.status_bar != this.config.status_bar {
-                            this.status_bar_visible = config.status_bar;
+                        if config.status_bar.show != this.config.status_bar.show {
+                            this.status_bar_visible = config.status_bar.show;
                         }
                         this.config = config.clone();
                         if this.config.theme != "Follow Herdr" {

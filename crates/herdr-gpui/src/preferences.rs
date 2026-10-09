@@ -173,18 +173,7 @@ impl HerdrWindow {
                 .items_center()
                 .cursor_pointer()
                 .hover(|style| style.bg(rgb(theme.active)))
-                .child(
-                    div()
-                        .flex_none()
-                        .flex()
-                        .w(px(30.))
-                        .h(px(18.))
-                        .p(px(2.))
-                        .rounded_full()
-                        .bg(rgb(if on { theme.foreground } else { theme.muted }))
-                        .when(on, |track| track.justify_end())
-                        .child(div().size(px(14.)).rounded_full().bg(rgb(theme.background))),
-                )
+                .child(crate::toggles::switch(theme, 18., on))
         };
         let note = |text: &'static str| {
             div()

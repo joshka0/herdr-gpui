@@ -1,5 +1,5 @@
 //! The status bar at the window's foot: Toggle Status Bar hides and restores
-//! it for the session, and `status_bar` in the config chooses where it starts.
+//! it for the session, and `[status_bar] show` in the config chooses where it starts.
 
 #![allow(clippy::unwrap_used)]
 
@@ -60,7 +60,7 @@ fn the_terminal_takes_the_rows_the_bar_gives_up(cx: &mut TestAppContext) {
     assert_eq!(terminal(cx), shown);
 }
 
-/// The real constructor reads `status_bar` from the loaded config, and the
+/// The real constructor reads `[status_bar] show` from the loaded config, and the
 /// toggle still brings the bar back in a window that started without it.
 #[cfg(feature = "integration-test")]
 #[gpui::test]
@@ -68,7 +68,7 @@ fn a_new_window_starts_with_the_configured_status_bar(cx: &mut TestAppContext) {
     for configured in [true, false] {
         cx.update(|cx| {
             let mut appearance = crate::app::InitialAppearance::default();
-            appearance.config.status_bar = configured;
+            appearance.config.status_bar.show = configured;
             cx.set_global(appearance);
         });
         let (view, cx) = cx.add_window_view(|window, cx| {

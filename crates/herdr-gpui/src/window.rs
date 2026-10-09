@@ -28,6 +28,7 @@ mod regions;
 mod render;
 mod selection;
 mod server_keys;
+mod status_bar;
 pub(crate) mod system_notifications;
 mod tab_drag;
 mod tab_strip;
@@ -201,7 +202,7 @@ pub(crate) struct HerdrWindow {
     /// Herdr's `ui.sidebar_start_collapsed` still applies: no shared settings
     /// have loaded yet and the user has not toggled the sidebar since startup.
     pub(crate) sidebar_start_pending: bool,
-    /// Starts as `config.status_bar`; Toggle Status Bar flips it for the
+    /// Starts as `config.status_bar.show`; Toggle Status Bar flips it for the
     /// session, and a reload that changes the setting applies it again.
     pub(crate) status_bar_visible: bool,
     pub(crate) device_filter: Option<String>,
@@ -689,7 +690,7 @@ impl HerdrWindow {
             update_preview: None,
             daemon_text: Default::default(),
             configured_terminal_size: config.terminal.size,
-            status_bar_visible: config.status_bar,
+            status_bar_visible: config.status_bar.show,
             gui_config_diagnostic: {
                 let mut diagnostic = crate::config_diagnostic::ConfigDiagnostic::default();
                 diagnostic.sync(config.diagnostic().as_deref());

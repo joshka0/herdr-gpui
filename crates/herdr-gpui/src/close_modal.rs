@@ -317,7 +317,7 @@ impl HerdrWindow {
             .when_some(close.error.clone(), |panel, error| panel.child(div().bg(rgb(theme.active)).p(px(8.)).child(error)))
             .when(self.offers_do_not_ask_again(), |panel| panel.child(div().id("close-do-not-ask").debug_selector(|| "close-do-not-ask".into())
                 .flex().items_center().gap(px(8.)).cursor_pointer().text_color(rgb(theme.muted))
-                .child(crate::icons::checkbox(theme, self.config.ui.size + 2., close.do_not_ask_again))
+                .child(crate::toggles::checkbox(theme, self.config.ui.size + 2., close.do_not_ask_again))
                 .child("Do not ask again")
                 .on_click(cx.listener(|this, _, _, cx| this.toggle_do_not_ask_again(cx)))))
             .child(div().flex().justify_end().gap(px(8.))

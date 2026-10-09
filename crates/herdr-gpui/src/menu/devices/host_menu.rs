@@ -398,7 +398,7 @@ impl HerdrWindow {
                         .gap(px(8.))
                         .cursor_pointer()
                         .when(toggle, |row| {
-                            row.child(crate::icons::checkbox(
+                            row.child(crate::toggles::checkbox(
                                 theme,
                                 self.config.ui.size + 2.,
                                 server_keys,
@@ -470,7 +470,7 @@ impl HerdrWindow {
                         .items_center()
                         .gap(px(8.))
                         .cursor_pointer()
-                        .child(crate::icons::checkbox(
+                        .child(crate::toggles::checkbox(
                             theme,
                             self.config.ui.size + 2.,
                             host.forget_github,
