@@ -166,8 +166,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) teleport_follow: Option<crate::teleport::Follow>,
     /// A worktree or workspace being created on another host.
     pub(crate) dispatch_job: Option<crate::dispatch::Job>,
-    /// A dispatched worktree's setup script, waiting for its host.
-    pub(crate) dispatch_setup: Option<crate::dispatch::Setup>,
+    /// Dispatched worktrees' setup scripts, waiting for their hosts in order.
+    pub(crate) dispatch_setups: std::collections::VecDeque<crate::dispatch::Setup>,
     /// A prompt fanned out to several agents; once launched it outlives its
     /// dialog so the lanes can be compared later.
     pub(crate) fan_out: Option<crate::fan_out::FanOut>,
@@ -763,7 +763,7 @@ impl HerdrWindow {
             teleport_marks: crate::teleport::Marks::start(),
             teleport_follow: None,
             dispatch_job: None,
-            dispatch_setup: None,
+            dispatch_setups: Default::default(),
             fan_out: None,
             git: git::Git::default(),
             deliveries: Default::default(),

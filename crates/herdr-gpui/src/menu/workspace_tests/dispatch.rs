@@ -189,27 +189,45 @@ fn a_dispatched_worktree_sets_up_once_its_host_is_shown(cx: &mut gpui::TestAppCo
         view.update(cx, |view, cx| {
             two_hosts(view);
             let now = std::time::Instant::now();
-            // Box is not the host shown, so its setup waits.
-            view.dispatch_setup = Some(setup_for("ssh:box", "w3", now));
+            // Box is not the host shown, and w-new is not listed: both wait.
+            view.queue_dispatch_setup(setup_for("ssh:box", "w3", now), cx);
+            view.queue_dispatch_setup(setup_for(crate::endpoint::LOCAL, "w-new", now), cx);
             view.poll_dispatch_setup(now, cx);
-            assert!(view.dispatch_setup.is_some());
+            assert_eq!(view.dispatch_setups.len(), 2);
             assert!(view.worktree_script.is_none());
-            // Nor does a workspace the shown host does not list start yet.
-            view.dispatch_setup = Some(setup_for(crate::endpoint::LOCAL, "w-new", now));
+            // A later one that is ready starts without dropping those waiting.
+            view.queue_dispatch_setup(setup_for(crate::endpoint::LOCAL, "w3", now), cx);
             view.poll_dispatch_setup(now, cx);
-            assert!(view.dispatch_setup.is_some());
-            // Listed on the shown host, it starts like a local creation's.
-            view.dispatch_setup = Some(setup_for(crate::endpoint::LOCAL, "w3", now));
-            view.poll_dispatch_setup(now, cx);
-            assert!(view.dispatch_setup.is_none());
             assert!(view.worktree_script.is_some());
+            assert_eq!(view.dispatch_setups.len(), 2, "earlier setups keep waiting");
+            assert!(view.flash.is_none());
+            // Hosts never shown are given up on, with a word.
             view.worktree_script = None;
-            // A host that never shows up is given up on, with a word.
-            view.dispatch_setup = Some(setup_for("ssh:box", "w3", now));
-            view.poll_dispatch_setup(now + std::time::Duration::from_secs(31), cx);
-            assert!(view.dispatch_setup.is_none());
+            view.poll_dispatch_setup(now + std::time::Duration::from_secs(121), cx);
+            assert!(view.dispatch_setups.is_empty());
             assert!(view.worktree_script.is_none());
             assert!(view.flash.is_some());
+        })
+    });
+}
+
+#[gpui::test]
+fn waiting_setups_are_bounded(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = cx.add_window_view(sidebar::layout_tests::fixture_window);
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            let now = std::time::Instant::now();
+            for _ in 0..8 {
+                view.queue_dispatch_setup(setup_for("ssh:box", "w3", now), cx);
+            }
+            assert!(view.flash.is_none());
+            view.queue_dispatch_setup(setup_for("ssh:box", "w4", now), cx);
+            assert_eq!(view.dispatch_setups.len(), 8);
+            assert_eq!(view.dispatch_setups.back().unwrap().workspace_id, "w4");
+            assert!(
+                view.flash.is_some(),
+                "the oldest is given up on, with a word"
+            );
         })
     });
 }

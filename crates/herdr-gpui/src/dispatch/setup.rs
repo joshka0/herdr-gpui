@@ -12,8 +12,12 @@ use crate::{
 use gpui::Context;
 use std::time::{Duration, Instant};
 
-/// How long a setup waits for its host and workspace, as a follow does.
-const WAIT: Duration = Duration::from_secs(30);
+/// How long a setup waits for the window to show its host and workspace.
+/// Setups queue behind one another, so this is longer than a follow.
+const WAIT: Duration = Duration::from_secs(120);
+/// Setups kept waiting at once.
+const MAX_WAITING: usize = 8;
+const GAVE_UP: &str = "A new worktree's setup script did not start: its host was not shown";
 
 /// A setup script waiting for the window to reach its checkout.
 pub(crate) struct Setup {
@@ -43,36 +47,45 @@ impl Setup {
 }
 
 impl HerdrWindow {
+    /// Queue a new worktree's setup behind any still waiting. Setups are
+    /// few; beyond [`MAX_WAITING`] the oldest is given up on, with a word.
+    pub(crate) fn queue_dispatch_setup(&mut self, setup: Setup, cx: &mut Context<Self>) {
+        self.dispatch_setups.push_back(setup);
+        if self.dispatch_setups.len() > MAX_WAITING {
+            self.dispatch_setups.pop_front();
+            self.show_flash(Flash::warning(GAVE_UP), cx);
+        }
+    }
+
     /// Start a waiting setup once its host is shown and lists its workspace,
-    /// and no other script is starting. Gives up after [`WAIT`].
+    /// and no other script is starting; the rest keep waiting their turn.
+    /// One whose host is not shown within [`WAIT`] is given up on.
     pub(crate) fn poll_dispatch_setup(&mut self, now: Instant, cx: &mut Context<Self>) {
-        let Some(setup) = &self.dispatch_setup else {
-            return;
-        };
-        if now >= setup.until {
-            let host = setup.endpoint_id.clone();
-            self.dispatch_setup = None;
-            tracing::warn!(%host, "the setup script's host was never shown");
-            self.show_flash(
-                Flash::warning("The new worktree's setup script did not start"),
-                cx,
-            );
+        if self.dispatch_setups.is_empty() {
             return;
         }
-        let shown = self.endpoints[self.selected_endpoint].id == setup.endpoint_id
-            && self.live.status.is_connected();
-        let Some(snapshot) = self.live.snapshot.as_ref().filter(|_| shown) else {
-            return;
-        };
-        let listed = snapshot
-            .workspaces
-            .iter()
-            .any(|workspace| workspace.workspace_id == setup.workspace_id);
-        if !listed || self.worktree_script.is_some() {
+        let before = self.dispatch_setups.len();
+        self.dispatch_setups.retain(|setup| now < setup.until);
+        if self.dispatch_setups.len() < before {
+            tracing::warn!("a dispatched worktree's host was never shown for its setup");
+            self.show_flash(Flash::warning(GAVE_UP), cx);
+        }
+        if self.worktree_script.is_some() || !self.live.status.is_connected() {
             return;
         }
+        let shown = &self.endpoints[self.selected_endpoint].id;
+        let Some(snapshot) = self.live.snapshot.as_ref() else {
+            return;
+        };
+        let ready = self.dispatch_setups.iter().position(|setup| {
+            &setup.endpoint_id == shown
+                && snapshot
+                    .workspaces
+                    .iter()
+                    .any(|workspace| workspace.workspace_id == setup.workspace_id)
+        });
         let boot = snapshot.boot_id.clone();
-        let Some(setup) = self.dispatch_setup.take() else {
+        let Some(setup) = ready.and_then(|index| self.dispatch_setups.remove(index)) else {
             return;
         };
         let launch = Launch {

@@ -1289,7 +1289,9 @@ does), the base commit is resolved here and shipped as a Git bundle only when
 that host lacks it, and that host's own daemon creates the worktree from it.
 Closing the dialog does not stop it; the result arrives as a flash, and the
 window switches to the new workspace. Once it is shown, a new worktree runs the
-repository's setup script there, asking for trust as a local creation does. A
+repository's setup script there, asking for trust as a local creation does.
+Setups of several such worktrees wait their turn; one whose host is not shown
+within two minutes is given up on, with a warning. A
 new workspace opens the repository's main checkout on that host.
 
 The fan-out dialog offers Spread agents across hosts. Each lane then goes to

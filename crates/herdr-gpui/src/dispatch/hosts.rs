@@ -196,15 +196,16 @@ impl HerdrWindow {
                 self.show_flash(Flash::success(format!("Created on {host}")), cx);
                 // Like a local creation, a new worktree runs its setup script,
                 // once the window has followed it there.
-                self.dispatch_setup = created.checkout.map(|checkout| {
-                    Setup::new(
+                if let Some(checkout) = created.checkout {
+                    let setup = Setup::new(
                         created.endpoint_id.clone(),
                         created.workspace_id.clone(),
                         repo,
                         checkout,
                         now,
-                    )
-                });
+                    );
+                    self.queue_dispatch_setup(setup, cx);
+                }
                 self.teleport_follow = Some(crate::teleport::Follow::new(
                     created.endpoint_id,
                     created.workspace_id,
