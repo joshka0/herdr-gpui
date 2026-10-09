@@ -305,6 +305,7 @@ fn view_menu_carries_the_font_size_and_full_screen_commands() {
         ("Increase Font Size", Command::IncreaseFontSize),
         ("Decrease Font Size", Command::DecreaseFontSize),
         ("Reset Font Size", Command::ResetFontSize),
+        ("Devices Overview", Command::DevicesOverview),
         ("Toggle Full Screen", Command::ToggleFullScreen),
     ];
     assert_eq!(actions.len(), expected.len());

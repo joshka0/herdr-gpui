@@ -1,6 +1,6 @@
 //! The menu behind a group's "…" button: tabs other than a terminal to open
 //! in the group (a blank browser tab, the focused checkout's review, the
-//! focused workspace's listening ports), closing tabs in the group, and
+//! Devices overview, the focused workspace's listening ports), closing tabs in the group, and
 //! splitting it. A terminal tab comes from the group's "+". Closing here only
 //! ever takes tabs out of this group's strip, as an editor's group menu does:
 //! the tabs stay open in Herdr, in the browser, and in every other group.
@@ -27,6 +27,8 @@ enum Action {
     NewBrowserTab,
     /// The review tab of the checkout the Git chip tracks.
     Review,
+    /// The Devices overview tab.
+    Devices,
     /// One of the focused workspace's listening ports and where it opens.
     Port {
         number: u16,
@@ -46,6 +48,7 @@ impl Action {
         match self {
             Self::NewBrowserTab => "New Browser Tab".into(),
             Self::Review => "Review Changes".into(),
+            Self::Devices => "Devices Overview".into(),
             Self::Port { link, .. } => link.label().into(),
             Self::Close => "Close".into(),
             Self::CloseOthers => "Close Others".into(),
@@ -58,6 +61,7 @@ impl Action {
         match self {
             Self::NewBrowserTab => Some("icons/globe.svg"),
             Self::Review => Some("icons/diff-unified.svg"),
+            Self::Devices => Some("icons/devices.svg"),
             Self::Port { .. } => Some("icons/arrow-right.svg"),
             Self::Split => Some("icons/split.svg"),
             Self::Close | Self::CloseOthers | Self::CloseAll => None,
@@ -75,7 +79,7 @@ impl Action {
     /// Which run of rows this one belongs to; a rule separates runs.
     fn section(&self) -> u8 {
         match self {
-            Self::NewBrowserTab | Self::Review => 0,
+            Self::NewBrowserTab | Self::Review | Self::Devices => 0,
             Self::Port { .. } => 1,
             Self::Close | Self::CloseOthers | Self::CloseAll => 2,
             Self::Split => 3,
@@ -110,6 +114,7 @@ impl HerdrWindow {
         if self.git.tracked().is_some() {
             actions.push(Action::Review);
         }
+        actions.push(Action::Devices);
         if let Some((_, _, listed)) = self.focused_listening_ports() {
             actions.extend(listed.ports.iter().filter_map(|port| {
                 Some(Action::Port {
@@ -165,6 +170,7 @@ impl HerdrWindow {
         match action {
             Action::NewBrowserTab => self.open_browser_tab_in(group, window, cx),
             Action::Review => self.open_review(window, cx),
+            Action::Devices => self.open_devices_overview(window, cx),
             Action::Port { link, .. } => {
                 let Some((endpoint, workspace)) = self
                     .focused_listening_ports()

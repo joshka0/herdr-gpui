@@ -15,7 +15,9 @@ use crate::{
     Error, Result,
     usage::{Host, Shell},
 };
-pub(crate) use render::{gauges, line, tooltip};
+pub(crate) use render::{
+    CPU_WARN, DISK_WARN, MEMORY_WARN, gauges, line, severity, storage, tooltip, uptime,
+};
 use sample::{Disk, Memory, Os, Sample, Ticks};
 use std::{
     collections::{HashMap, VecDeque},

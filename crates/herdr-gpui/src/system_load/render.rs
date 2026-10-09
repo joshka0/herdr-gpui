@@ -18,8 +18,10 @@ const GAUGE_WIDTH: f32 = 3.;
 const ITEM_GAP: f32 = 5.;
 /// Glyphs a share takes at most: `100%`.
 const SHARE_GLYPHS: f32 = 4.;
-const CPU_WARN: f32 = 75.;
-const MEMORY_WARN: f32 = 80.;
+pub(crate) const CPU_WARN: f32 = 75.;
+pub(crate) const MEMORY_WARN: f32 = 80.;
+/// A home volume this full is worth a look.
+pub(crate) const DISK_WARN: f32 = 80.;
 const CRITICAL: f32 = 90.;
 
 impl HerdrWindow {
@@ -171,7 +173,8 @@ fn share(value: f32, warn: f32, stale: bool, theme: &Theme, glyph: Option<f32>) 
         .child(format!("{value:.0}%"))
 }
 
-fn severity(value: f32, warn: f32, theme: &Theme, normal: u32) -> u32 {
+/// `normal` below `warn`, yellow from it, red once critical.
+pub(crate) fn severity(value: f32, warn: f32, theme: &Theme, normal: u32) -> u32 {
     if value >= CRITICAL {
         theme.ink(theme.palette[1])
     } else if value >= warn {

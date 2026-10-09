@@ -183,6 +183,12 @@ pub(crate) fn menus(layout: Layout) -> Vec<Menu> {
                 ),
                 MenuItem::separator(),
                 layout_menu(layout.mode),
+                MenuItem::action(
+                    "Devices Overview",
+                    RunCommand {
+                        command: Command::DevicesOverview,
+                    },
+                ),
                 MenuItem::separator(),
                 MenuItem::action(
                     "Toggle Full Screen",

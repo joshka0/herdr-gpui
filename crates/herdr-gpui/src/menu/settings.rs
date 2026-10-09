@@ -401,6 +401,7 @@ impl HerdrWindow {
                 | Command::MoveCodeToGroup
                 | Command::MoveCodeToPanel
                 | Command::ToggleStatusBar
+                | Command::DevicesOverview
                 | Command::IncreaseFontSize
                 | Command::DecreaseFontSize
                 | Command::ResetFontSize
