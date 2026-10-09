@@ -27,8 +27,14 @@ impl Config {
             .create(true)
             .truncate(false)
             .open(&lock_path)
+            .inspect_err(|error| {
+                tracing::warn!(operation = "config_lock_open", kind = ?error.kind(), raw_os_error = ?error.raw_os_error(), "Config lock failed");
+            })
             .map_err(|error| Error::from(error).at_path(&lock_path))?;
         lock.lock()
+            .inspect_err(|error| {
+                tracing::warn!(operation = "config_lock_acquire", kind = ?error.kind(), raw_os_error = ?error.raw_os_error(), "Config lock failed");
+            })
             .map_err(|error| Error::from(error).at_path(&lock_path))?;
         let local = path.with_extension("local.toml");
         let original = match fs::read_to_string(path) {

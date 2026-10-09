@@ -8,6 +8,8 @@ use crate::{
     keymap::{Binding, DaemonKeys, Keymap, PaneKeys},
 };
 mod bitmap_fonts;
+mod coder;
+mod daytona;
 mod files;
 mod fonts;
 mod layout;
@@ -16,9 +18,17 @@ pub(crate) mod preferences;
 pub(crate) mod sidebar;
 mod sidebar_style;
 pub(crate) mod status_bar;
+#[cfg(feature = "cloud")]
+mod table;
 mod theme;
 pub(crate) mod watch;
 
+pub use coder::CoderConfig;
+#[cfg(feature = "coder")]
+pub(crate) use coder::CoderFields;
+pub use daytona::DaytonaConfig;
+#[cfg(feature = "daytona")]
+pub(crate) use daytona::DaytonaFields;
 use files::write_config;
 pub(crate) use fonts::FontFace;
 use fonts::FontSettings;
@@ -91,6 +101,8 @@ pub struct Config {
     pub terminal: FontConfig,
     pub ui: FontConfig,
     pub github: GitHubConfig,
+    pub coder: CoderConfig,
+    pub daytona: DaytonaConfig,
     pub features: Features,
     pub notifications: NotificationConfig,
     pub(crate) notification_overrides: NotificationSettings,
@@ -177,28 +189,69 @@ pub struct CodeConfig {
 /// Alt always reaches the pane there.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum OptionAsAlt {
-    /// Alt on the U.S. and ABC layouts, whose Option layer only holds symbols
-    /// like `π`; typing elsewhere, where it holds `@`, `[`, or letters.
+    /// The left Option sends Alt on the U.S. and ABC layouts, whose Option
+    /// layer only holds symbols like `π` and dead keys like `´`; the right
+    /// Option still types them. Both type elsewhere, where Option holds `@`,
+    /// `[`, or letters.
     #[default]
     Auto,
     Always,
     Never,
+    /// Only the left Option sends Alt; the right one types.
+    Left,
+    /// Only the right Option sends Alt; the left one types.
+    Right,
+}
+
+/// Which Option keys a keystroke was made with, as macOS reports them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OptionKeys {
+    pub left: bool,
+    pub right: bool,
+}
+
+impl OptionKeys {
+    /// What a keystroke whose side is unknown counts as: the left key,
+    /// which is where Alt has always been.
+    pub const LEFT: Self = Self {
+        left: true,
+        right: false,
+    };
+
+    /// The side from an `NSEvent`'s modifier flags, whose device-dependent
+    /// bits tell the two keys apart. Flags naming neither count as the left.
+    #[cfg(any(target_os = "macos", test))]
+    pub fn from_device_flags(flags: usize) -> Self {
+        const LEFT: usize = 0x20;
+        const RIGHT: usize = 0x40;
+        let keys = Self {
+            left: flags & LEFT != 0,
+            right: flags & RIGHT != 0,
+        };
+        if keys.left || keys.right {
+            keys
+        } else {
+            Self::LEFT
+        }
+    }
 }
 
 impl OptionAsAlt {
     /// macOS layouts whose Option characters a terminal user rarely types.
     const ALT_LAYOUTS: [&'static str; 2] = ["com.apple.keylayout.US", "com.apple.keylayout.ABC"];
 
-    /// Whether Option-modified keys go to the pane as Alt under `layout`, the
-    /// platform keyboard layout ID.
-    pub fn sends_alt(self, layout: &str) -> bool {
+    /// Whether Option-modified keys made with `keys` go to the pane as Alt
+    /// under `layout`, the platform keyboard layout ID.
+    pub fn sends_alt(self, layout: &str, keys: OptionKeys) -> bool {
         if !cfg!(target_os = "macos") {
             return true;
         }
         match self {
-            Self::Auto => Self::ALT_LAYOUTS.contains(&layout),
+            Self::Auto => Self::ALT_LAYOUTS.contains(&layout) && keys.left,
             Self::Always => true,
             Self::Never => false,
+            Self::Left => keys.left,
+            Self::Right => keys.right,
         }
     }
 }
@@ -213,11 +266,16 @@ impl<'de> Deserialize<'de> for OptionAsAlt {
             Bool(bool),
             Name(String),
         }
+        const NAMES: &[&str] = &["auto", "left", "right"];
         match Value::deserialize(deserializer)? {
             Value::Bool(true) => Ok(Self::Always),
             Value::Bool(false) => Ok(Self::Never),
-            Value::Name(name) if name == "auto" => Ok(Self::Auto),
-            Value::Name(name) => Err(serde::de::Error::unknown_variant(&name, &["auto"])),
+            Value::Name(name) => match name.as_str() {
+                "auto" => Ok(Self::Auto),
+                "left" => Ok(Self::Left),
+                "right" => Ok(Self::Right),
+                _ => Err(serde::de::Error::unknown_variant(&name, NAMES)),
+            },
         }
     }
 }
@@ -291,6 +349,8 @@ impl Default for Config {
         Self {
             theme: "Default".into(),
             github: GitHubConfig::default(),
+            coder: CoderConfig::default(),
+            daytona: DaytonaConfig::default(),
             confirm_close_tab: true,
             confirm_close_pane: true,
             show_agents: true,
@@ -350,6 +410,8 @@ struct Settings {
     terminal: FontSettings,
     ui: FontSettings,
     github: GitHubConfig,
+    coder: CoderConfig,
+    daytona: DaytonaConfig,
     features: Features,
     notifications: NotificationSettings,
     clipboard_toast: ClipboardToastSettings,
@@ -625,6 +687,14 @@ impl Config {
         };
         settings.github.client_id_with_override(None)?;
         config.github = settings.github;
+        // Check what the file says so a bad value is reported at load; the
+        // environment may still fill or override keys when Coder is used.
+        #[cfg(feature = "coder")]
+        settings.coder.check()?;
+        config.coder = settings.coder;
+        #[cfg(feature = "daytona")]
+        settings.daytona.settings_with(|_| None)?;
+        config.daytona = settings.daytona;
         config.features = settings.features;
         config.notification_overrides = settings.notifications;
         config.notifications = settings

@@ -735,7 +735,9 @@ impl Render for HerdrWindow {
                             .relative()
                             .child(content)
                             .children(self.render_notices(cx))
-                            .child(self.render_status_bar(cx)),
+                            .when(self.status_bar_visible, |column| {
+                                column.child(self.render_status_bar(cx))
+                            }),
                     ),
             )
             .when(merged, |root| root.children(self.render_worktree_banner()))

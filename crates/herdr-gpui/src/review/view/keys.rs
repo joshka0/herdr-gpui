@@ -1,8 +1,9 @@
 //! Keys in the diff, while it holds the keyboard: `j`/`k` and the arrows
 //! scroll a line, Space and Page Up/Down a page, `]`/`[` move between hunks
 //! and `.`/`,` between files, `/` finds, `n`/`N` step through the matches,
-//! `x` folds the file at the top and `v` marks it viewed. Fields in the
-//! review keep their own keys.
+//! `x` folds the file at the top and `v` marks it viewed. Cmd-C copies the
+//! selected code, Cmd-A selects the file's, and Escape clears it. Fields in
+//! the review keep their own keys.
 use super::Review;
 use crate::{HerdrWindow, browser::TabId, review::diff::RowId};
 use gpui::{prelude::*, *};
@@ -105,6 +106,23 @@ impl HerdrWindow {
     ) -> bool {
         let keystroke = &event.keystroke;
         let modifiers = keystroke.modifiers;
+        // Copy and Select All, with Cmd or, as off macOS, Ctrl: the diff
+        // has no program to send Ctrl-C to.
+        let edit = (modifiers.platform != modifiers.control)
+            && !modifiers.alt
+            && !modifiers.shift
+            && !modifiers.function;
+        match keystroke.key.as_str() {
+            "c" if edit => return self.copy_review_selection(id, cx),
+            "a" if edit => {
+                self.select_review_file(id, cx);
+                return true;
+            }
+            "escape" if !modifiers.modified() && self.clear_review_selection(id, cx) => {
+                return true;
+            }
+            _ => {}
+        }
         if modifiers.control || modifiers.alt || modifiers.platform || modifiers.function {
             return false;
         }

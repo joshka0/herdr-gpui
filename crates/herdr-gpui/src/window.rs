@@ -13,6 +13,7 @@ mod file_drop;
 mod file_links;
 mod find;
 mod flash;
+pub(crate) use commands::run_window_command;
 pub(crate) use flash::Flash;
 mod image_source;
 mod images;
@@ -43,6 +44,10 @@ mod font_size_tests;
 mod key_action_tests;
 #[cfg(all(test, feature = "integration-test"))]
 mod resize_tests;
+#[cfg(test)]
+mod shortcut_tests;
+#[cfg(test)]
+mod status_bar_tests;
 #[cfg(test)]
 mod tests;
 
@@ -136,6 +141,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) selection_follow: selection::Follow,
     /// The find bar, over the pane it searches.
     pub(crate) find: Option<find::FindBar>,
+    /// How the find bar was left over each pane, to bring it back there.
+    pub(crate) find_memory: crate::find::memory::Memory,
     /// Keyboard copy mode, when it holds the keyboard.
     pub(crate) copy_mode: Option<copy_mode::CopyModeState>,
     /// The brief message over the terminal, and when it stops showing.
@@ -148,6 +155,9 @@ pub(crate) struct HerdrWindow {
     /// The terminal grid's cached regions; see `regions`.
     pub(crate) regions: Vec<regions::RegionLayers>,
     pub(crate) marked: String,
+    /// Where the IME's caret or converted clause is within `marked`, in
+    /// UTF-16; `None` puts the caret after it.
+    pub(crate) marked_selection: Option<std::ops::Range<usize>>,
     /// The sidebar row the pointer is resting on, waiting to open its menu.
     pub(crate) hover: Option<sidebar::HoverRest>,
     /// The menu that resting opened, which the pointer closes by leaving it.
@@ -164,6 +174,10 @@ pub(crate) struct HerdrWindow {
     pub(crate) teleport_marks: crate::teleport::Marks,
     /// The workspace a finished teleport keeps steering to until focused.
     pub(crate) teleport_follow: Option<crate::teleport::Follow>,
+    /// A worktree or workspace being created on another host.
+    pub(crate) dispatch_job: Option<crate::dispatch::Job>,
+    /// Dispatched worktrees' setup scripts, waiting for their hosts in order.
+    pub(crate) dispatch_setups: std::collections::VecDeque<crate::dispatch::Setup>,
     /// A prompt fanned out to several agents; once launched it outlives its
     /// dialog so the lanes can be compared later.
     pub(crate) fan_out: Option<crate::fan_out::FanOut>,
@@ -188,6 +202,9 @@ pub(crate) struct HerdrWindow {
     pub(crate) checkpoints: crate::checkpoint::Checkpoints,
     /// Remote ports forwarded to this machine; they end with the window.
     pub(crate) port_forwards: crate::port_forward::PortForwards,
+    /// Cloud machines being added; see `cloud::Jobs`.
+    #[cfg(feature = "cloud")]
+    pub(crate) cloud_jobs: crate::cloud::Jobs,
     pub(crate) listening_ports: crate::listening_ports::ListeningPorts,
     /// SSH tunnels to remote ports that listen on their host's loopback only.
     pub(crate) tunnels: crate::listening_ports::Tunnels,
@@ -202,6 +219,9 @@ pub(crate) struct HerdrWindow {
     /// Herdr's `ui.sidebar_start_collapsed` still applies: no shared settings
     /// have loaded yet and the user has not toggled the sidebar since startup.
     pub(crate) sidebar_start_pending: bool,
+    /// Starts as `config.status_bar.show`; Toggle Status Bar flips it for the
+    /// session, and a reload that changes the setting applies it again.
+    pub(crate) status_bar_visible: bool,
     pub(crate) device_filter: Option<String>,
     pub(crate) wheel: WheelAccumulator,
     pub(crate) sidebar_width: Option<f32>,
@@ -437,6 +457,7 @@ impl HerdrWindow {
         self.update_workspace_dialog(window, cx);
         self.poll_teleport(window, cx);
         self.poll_fan_out(window, cx);
+        self.poll_dispatch(window, cx);
         self.poll_device_setup(window, cx);
         self.poll_worktree_script(window, cx);
         self.poll_worktree_source(cx);
@@ -454,7 +475,7 @@ impl HerdrWindow {
                 .as_ref()
                 .and_then(|s| s.focused_pane_id.clone())
         {
-            self.marked.clear();
+            self.discard_composition(cx);
         }
         self.poll_github(window, cx);
         if self.update_workspace_pr() {
@@ -494,7 +515,7 @@ impl HerdrWindow {
             .show
             .then(|| self.endpoints.get(self.selected_endpoint))
             .flatten()
-            .map(|endpoint| crate::usage::Host::from(&endpoint.connection.target));
+            .and_then(|endpoint| crate::usage::Host::of(&endpoint.connection.target));
         let granted = crate::usage::KeychainGrants::granted(cx);
         let changed = self.usage.poll(
             host,
@@ -512,9 +533,10 @@ impl HerdrWindow {
         changed
     }
 
-    /// CPU and memory are sampled for every enabled host.
+    /// CPU and memory are sampled for every enabled host, while they are
+    /// shown or a host picker ranks hosts by them.
     fn update_system_load(&mut self) -> bool {
-        if !self.config.show_system_load {
+        if !self.config.show_system_load && !self.dispatch_sampling() {
             return self.system_load.poll(Vec::new());
         }
         let hosts = self.watched_hosts();
@@ -552,7 +574,7 @@ impl HerdrWindow {
                 endpoint.enabled
                     && (live.status.is_connected() || !endpoint.connection.target.is_remote())
             })
-            .map(|(_, endpoint)| crate::usage::Host::from(&endpoint.connection.target))
+            .filter_map(|(_, endpoint)| crate::usage::Host::of(&endpoint.connection.target))
             .collect()
     }
 
@@ -631,7 +653,7 @@ impl HerdrWindow {
     pub(crate) fn selected_host(&self) -> Option<crate::usage::Host> {
         self.endpoints
             .get(self.selected_endpoint)
-            .map(|endpoint| crate::usage::Host::from(&endpoint.connection.target))
+            .and_then(|endpoint| crate::usage::Host::of(&endpoint.connection.target))
     }
 
     pub(crate) fn new(
@@ -690,6 +712,7 @@ impl HerdrWindow {
             update_preview: None,
             daemon_text: Default::default(),
             configured_terminal_size: config.terminal.size,
+            status_bar_visible: config.status_bar.show,
             gui_config_diagnostic: {
                 let mut diagnostic = crate::config_diagnostic::ConfigDiagnostic::default();
                 diagnostic.sync(config.diagnostic().as_deref());
@@ -746,12 +769,14 @@ impl HerdrWindow {
             selection_follow: Default::default(),
             find: None,
             copy_mode: None,
+            find_memory: Default::default(),
             flash: None,
             presentation: Default::default(),
             wake: endpoint::WakeClock::new(std::time::Instant::now(), std::time::SystemTime::now()),
             painter: Default::default(),
             regions: Vec::new(),
             marked: String::new(),
+            marked_selection: None,
             hover: None,
             hover_menu: None,
             local_error: error,
@@ -761,6 +786,8 @@ impl HerdrWindow {
             teleport: None,
             teleport_marks: crate::teleport::Marks::start(),
             teleport_follow: None,
+            dispatch_job: None,
+            dispatch_setups: Default::default(),
             fan_out: None,
             git: git::Git::default(),
             deliveries: Default::default(),
@@ -774,6 +801,8 @@ impl HerdrWindow {
             system_load: Default::default(),
             checkpoints: Default::default(),
             port_forwards: Default::default(),
+            #[cfg(feature = "cloud")]
+            cloud_jobs: Default::default(),
             listening_ports: Default::default(),
             tunnels: Default::default(),
             install_warning_shown: false,
@@ -862,7 +891,7 @@ impl HerdrWindow {
             .ok()
             .map(|path| preferences::Preferences::new(&path));
         this.avatars = Some(avatars::Avatars::new());
-        this.reconnect();
+        this.reconnect(cx);
         log_window::set_appearance(&this.config, &this.theme, cx);
         this.load_gui_config(cx);
         this.load_shared_settings(cx);

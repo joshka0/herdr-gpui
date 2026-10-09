@@ -150,6 +150,10 @@ pub enum Error {
     StaleWorkspace,
     #[error("Workspace label must not be empty.")]
     EmptyWorkspaceLabel,
+    #[error("{0} cannot be reached by script. Choose another host.")]
+    DispatchHostUnavailable(String),
+    #[error("Another host is still being set up. Wait for it to finish.")]
+    DispatchBusy,
     #[error(
         "Invalid Git branch name. Use a name such as config-reload, without spaces or special ref characters."
     )]
@@ -279,13 +283,13 @@ pub enum Error {
     #[error("Missing credential directory.")]
     CredentialDirectory,
     #[error(
-        "Cannot access private GitHub credential file. Require an owned directory and regular 0600 file; symlinks are rejected."
+        "Cannot access private credential file. Require an owned directory and regular 0600 file; symlinks are rejected."
     )]
     CredentialPermissions,
-    #[error("Cannot access private GitHub credential file.")]
+    #[error("Cannot access private credential file.")]
     CredentialIo(#[source] io::Error),
     #[error(
-        "No secure credential store configured. Explicitly opt in with [github] allow_plaintext_credentials = true, or use GH_TOKEN / GITHUB_TOKEN."
+        "No secure credential store configured. Explicitly opt in with allow_plaintext_credentials = true in the [github] or [coder] table, or use GH_TOKEN / GITHUB_TOKEN for GitHub."
     )]
     CredentialPolicy,
     #[error(
@@ -336,6 +340,15 @@ pub enum Error {
     GitHubTokenType,
     #[error("GitHub {0} worker stopped.")]
     GitHubWorker(&'static str),
+    #[cfg(feature = "coder")]
+    #[error(transparent)]
+    Coder(#[from] crate::coder::Error),
+    #[cfg(feature = "daytona")]
+    #[error(transparent)]
+    Daytona(#[from] crate::daytona::Error),
+    #[cfg(feature = "cloud")]
+    #[error(transparent)]
+    Cloud(#[from] crate::cloud::Error),
     #[error("{0}")]
     Config(#[source] config_loader::ConfigError),
     #[error("{source}")]
@@ -535,6 +548,8 @@ pub enum Error {
     LocalWorktreeNote,
     #[error("Invalid saved worktree notes")]
     InvalidWorktreeNotes,
+    #[error("Invalid saved dispatch history")]
+    InvalidDispatchHistory,
     #[error("Invalid saved editor groups")]
     InvalidGroupLayouts,
     #[error("Herdr GPUI is not running, or its control socket {} is unreachable: {source}", path.display())]

@@ -148,7 +148,7 @@ pub(crate) async fn verify_native(
                 .timer(Duration::from_millis(10))
                 .await;
         }
-        for (index, section) in Section::ALL.into_iter().enumerate() {
+        for (index, section) in Section::ALL.iter().copied().enumerate() {
             let (target, bounds) =
                 AnyWindowHandle::from(settings).update(cx, |_, window, cx| -> Result<_> {
                     window.draw(cx).clear(cx);
