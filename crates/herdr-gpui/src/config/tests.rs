@@ -12,6 +12,7 @@ mod icon_font;
 mod keybindings;
 mod line_height;
 mod loading;
+mod missing_fonts;
 mod notification_settings;
 mod preferences;
 mod sidebar_settings;

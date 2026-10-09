@@ -118,6 +118,9 @@ pub struct Config {
     /// none installed, so Private Use Area glyphs draw as missing-glyph boxes.
     /// Never set when the config names the terminal's `fallback` itself.
     pub(crate) icon_font_missing: bool,
+    /// Configured families, sorted, that font resolution found no installed
+    /// family for; `diagnostic` reports them.
+    pub(crate) missing_fonts: Vec<String>,
 }
 
 /// A device list larger than any real catalog is a config mistake.
@@ -310,6 +313,7 @@ impl Default for Config {
             devices: BTreeMap::new(),
             unknown_keys: Vec::new(),
             icon_font_missing: false,
+            missing_fonts: Vec::new(),
             palette: crate::palette::PaletteConfig::default(),
             sidebar: font(monospace, 12.0),
             // Tabs are terminal chrome, so they read in the monospace face the
@@ -481,20 +485,33 @@ impl Config {
         Ok(Self::path()?.with_extension("local.toml"))
     }
 
-    /// A one-line warning naming the keys this build ignored, if any.
+    /// Warnings naming the keys this build ignored and the configured fonts
+    /// that are not installed, one line each, if any.
     pub(crate) fn diagnostic(&self) -> Option<String> {
         const LISTED: usize = 5;
-        if self.unknown_keys.is_empty() {
-            return None;
-        }
-        let listed = self.unknown_keys[..self.unknown_keys.len().min(LISTED)].join(", ");
-        let more = match self.unknown_keys.len().saturating_sub(LISTED) {
-            0 => String::new(),
-            more => format!(" and {more} more"),
+        let list = |items: &[String]| {
+            let listed = items[..items.len().min(LISTED)].join(", ");
+            match items.len().saturating_sub(LISTED) {
+                0 => listed,
+                more => format!("{listed} and {more} more"),
+            }
         };
-        Some(format!(
-            "config-gpui.local.toml: ignoring unknown keys {listed}{more}"
-        ))
+        let mut lines = Vec::new();
+        if !self.unknown_keys.is_empty() {
+            lines.push(format!(
+                "config-gpui.local.toml: ignoring unknown keys {}",
+                list(&self.unknown_keys)
+            ));
+        }
+        if !self.missing_fonts.is_empty() {
+            let fonts: Vec<String> = self
+                .missing_fonts
+                .iter()
+                .map(|family| format!("\"{family}\""))
+                .collect();
+            lines.push(format!("Configured fonts not installed: {}", list(&fonts)));
+        }
+        (!lines.is_empty()).then(|| lines.join("\n"))
     }
 
     pub fn load() -> Result<Self> {
