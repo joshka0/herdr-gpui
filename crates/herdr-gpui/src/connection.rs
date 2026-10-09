@@ -178,7 +178,7 @@ impl ConnectionBridge {
                     } else {
                         "daemon_connect"
                     };
-                    tracing::debug!(category, error_kind = ?error.kind(), "Connection bridge connector failed");
+                    tracing::debug!(category, error_kind = ?error.kind(), raw_os_error = ?error.raw_os_error(), "Connection bridge connector failed");
                 }
                 if result
                     .as_ref()

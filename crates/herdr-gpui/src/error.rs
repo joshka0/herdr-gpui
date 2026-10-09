@@ -150,6 +150,10 @@ pub enum Error {
     StaleWorkspace,
     #[error("Workspace label must not be empty.")]
     EmptyWorkspaceLabel,
+    #[error("{0} cannot be reached by script. Choose another host.")]
+    DispatchHostUnavailable(String),
+    #[error("Another host is still being set up. Wait for it to finish.")]
+    DispatchBusy,
     #[error(
         "Invalid Git branch name. Use a name such as config-reload, without spaces or special ref characters."
     )]
@@ -550,6 +554,8 @@ pub enum Error {
     LocalWorktreeNote,
     #[error("Invalid saved worktree notes")]
     InvalidWorktreeNotes,
+    #[error("Invalid saved dispatch history")]
+    InvalidDispatchHistory,
     #[error("Invalid saved editor groups")]
     InvalidGroupLayouts,
     #[error("Herdr GPUI is not running, or its control socket {} is unreachable: {source}", path.display())]

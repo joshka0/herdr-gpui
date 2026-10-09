@@ -72,7 +72,8 @@ the last open main window. Fullscreen windows restore to their normal rectangle.
 Each window reopens on the display it was on; if that display is disconnected,
 it opens on the primary display, resized and moved to fit. Logs windows
 are not restored. Geometry is stored in `window-state.json` under
-`$XDG_STATE_HOME/herdr/gpui`, or `~/.local/state/herdr/gpui` by default. Native
+`$XDG_STATE_HOME/herdr/gpui`, or `~/.local/state/herdr/gpui` by default
+(`%LOCALAPPDATA%\herdr\gpui` on Windows when `HOME` is unset). Native
 test modes skip this state. Up to 64 main windows are restored.
 
 The Rust GitHub updater verifies signed archive manifests and presents a shared
@@ -1265,6 +1266,47 @@ each host. Remote hosts use the terminal's SSH trust and authentication policy,
 and the UI thread never blocks. The GUI connection's API does not expose layouts,
 process details or agent sessions, which is why Teleport uses the CLI.
 
+## Smart Dispatch
+
+When more than one host is connected, the New worktree dialog (its branch form)
+and the New workspace dialog for a Git checkout offer a host for the new
+checkout. The three hosts with the most room are tiles, best first; every other
+host, offline ones last, opens from the Other field below them. The host the
+window shows stays chosen until you pick another, so pressing Enter still
+creates where it always did.
+
+Hosts rank by spare cores: cores less the 5 minute load average (or the CPU
+share where there is none), from the same samples as the CPU and memory
+display. While a picker is open every connected host is sampled, even with
+that display off. Each agent working there takes half a core off, a host that
+would have to clone the repository first takes one, memory above 90% halves
+its room, and each of the repository's last eight new checkouts that went
+there adds half a core, up to three. The ranking follows the samples for a few
+seconds, then holds still so the tiles do not move under the pointer.
+
+Choosing another host creates the checkout there through the same scripts as
+Teleport: the repository is found by remote (or opened, or cloned, as Teleport
+does), the base commit is resolved here and shipped as a Git bundle only when
+that host lacks it, and that host's own daemon creates the worktree from it.
+Closing the dialog does not stop it; the result arrives as a flash, and the
+window switches to the new workspace. Once it is shown, a new worktree runs the
+repository's setup script there, asking for trust as a local creation does.
+Setups of several such worktrees wait their turn; one whose host is not shown
+within two minutes is given up on, with a warning. A
+new workspace opens the repository's main checkout on that host.
+
+The fan-out dialog offers Spread agents across hosts. Each lane then goes to
+the host with the most room left, a lane counting as a core, and its host chip
+opens every host, best first, to move that lane. Each other host is set up once
+before its lanes, and a lane whose agent is not installed there fails with a
+reason. Lanes on another host show it next to their status, and Open, Keep and
+the comparison work across hosts; a host that cannot be read marks only its
+own lanes, keeping the changes read before.
+
+Where new checkouts went is kept in `dispatch-history.json` in the state
+directory, by repository name and host. Like Teleport, dispatch needs a Linux
+or macOS client and the local session or a saved SSH host on both ends.
+
 ## Images
 
 On a selected SSH endpoint, drop one PNG, JPEG, GIF, WebP, or BMP image onto a pane
@@ -1817,14 +1859,30 @@ attention can keep the badge visible. This QA setting is not saved.
 
 The client's own logs are written to
 `$XDG_STATE_HOME/herdr/gpui/logs/herdr-gpui.jsonl` (falling back to
-`~/.local/state`), one JSON record per line, readable only by you on Unix. Past
+`$HOME/.local/state`, or `%LOCALAPPDATA%` on Windows when `HOME` is unset), one
+JSON record per line, readable only by you on Unix. Windows installations with
+`HOME` set retain their existing state directory after upgrading. If both
+`HOME` and `LOCALAPPDATA` are missing, Windows uses
+`%USERPROFILE%\AppData\Local`. Empty variables are treated as unset. Past
 16 MiB the file is rotated to `herdr-gpui.1.jsonl`, replacing the previous one,
 so at most two files are kept. Logs are not held in memory: **Window > Logs**
 reads the newest 5,000 records of the file while it is open, including earlier
 runs, and filters, copies, or exports them. Nothing is uploaded. Logging never
 waits on the disk; lines that cannot be queued or written are counted as dropped
-in the window's status bar. Without `XDG_STATE_HOME` or `HOME` (as on a default
-Windows setup) nothing is saved and the window says so.
+in the window's status bar. If none of these state-directory variables is
+available, nothing is saved and the window says so.
+
+Local Windows connections are supported through the daemon's named pipe; pass
+the binary client socket path to `--socket`, not the JSON API socket. No debug
+build or `RUST_LOG` setting is needed: client debug records are captured in
+release builds too. For a connection failure, inspect `operation`, `kind`, and
+`raw_os_error` in the log: `pipe_name` is name conversion, `pipe_connect` is the
+pipe library's open/wait operation, and `pipe_peek` is `PeekNamedPipe` after
+connection. Config failures distinguish `config_lock_open` from
+`config_lock_acquire`. These operation records omit paths and retain native
+error codes (for example, `5` for Windows access denied). A successful plain
+pipe client alone does not establish why the GUI was denied; include these
+records when reporting the failure.
 
 ## Supported
 
