@@ -152,6 +152,7 @@ project_roots = []
 # close_tab = "cmd-shift-w"
 # focus_tab_1 = "cmd-1"   # through focus_tab_9 = "cmd-9"
 # toggle_sidebar = "cmd-b"
+# toggle_status_bar = "cmd-ctrl-b"   # unbound by default
 # increase_font_size = ["cmd-=", "cmd-+"]
 # decrease_font_size = "cmd--"
 # reset_font_size = "cmd-0"
@@ -259,6 +260,10 @@ size = 12
 # What the status bar shows, also under Settings > Status bar. Whether usage
 # and CPU/memory show at all is [usage] show and show_system_load.
 # [status_bar]
+# The bar itself. false opens windows without it; Terminal > Toggle Status Bar,
+# or a `toggle_status_bar` binding, hides or shows it for the session. While
+# hidden, its connection message, prefix and resize badges show nowhere else.
+# show = true
 # "detailed" draws a meter and a service's two tightest windows; "compact"
 # shows each service's tightest limit as one share.
 # usage = "detailed"
