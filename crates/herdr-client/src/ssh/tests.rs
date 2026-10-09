@@ -2,6 +2,7 @@ use super::*;
 
 mod forward;
 mod incompatible;
+mod probe_failure;
 
 #[test]
 fn discovery_and_bridge_stdio_work_with_quoted_install_paths() {
