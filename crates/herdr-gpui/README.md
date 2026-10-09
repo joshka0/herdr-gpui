@@ -1611,7 +1611,8 @@ comments on a pull request.
   elsewhere) for the whole file at the top. Cmd-C or **Edit > Copy** copies
   the code alone, never line numbers, `+`/`-` signs, or hunk headers; side by
   side, a selection keeps to the side it started on, and Select All takes the
-  new side. Escape clears it. Tabs copy as the four spaces they are drawn as.
+  side last clicked in that file, else the new side (the old side of a deleted
+  file). A folded file has no code to select. Escape clears it. Tabs copy as the four spaces they are drawn as.
 - The copy icon on a file's header copies its path, and the one on a hunk
   header copies the hunk as a patch reads, signs and header included.
 - Notes go to the agent in the focused pane, or else to the first agent Herdr
@@ -2138,7 +2139,8 @@ Windows setup) nothing is saved and the window says so.
   like Ghostty's `text:` binds. On macOS, Cmd-Left, Cmd-Right, and
   Cmd-Backspace send Ctrl-A, Ctrl-E, and Ctrl-U by default, so zsh and agent
   prompts jump to the line's ends or delete back to its start as in every
-  other Mac terminal. A value is a key a terminal can receive (`ctrl-a`,
+  other Mac terminal, and Option-Left and Option-Right send Esc-b and Esc-f
+  to move by word. A value is a key a terminal can receive (`ctrl-a`,
   `home`, `alt-b`, `shift-enter`), and an empty string removes a default. A
   pane key takes its keystroke from a default or daemon command, so
   `"cmd-k" = "ctrl-l"` replaces Clear; listing it under `[keybindings]` as well
@@ -2240,7 +2242,8 @@ Windows setup) nothing is saved and the window says so.
   any layout. Option-Left and Option-Right move a word back and forward
   (Esc-b and Esc-f), Cmd-Left and Cmd-Right to the line's start and end.
 - Ctrl-Cmd-F toggles full screen and Cmd-` brings the app's next window
-  forward, as in other Mac apps.
+  forward, as in other Mac apps, from the Settings and Log windows too. The
+  cycle visits every window in a stable order, not front to back.
 - Pointer selection of terminal cells, copied to the clipboard on release with
   a configurable flash. Selections stay within one pane or the popup above it,
   anchor on half cells, and never reach the daemon.
