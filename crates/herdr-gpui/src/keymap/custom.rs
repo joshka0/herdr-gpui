@@ -175,11 +175,19 @@ impl Keymap {
             Some(body) => (Some(self.prefix_word()), body),
             None => (None, raw),
         };
+        // A trailing `++`, or the whole body `+`, is the plus key itself.
+        let body = body.trim();
+        let (body, plus) = match body.strip_suffix("++") {
+            Some(modifiers) => (modifiers, Some("+")),
+            None if body == "+" => ("", Some("+")),
+            None => (body, None),
+        };
         let keys = body
             .split('+')
             .map(str::trim)
             .filter(|key| !key.is_empty())
             .map(str::to_lowercase)
+            .chain(plus.map(str::to_owned))
             .collect::<Vec<_>>()
             .join("-");
         if keys.is_empty() {
