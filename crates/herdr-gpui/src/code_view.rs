@@ -183,10 +183,21 @@ impl CodeView {
     /// The 1-based line the editor opens at: the marked one, or the top
     /// line in view.
     fn editor_line(&self) -> u32 {
-        self.marked.unwrap_or_else(|| {
-            u32::try_from(self.scroll.logical_scroll_top_index() + 1).unwrap_or(1)
-        })
+        self.marked
+            .unwrap_or_else(|| u32::try_from(top_row(&self.scroll) + 1).unwrap_or(1))
     }
+}
+
+/// The row at the top of the view, or the one a pending jump will put there.
+/// GPUI offers this only to its own tests, so it is read from the handle's
+/// public state the same way.
+fn top_row(scroll: &UniformListScrollHandle) -> usize {
+    let state = scroll.0.borrow();
+    state
+        .deferred_scroll_to_item
+        .as_ref()
+        .map(|deferred| deferred.item_index)
+        .unwrap_or_else(|| state.base_handle.logical_scroll_top().0)
 }
 
 impl HerdrWindow {
@@ -418,7 +429,7 @@ impl HerdrWindow {
             return false;
         };
         let count = view.text().map_or(0, |text| text.lines.len());
-        let top = view.scroll.logical_scroll_top_index();
+        let top = top_row(&view.scroll);
         let page = 20;
         let row = match (keystroke.key.as_str(), modifiers.shift) {
             ("j" | "down", false) => top + 1,
