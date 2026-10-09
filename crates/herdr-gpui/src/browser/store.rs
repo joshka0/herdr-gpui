@@ -46,14 +46,29 @@ impl Scope {
     }
 }
 
-/// Where a tab's page shows. Only `Group` tabs are listed in tab strips; a
-/// workspace's one `Code` tab shows in the VS Code panel beside its groups.
+/// Where a tab's page shows. `Group` tabs are listed in tab strips; a
+/// workspace's one VS Code tab shows in the VS Code panel beside its groups
+/// (`Code`), or, once the user moves it there, in the strips as any page
+/// does (`CodeGroup`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum Place {
     #[default]
     Group,
     Code,
+    CodeGroup,
+}
+
+impl Place {
+    /// Whether this is the workspace's VS Code tab, wherever it shows.
+    pub(crate) fn is_code(self) -> bool {
+        matches!(self, Self::Code | Self::CodeGroup)
+    }
+
+    /// Whether the tab strips list it.
+    fn in_strips(self) -> bool {
+        matches!(self, Self::Group | Self::CodeGroup)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -88,7 +103,7 @@ impl Tab {
                 .as_ref()
                 .is_none_or(|pane| !pane.is_empty() && pane.len() <= 256)
             // No agent opens a VS Code tab, so none has notes to send back.
-            && (self.place == Place::Group || self.origin.is_none())
+            && (!self.place.is_code() || self.origin.is_none())
     }
 }
 
@@ -208,22 +223,38 @@ impl Store {
         self.tabs.iter().find(|tab| tab.id == id)
     }
 
-    /// The tab strip tabs of one workspace, in the order they were opened.
+    /// The tab strip tabs of one workspace, in the order they were opened,
+    /// the VS Code tab among them while it is in the groups.
     pub(crate) fn in_workspace<'a>(
         &'a self,
         scope: &'a Scope,
         workspace_id: &'a str,
     ) -> impl Iterator<Item = &'a Tab> + 'a {
         self.tabs.iter().filter(move |tab| {
-            tab.place == Place::Group && &tab.scope == scope && tab.workspace_id == workspace_id
+            tab.place.in_strips() && &tab.scope == scope && tab.workspace_id == workspace_id
         })
     }
 
-    /// The workspace's VS Code tab, if it has one.
+    /// The workspace's VS Code tab, if it has one, in the panel or the
+    /// groups.
     pub(crate) fn code_tab(&self, scope: &Scope, workspace_id: &str) -> Option<&Tab> {
         self.tabs.iter().find(|tab| {
-            tab.place == Place::Code && &tab.scope == scope && tab.workspace_id == workspace_id
+            tab.place.is_code() && &tab.scope == scope && tab.workspace_id == workspace_id
         })
+    }
+
+    /// Moves a VS Code tab between the panel and the groups. Whether it
+    /// moved: other tabs, and a tab already there, stay as they are.
+    pub(crate) fn move_code_tab(&mut self, id: TabId, place: Place) -> bool {
+        let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == id) else {
+            return false;
+        };
+        if !tab.place.is_code() || !place.is_code() || tab.place == place {
+            return false;
+        }
+        tab.place = place;
+        self.save();
+        true
     }
 
     /// Opens a tab for the strips, or returns `None` when the app already
@@ -241,7 +272,6 @@ impl Store {
     /// The workspace's VS Code tab, opened on `location` if it has none yet.
     /// `None` when the app already holds the most tabs it keeps. Only builds
     /// that show pages open one.
-    #[cfg(any(target_os = "macos", windows, test))]
     pub(crate) fn open_code_tab(
         &mut self,
         scope: Scope,
@@ -394,7 +424,7 @@ impl Store {
     /// the tabs closed.
     pub(crate) fn close_code_tabs_off(&mut self, origin: &str) -> Vec<TabId> {
         let off = |tab: &Tab| {
-            tab.place == Place::Code
+            tab.place.is_code()
                 && !matches!(&tab.location, Some(Location::Web { url }) if url.origin() == origin)
         };
         let gone: Vec<TabId> = self

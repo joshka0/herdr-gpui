@@ -1732,9 +1732,19 @@ belongs to one address.
   live beside them, deciding for itself what to dim. When the Herdr realm is
   narrower than 480 px, dialogs take the whole window again and the page steps
   aside while they show.
-- The page is a [browser tab](#browser-tabs) that no strip lists, so the same
-  rules apply: `http` and `https` only, native web views drawn above the
-  window, and no pages on Linux.
+- **Move VS Code to Group** in the Terminal menu or the command palette moves
+  a space's VS Code into a new editor group, split off to the right of the
+  group in use, as a tab of the strips: it splits, resizes, and is covered
+  by dialogs as any page is. **Move VS Code to Panel** puts it back. The page
+  moves with it and keeps its state, and it stays the space's one VS Code
+  page: it still waits for its server, no agent opens pages in it, and
+  closing it in a strip closes it, so the next **Toggle VS Code** opens a new
+  one in the panel. While it is in a group, the title bar button and
+  **Toggle VS Code** show it there. Bind them to `move_code_to_group` and
+  `move_code_to_panel`; they have no default keys.
+- The page is a [browser tab](#browser-tabs), listed in the strips only while
+  it is in a group, so the same rules apply: `http` and `https` only, native
+  web views drawn above the window, and no pages on Linux.
 - The keyboard goes to whatever has focus. While a page has it, this one or a
   browser tab's, the page's own shortcuts win, as a terminal program's do
   while its pane has focus. On macOS, Cut, Copy, and Paste act on the page,

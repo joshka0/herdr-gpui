@@ -11,8 +11,8 @@
 //! only after an answer of its own. Until then the panel says why it is
 //! empty.
 #[cfg(any(target_os = "macos", windows))]
-use super::{Location, TabId, store::Place};
-use super::{Scope, Store, WebUrl, view::store};
+use super::{Location, TabId};
+use super::{Scope, Store, WebUrl, store::Place, view::store};
 use crate::{
     HerdrWindow,
     code_server::{self, Server},
@@ -68,8 +68,13 @@ impl HerdrWindow {
     }
 
     /// Shows or hides the focused workspace's panel. A hidden page keeps
-    /// running, but no longer holds the keyboard.
+    /// running, but no longer holds the keyboard. A VS Code tab the user
+    /// moved to the groups is shown there instead.
     pub(crate) fn toggle_code(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(id) = self.grouped_code_tab(cx) {
+            self.show_browser_tab_in(None, id, window, cx);
+            return;
+        }
         let Some(layout) = self.ensure_layout() else {
             self.show_flash(Flash::warning("Open a workspace first"), cx);
             return;
@@ -90,14 +95,14 @@ impl HerdrWindow {
         cx.notify();
     }
 
-    /// Closes this window's panel pages, keeping their tabs, and forgets why
+    /// Closes this window's VS Code pages, keeping their tabs, and forgets why
     /// any could not be created, so each is created anew.
     #[cfg(any(target_os = "macos", windows))]
     fn close_code_pages(&mut self, cx: &App) {
         let Some(store) = store(cx) else {
             return;
         };
-        let code = |id: TabId| store.get(id).is_some_and(|tab| tab.place == Place::Code);
+        let code = |id: TabId| store.get(id).is_some_and(|tab| tab.place.is_code());
         let pages: Vec<TabId> = self.browser.pages.ids().filter(|id| code(*id)).collect();
         for id in pages {
             self.browser.pages.close(id);
@@ -113,20 +118,23 @@ impl HerdrWindow {
             return None;
         }
         let (scope, workspace) = self.browser_key()?;
-        let id = store(cx)?.code_tab(&scope, &workspace)?.id;
-        self.browser.pages.contains(id).then_some(id)
+        let tab = store(cx)?.code_tab(&scope, &workspace)?;
+        // A tab in the groups is presented with the groups' pages.
+        (tab.place == Place::Code && self.browser.pages.contains(tab.id)).then_some(tab.id)
     }
 
-    /// Runs on every window tick: a shown panel gets its page, such as one
+    /// Runs on every window tick, and when a group shows the VS Code tab: a
+    /// shown panel, or a group showing the tab, gets its page, such as one
     /// restored at startup or that of a workspace just switched to.
     pub(super) fn ensure_code_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.open_code_page(false, window, cx);
     }
 
-    /// Opens the focused workspace's panel tab, and creates its page, if
-    /// the panel shows and its server answers. Creating a page starts the
-    /// platform's web content processes, so this runs from input and ticks,
-    /// never from render. `report` says why a tab could not open.
+    /// Opens the focused workspace's VS Code tab, and creates its page, if
+    /// the panel shows it or a group does, and its server answers. Creating
+    /// a page starts the platform's web content processes, so this runs from
+    /// input and ticks, never from render. `report` says why a tab could
+    /// not open.
     fn open_code_page(&mut self, report: bool, window: &mut Window, cx: &mut Context<Self>) {
         if !super::EMBEDDED {
             return;
@@ -135,14 +143,30 @@ impl HerdrWindow {
             self.forget_code_address(cx);
             return;
         };
-        if !self.shown_code() {
-            return;
-        }
         let Some((scope, workspace)) = self.browser_key() else {
             return;
         };
         self.follow_code_address(&url, cx);
-        if self.code_page_settled(&scope, &workspace, cx) || !self.code_server_ready(&url, cx) {
+        let wanted = match store(cx).and_then(|store| store.code_tab(&scope, &workspace)) {
+            Some(tab) if tab.place == Place::CodeGroup => {
+                let id = tab.id;
+                // The tab is in the groups, so the panel no longer shows,
+                // as when another window moved it there.
+                if let Some(layout) = self
+                    .browser
+                    .layouts
+                    .get_mut(&(scope.clone(), workspace.clone()))
+                {
+                    layout.code = false;
+                }
+                self.group_shows_page(id, cx)
+            }
+            _ => self.shown_code(),
+        };
+        if !wanted
+            || self.code_page_settled(&scope, &workspace, cx)
+            || !self.code_server_ready(&url, cx)
+        {
             return;
         }
         #[cfg(not(any(target_os = "macos", windows)))]

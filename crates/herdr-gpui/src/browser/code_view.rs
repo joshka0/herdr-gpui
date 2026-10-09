@@ -1,6 +1,6 @@
 //! Drawing the VS Code panel to the right of the editor groups, its draggable edge,
 //! and the titlebar button that shows and hides it.
-use super::{code::Reach, view::store};
+use super::{code::Reach, store::Place, view::store};
 use crate::{HerdrWindow, panel_resize::PanelDrag};
 use gpui::{prelude::*, *};
 
@@ -61,9 +61,11 @@ impl HerdrWindow {
 
     /// The page, or why there is none yet.
     fn render_code_body(&self, cx: &App) -> AnyElement {
+        // A tab moved to the groups draws there, not here.
         let tab = self
             .browser_key()
-            .and_then(|(scope, workspace)| store(cx)?.code_tab(&scope, &workspace).cloned());
+            .and_then(|(scope, workspace)| store(cx)?.code_tab(&scope, &workspace).cloned())
+            .filter(|tab| tab.place == Place::Code);
         let failure = tab
             .as_ref()
             .and_then(|tab| self.browser.failed.get(&tab.id).cloned());
@@ -74,6 +76,12 @@ impl HerdrWindow {
         {
             return self.page_area(tab.id, page).into_any_element();
         }
+        self.render_code_status(failure)
+    }
+
+    /// Why the VS Code page is not there yet, in the panel or in a group:
+    /// `failure` says why it could not be created.
+    pub(super) fn render_code_status(&self, failure: Option<SharedString>) -> AnyElement {
         let text: SharedString = if !super::EMBEDDED {
             "This build cannot show pages in the window.".into()
         } else if self.config.code.url.is_none() {
@@ -138,7 +146,12 @@ impl HerdrWindow {
         if !super::EMBEDDED || self.config.code.url.is_none() {
             return None;
         }
-        let color = if self.shown_code() {
+        // Lit while VS Code shows, in the panel or in a group.
+        let shown = self.shown_code()
+            || self
+                .grouped_code_tab(cx)
+                .is_some_and(|id| self.group_shows_page(id, cx));
+        let color = if shown {
             self.theme.foreground
         } else {
             self.theme.muted

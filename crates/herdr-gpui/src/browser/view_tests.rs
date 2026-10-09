@@ -57,5 +57,8 @@ mod tab_strip;
 /// pages make.
 mod code;
 
+/// The VS Code tab moved between its panel and the groups.
+mod code_group;
+
 /// What closing a workspace does to its browser tabs.
 mod workspace_close;

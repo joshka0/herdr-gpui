@@ -391,6 +391,8 @@ impl HerdrWindow {
                 Command::NewWindow
                 | Command::ToggleSidebar
                 | Command::ToggleCode
+                | Command::MoveCodeToGroup
+                | Command::MoveCodeToPanel
                 | Command::IncreaseFontSize
                 | Command::DecreaseFontSize
                 | Command::ResetFontSize

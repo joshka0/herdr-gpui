@@ -258,3 +258,50 @@ fn the_store_is_bounded() {
             .is_none()
     );
 }
+
+/// Moved to the groups, the VS Code tab is listed in its workspace's
+/// strips, and is still its one VS Code tab, never handed to an agent.
+#[test]
+fn a_vs_code_tab_moves_between_its_panel_and_the_strips() {
+    let mut store = Store::default();
+    let scope = Scope::endpoint("local");
+    let page = url("http://127.0.0.1:8000/").unwrap();
+    let strip = store
+        .open(scope.clone(), "w_1", url("https://a.test/"), None)
+        .unwrap();
+    let code = store
+        .open_code_tab(scope.clone(), "w_1", page.clone())
+        .unwrap();
+    // Only a VS Code tab moves, and only to a VS Code place it is not in.
+    assert!(!store.move_code_tab(strip, Place::Code));
+    assert!(!store.move_code_tab(code, Place::Group));
+    assert!(!store.move_code_tab(code, Place::Code));
+    assert!(store.move_code_tab(code, Place::CodeGroup));
+
+    let listed: Vec<_> = store
+        .in_workspace(&scope, "w_1")
+        .map(|tab| tab.id)
+        .collect();
+    assert_eq!(listed, [strip, code]);
+    assert_eq!(store.code_tab(&scope, "w_1").map(|tab| tab.id), Some(code));
+    assert_eq!(
+        store.open_code_tab(scope.clone(), "w_1", page.clone()),
+        Some(code)
+    );
+    assert_eq!(store.opened_before(&scope, "w_1", None, &page), None);
+
+    // It is saved where it is.
+    let bytes = serde_json::to_vec(&Saved {
+        tabs: store.tabs.clone(),
+    })
+    .unwrap();
+    let restored = Store::with_tabs(parse(&bytes).unwrap(), None);
+    assert_eq!(restored.get(code).unwrap().place, Place::CodeGroup);
+
+    assert!(store.move_code_tab(code, Place::Code));
+    let listed: Vec<_> = store
+        .in_workspace(&scope, "w_1")
+        .map(|tab| tab.id)
+        .collect();
+    assert_eq!(listed, [strip]);
+}

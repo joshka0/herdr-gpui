@@ -3,7 +3,8 @@
 //! terminals, so these tabs belong to this client alone; the daemon and its
 //! other clients never see them. Pages are native web views drawn above the window, which is why the
 //! window hides them whenever one of its own overlays is open. Each workspace
-//! may also show VS Code in a panel to the right of its groups.
+//! may also show VS Code in a panel to the right of its groups, or as a tab
+//! in its groups.
 
 #[cfg(any(target_os = "macos", windows, test))]
 mod annotate;
@@ -11,6 +12,7 @@ mod annotate;
 #[cfg(any(target_os = "macos", windows))]
 mod annotate_view;
 mod code;
+mod code_group;
 mod code_view;
 mod feedback;
 mod group_motion;

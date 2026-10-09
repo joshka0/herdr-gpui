@@ -64,8 +64,11 @@ impl HerdrWindow {
             .map(|tab| {
                 let id = tab.id;
                 let (background, text) = self.tab_colors(shown == Some(id), slot.id);
-                // A review tab shows a diff, not a page.
-                let icon = if tab
+                // The VS Code tab bears its mark; a review tab shows a diff,
+                // not a page.
+                let icon = if tab.place.is_code() {
+                    "icons/vscode.svg"
+                } else if tab
                     .location
                     .as_ref()
                     .is_some_and(|location| !location.is_page())
@@ -357,6 +360,9 @@ impl HerdrWindow {
             ));
         let content = match (page, &failure) {
             (Some(page), None) => self.page_area(id, page).into_any_element(),
+            // The VS Code tab says, as its panel does, why its page is not
+            // there yet.
+            _ if tab.place.is_code() => self.render_code_status(failure.clone()),
             _ => div()
                 .flex_1()
                 .min_h_0()

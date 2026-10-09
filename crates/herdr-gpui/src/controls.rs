@@ -48,6 +48,8 @@ pub enum Command {
     InstallBrowserSkill,
     SplitEditor,
     ToggleCode,
+    MoveCodeToGroup,
+    MoveCodeToPanel,
     MoveTabPrevious,
     MoveTabNext,
     RenameTab,
@@ -623,6 +625,18 @@ pub const COMMANDS: &[CommandInfo] = &[
         label: "Toggle VS Code",
         shortcuts: &[],
     },
+    CommandInfo {
+        command: Command::MoveCodeToGroup,
+        name: "move_code_to_group",
+        label: "Move VS Code to Group",
+        shortcuts: &[],
+    },
+    CommandInfo {
+        command: Command::MoveCodeToPanel,
+        name: "move_code_to_panel",
+        label: "Move VS Code to Panel",
+        shortcuts: &[],
+    },
 ];
 
 pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Method, Value)> {
@@ -784,6 +798,8 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::InstallBrowserSkill
         | Command::SplitEditor
         | Command::ToggleCode
+        | Command::MoveCodeToGroup
+        | Command::MoveCodeToPanel
         // These need state beyond the snapshot, such as the sidebar's order
         // or a dialog, so the window runs them.
         | Command::RenameTab

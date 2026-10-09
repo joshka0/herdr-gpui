@@ -244,6 +244,14 @@ impl HerdrWindow {
                 self.toggle_code(window, cx);
                 return;
             }
+            Command::MoveCodeToGroup => {
+                self.move_code_to_group(window, cx);
+                return;
+            }
+            Command::MoveCodeToPanel => {
+                self.move_code_to_panel(window, cx);
+                return;
+            }
             Command::InstallBrowserSkill => {
                 self.install_browser_skill(window, cx);
                 return;
