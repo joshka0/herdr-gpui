@@ -166,14 +166,25 @@ impl CodeView {
     }
 
     /// The row at the top of the view, or the row a pending jump will put
-    /// there. gpui only exposes `logical_scroll_top_index` to its own test
-    /// builds, so release builds read the same public state here.
+    /// there. A uniform list never records its rows' bounds in its scroll
+    /// handle, so `ScrollHandle::logical_scroll_top` always says row 0 once
+    /// drawn; the row comes from the scroll offset and the row height, as
+    /// the list itself works out which rows to draw.
     fn top_row(&self) -> usize {
         let state = self.scroll.0.borrow();
-        state.deferred_scroll_to_item.as_ref().map_or_else(
-            || state.base_handle.logical_scroll_top().0,
-            |item| item.item_index,
-        )
+        if let Some(item) = &state.deferred_scroll_to_item {
+            return item.item_index;
+        }
+        let count = self.text().map_or(0, |text| text.lines.len());
+        let Some(size) = state.last_item_size.filter(|_| count > 0) else {
+            return 0;
+        };
+        let height = size.contents.height / count as f32;
+        if height <= Pixels::ZERO {
+            return 0;
+        }
+        // Negative or NaN rows saturate to 0.
+        (-state.base_handle.offset().y / height).floor() as usize
     }
 
     /// The marked line, and how many lines the read file has.
