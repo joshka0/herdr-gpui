@@ -18,7 +18,7 @@ fn a_dead_key_reaches_the_pane_only_as_the_composed_character(cx: &mut gpui::Tes
     };
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
-            prepare_mouse(view, endpoint);
+            prepare_mouse(view, endpoint, cx);
             view.live.activation = Some(crate::state::SurfaceActivation {
                 request: "activate-1".into(),
                 boot: view.live.snapshot.as_ref().unwrap().boot_id.clone(),
@@ -73,12 +73,40 @@ fn navigating_away_drops_the_composition(cx: &mut gpui::TestAppContext) {
     let (endpoint, _server) = connected_endpoint("dead-keys-navigate");
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
-            prepare_mouse(view, endpoint);
+            prepare_mouse(view, endpoint, cx);
             view.marked = "\u{b4}".into();
             view.marked_selection = Some(1..1);
             view.navigate(NavigationTarget::Pane("w1:p2"), cx);
             assert!(view.marked.is_empty());
             assert_eq!(view.marked_selection, None);
+        });
+    });
+}
+
+/// Detaching or reconnecting mid-composition ends it in the platform's input
+/// method as well, so the input method cannot finish the old text into the
+/// terminal the window shows next.
+#[cfg(feature = "integration-test")]
+#[gpui::test]
+fn a_connection_change_drops_the_platform_composition(cx: &mut gpui::TestAppContext) {
+    let (fixture, cx) = cx.add_window_view(|window, cx| {
+        Fixture(cx.new(|cx| crate::sidebar::layout_tests::fixture_window(window, cx)))
+    });
+    let view = fixture.update(cx, |fixture, _| fixture.0.clone());
+    let (endpoint, _server) = connected_endpoint("dead-keys-detach");
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            prepare_mouse(view, endpoint, cx);
+            let before = view.input_probe.compositions_discarded;
+            view.marked = "\u{b4}".into();
+            view.marked_selection = Some(1..1);
+            view.detach_endpoint(cx);
+            assert!(view.marked.is_empty());
+            assert_eq!(view.marked_selection, None);
+            assert_eq!(view.input_probe.compositions_discarded, before + 1);
+            // Nothing is composing now, so the input method is not told again.
+            view.reconnect(cx);
+            assert_eq!(view.input_probe.compositions_discarded, before + 1);
         });
     });
 }

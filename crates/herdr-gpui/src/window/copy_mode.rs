@@ -359,7 +359,7 @@ mod tests {
             MockPeer::advertising(&["pane.copy_motion", "pane.selection.read", "pane.scroll"]);
         let (view, cx) = cx.add_window_view(|window, cx| {
             let mut view = fixture_window(window, cx);
-            peer.prepare(&mut view);
+            peer.prepare(&mut view, cx);
             view.live.supports_copy_motion = true;
             let surface = Arc::make_mut(view.live.surface.as_mut().unwrap());
             surface.panes[0].content_revision = 2;

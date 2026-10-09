@@ -61,6 +61,10 @@ impl HerdrWindow {
         }
         self.marked.clear();
         self.marked_selection = None;
+        #[cfg(feature = "integration-test")]
+        {
+            self.input_probe.compositions_discarded += 1;
+        }
         discard_platform_composition(cx);
     }
 }

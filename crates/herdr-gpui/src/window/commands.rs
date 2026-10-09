@@ -360,7 +360,7 @@ impl HerdrWindow {
                 cx.notify();
                 return;
             }
-            Command::Reconnect => self.reconnect(),
+            Command::Reconnect => self.reconnect(cx),
             Command::Quit => {
                 cx.quit();
                 return;

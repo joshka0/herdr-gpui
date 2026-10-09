@@ -108,7 +108,7 @@ impl HerdrWindow {
         }
         let endpoint = &mut self.endpoints[self.selected_endpoint];
         if self.selected_generation != endpoint.generation {
-            self.reset_selected();
+            self.reset_selected(cx);
         }
         let endpoint = &mut self.endpoints[self.selected_endpoint];
         if selected_changed {
@@ -197,7 +197,7 @@ impl HerdrWindow {
             } else {
                 // Recover Local with a fresh active handshake, even if the
                 // previous surface lane or its acknowledgement was unavailable.
-                self.reconnect();
+                self.reconnect(cx);
             }
             self.local_error = Some(error);
             changed = Redraw::Window;

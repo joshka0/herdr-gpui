@@ -862,7 +862,7 @@ impl HerdrWindow {
             .ok()
             .map(|path| preferences::Preferences::new(&path));
         this.avatars = Some(avatars::Avatars::new());
-        this.reconnect();
+        this.reconnect(cx);
         log_window::set_appearance(&this.config, &this.theme, cx);
         this.load_gui_config(cx);
         this.load_shared_settings(cx);
