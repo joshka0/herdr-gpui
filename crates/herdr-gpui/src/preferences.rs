@@ -173,18 +173,7 @@ impl HerdrWindow {
                 .items_center()
                 .cursor_pointer()
                 .hover(|style| style.bg(rgb(theme.active)))
-                .child(
-                    div()
-                        .flex_none()
-                        .flex()
-                        .w(px(30.))
-                        .h(px(18.))
-                        .p(px(2.))
-                        .rounded_full()
-                        .bg(rgb(if on { theme.foreground } else { theme.muted }))
-                        .when(on, |track| track.justify_end())
-                        .child(div().size(px(14.)).rounded_full().bg(rgb(theme.background))),
-                )
+                .child(crate::toggles::switch(theme, 18., on))
         };
         let note = |text: &'static str| {
             div()
@@ -747,15 +736,29 @@ impl Drop for Preferences {
 
 /// The GPUI client's own state directory, shared by preferences and logs.
 pub(crate) fn state_dir() -> Option<PathBuf> {
-    env::var_os("XDG_STATE_HOME")
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .or_else(|| {
-            env::var_os("HOME")
-                .filter(|value| !value.is_empty())
-                .map(|home| PathBuf::from(home).join(".local/state"))
-        })
-        .map(|root| root.join("herdr/gpui"))
+    state_dir_with(|name| env::var_os(name))
+}
+
+fn state_dir_with(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<PathBuf> {
+    let var = |name| var(name).filter(|value| !value.is_empty());
+    let root = var("XDG_STATE_HOME").map(PathBuf::from).or_else(|| {
+        // Existing Windows installations with HOME already store preferences
+        // here. Keep selecting the same directory after an upgrade.
+        if let Some(home) = var("HOME") {
+            return Some(PathBuf::from(home).join(".local").join("state"));
+        }
+        #[cfg(windows)]
+        {
+            if let Some(local) = var("LOCALAPPDATA") {
+                return Some(PathBuf::from(local));
+            }
+            if let Some(profile) = var("USERPROFILE") {
+                return Some(PathBuf::from(profile).join("AppData").join("Local"));
+            }
+        }
+        None
+    });
+    root.map(|root| root.join("herdr").join("gpui"))
 }
 
 fn endpoint_path(dir: &Path, socket: &Path) -> PathBuf {

@@ -88,6 +88,7 @@ mod terminal;
 mod terminal_painter;
 mod theme_picker;
 mod titlebar;
+mod toggles;
 mod update_panel;
 mod updater;
 mod usage;

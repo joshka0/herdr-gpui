@@ -2,6 +2,8 @@
 use super::*;
 use std::time::{Duration, Instant};
 
+mod state_directory;
+
 #[core::prelude::v1::test]
 fn font_size_input_accepts_only_whole_values_in_range() {
     for (input, expected) in [

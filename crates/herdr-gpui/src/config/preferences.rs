@@ -15,6 +15,7 @@ pub(crate) enum Preference {
     ClipboardEnabled(Option<bool>),
     ClipboardPosition(Option<ClipboardToastPosition>),
     SidebarGap(f32),
+    StatusBar(status_bar::Edit),
 }
 
 impl Config {
@@ -23,7 +24,7 @@ impl Config {
         Self::save_preference_path(edit, &local)
     }
 
-    fn save_preference_path(edit: Preference, path: &Path) -> Result<()> {
+    pub(super) fn save_preference_path(edit: Preference, path: &Path) -> Result<()> {
         let result = (|| -> Result<()> {
             let text = match fs::read_to_string(path) {
                 Ok(text) => text,
@@ -87,6 +88,10 @@ impl Config {
                         })
                     }),
                 ),
+                Preference::StatusBar(edit) => {
+                    let (key, value) = edit.entry();
+                    (Some("status_bar"), key, Some(value))
+                }
                 Preference::SidebarGap(value) => {
                     if !value.is_finite() || !(0.0..=MAX_SIDEBAR_GAP).contains(&value) {
                         return Err(Error::InvalidSidebarGap);

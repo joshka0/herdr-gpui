@@ -387,22 +387,28 @@ impl HerdrWindow {
                         | Page::RemoveWsl
                 ),
                 |panel| {
+                    let room = (viewport.width - px(24.)).max(px(0.));
+                    // A list of actions takes its longest label's width, which
+                    // the UI font and size decide, so no fixed width fits all.
+                    let forwards = page == Page::Host && self.host_menu_lists_forwards();
+                    if matches!(page, Page::Tab | Page::Pane | Page::Host) && !forwards {
+                        return panel
+                            .min_w(px(180.).min(room))
+                            .max_w(room)
+                            .max_h((viewport.height - px(24.)).max(px(0.)));
+                    }
                     panel
-                        .w((viewport.width - px(24.)).max(px(0.)).min(px(
-                            if page == Page::Host && self.host_menu_lists_forwards() {
-                                // Room for a forward's port, state, and actions.
-                                260.
-                            } else if matches!(page, Page::Tab | Page::Pane | Page::Host) {
-                                180.
-                            } else if page == Page::PaneProcesses {
-                                // Name, command, pid, CPU and memory columns.
-                                560.
-                            } else if page == Page::Group {
-                                240.
-                            } else {
-                                360.
-                            },
-                        )))
+                        .w(room.min(px(if forwards {
+                            // Room for a forward's port, state, and actions.
+                            260.
+                        } else if page == Page::PaneProcesses {
+                            // Name, command, pid, CPU and memory columns.
+                            560.
+                        } else if page == Page::Group {
+                            240.
+                        } else {
+                            360.
+                        })))
                         .max_h((viewport.height - px(24.)).max(px(0.)))
                 },
             )
