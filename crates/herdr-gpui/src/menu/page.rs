@@ -18,6 +18,9 @@ pub(crate) enum Page {
     /// Names a saved SSH device's port to forward to this computer.
     ForwardPort,
     RemoveDevice,
+    /// Sign in to Coder and add one of its workspaces as a device.
+    #[cfg(feature = "coder")]
+    AddCoder,
     /// Picking a WSL distribution to save as a device.
     AddWsl,
     /// Confirming a saved WSL distribution should be forgotten.

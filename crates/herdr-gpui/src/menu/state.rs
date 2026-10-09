@@ -44,6 +44,8 @@ pub(crate) struct MenuState {
     /// The saved distribution the removal confirmation names.
     pub(super) wsl_remove: Option<String>,
     pub(super) session_edit: Option<super::sessions::Edit>,
+    #[cfg(feature = "coder")]
+    pub(super) coder: Option<super::devices::coder::Wizard>,
     pub(super) devices_scroll: ScrollHandle,
     /// The sessions list scrolls its own way; the two popups never share one.
     pub(crate) sessions_scroll: ScrollHandle,
@@ -255,6 +257,8 @@ impl MenuState {
             wsl_setup: None,
             wsl_remove: None,
             session_edit: None,
+            #[cfg(feature = "coder")]
+            coder: None,
             devices_scroll: ScrollHandle::new(),
             sessions_scroll: ScrollHandle::new(),
             usage_scroll: ScrollHandle::new(),
@@ -311,6 +315,10 @@ impl MenuState {
         self.wsl_setup = None;
         self.wsl_remove = None;
         self.session_edit = None;
+        #[cfg(feature = "coder")]
+        {
+            self.coder = None;
+        }
         self.devices_scroll.set_offset(Point::default());
         self.sessions_scroll.set_offset(Point::default());
         self.usage_scroll.set_offset(Point::default());

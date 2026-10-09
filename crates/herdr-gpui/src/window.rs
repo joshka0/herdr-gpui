@@ -194,6 +194,9 @@ pub(crate) struct HerdrWindow {
     pub(crate) checkpoints: crate::checkpoint::Checkpoints,
     /// Remote ports forwarded to this machine; they end with the window.
     pub(crate) port_forwards: crate::port_forward::PortForwards,
+    /// Cloud machines being added; see `cloud::Jobs`.
+    #[cfg(feature = "cloud")]
+    pub(crate) cloud_jobs: crate::cloud::Jobs,
     pub(crate) listening_ports: crate::listening_ports::ListeningPorts,
     /// SSH tunnels to remote ports that listen on their host's loopback only.
     pub(crate) tunnels: crate::listening_ports::Tunnels,
@@ -501,7 +504,7 @@ impl HerdrWindow {
             .show
             .then(|| self.endpoints.get(self.selected_endpoint))
             .flatten()
-            .map(|endpoint| crate::usage::Host::from(&endpoint.connection.target));
+            .and_then(|endpoint| crate::usage::Host::of(&endpoint.connection.target));
         let granted = crate::usage::KeychainGrants::granted(cx);
         let changed = self.usage.poll(
             host,
@@ -560,7 +563,7 @@ impl HerdrWindow {
                 endpoint.enabled
                     && (live.status.is_connected() || !endpoint.connection.target.is_remote())
             })
-            .map(|(_, endpoint)| crate::usage::Host::from(&endpoint.connection.target))
+            .filter_map(|(_, endpoint)| crate::usage::Host::of(&endpoint.connection.target))
             .collect()
     }
 
@@ -639,7 +642,7 @@ impl HerdrWindow {
     pub(crate) fn selected_host(&self) -> Option<crate::usage::Host> {
         self.endpoints
             .get(self.selected_endpoint)
-            .map(|endpoint| crate::usage::Host::from(&endpoint.connection.target))
+            .and_then(|endpoint| crate::usage::Host::of(&endpoint.connection.target))
     }
 
     pub(crate) fn new(
@@ -785,6 +788,8 @@ impl HerdrWindow {
             system_load: Default::default(),
             checkpoints: Default::default(),
             port_forwards: Default::default(),
+            #[cfg(feature = "cloud")]
+            cloud_jobs: Default::default(),
             listening_ports: Default::default(),
             tunnels: Default::default(),
             install_warning_shown: false,
