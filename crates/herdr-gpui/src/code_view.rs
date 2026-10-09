@@ -165,6 +165,17 @@ impl CodeView {
         }
     }
 
+    /// The row at the top of the view, or the row a pending jump will put
+    /// there. gpui only exposes `logical_scroll_top_index` to its own test
+    /// builds, so release builds read the same public state here.
+    fn top_row(&self) -> usize {
+        let state = self.scroll.0.borrow();
+        state.deferred_scroll_to_item.as_ref().map_or_else(
+            || state.base_handle.logical_scroll_top().0,
+            |item| item.item_index,
+        )
+    }
+
     /// The marked line, and how many lines the read file has.
     #[cfg(test)]
     pub(crate) fn shown(&self) -> (Option<u32>, Option<usize>) {
@@ -183,9 +194,8 @@ impl CodeView {
     /// The 1-based line the editor opens at: the marked one, or the top
     /// line in view.
     fn editor_line(&self) -> u32 {
-        self.marked.unwrap_or_else(|| {
-            u32::try_from(self.scroll.logical_scroll_top_index() + 1).unwrap_or(1)
-        })
+        self.marked
+            .unwrap_or_else(|| u32::try_from(self.top_row() + 1).unwrap_or(1))
     }
 }
 
@@ -418,7 +428,7 @@ impl HerdrWindow {
             return false;
         };
         let count = view.text().map_or(0, |text| text.lines.len());
-        let top = view.scroll.logical_scroll_top_index();
+        let top = view.top_row();
         let page = 20;
         let row = match (keystroke.key.as_str(), modifiers.shift) {
             ("j" | "down", false) => top + 1,
