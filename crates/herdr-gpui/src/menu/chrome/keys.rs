@@ -128,10 +128,6 @@ impl HerdrWindow {
             self.group_menu_key(event, window, cx);
             return;
         }
-        if self.menu.page == Some(Page::NewTab) {
-            self.new_tab_menu_key(event, window, cx);
-            return;
-        }
         if matches!(
             self.menu.page,
             Some(Page::Pane | Page::RenamePane | Page::PaneProcesses | Page::KillProcesses)
@@ -156,6 +152,14 @@ impl HerdrWindow {
         }
         if matches!(self.menu.page, Some(Page::Devices | Page::AddDevice)) {
             self.devices_key(event, window, cx);
+            return;
+        }
+        #[cfg(feature = "coder")]
+        if self.menu.page == Some(Page::AddCoder) {
+            if self.coder_key(event, window, cx) {
+                cx.stop_propagation();
+                window.prevent_default();
+            }
             return;
         }
         if self.menu.page == Some(Page::Sessions) {

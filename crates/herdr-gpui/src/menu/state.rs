@@ -44,6 +44,8 @@ pub(crate) struct MenuState {
     /// The saved distribution the removal confirmation names.
     pub(super) wsl_remove: Option<String>,
     pub(super) session_edit: Option<super::sessions::Edit>,
+    #[cfg(feature = "coder")]
+    pub(super) coder: Option<super::devices::coder::Wizard>,
     pub(super) devices_scroll: ScrollHandle,
     /// The sessions list scrolls its own way; the two popups never share one.
     pub(crate) sessions_scroll: ScrollHandle,
@@ -85,7 +87,6 @@ pub(crate) struct MenuState {
     pub(crate) close: Option<crate::close_modal::CloseConfirmation>,
     pub(crate) tab: Option<crate::tab_menu::TabMenu>,
     pub(crate) group: Option<crate::group_menu::GroupMenu>,
-    pub(crate) new_tab: Option<crate::new_tab_menu::NewTabMenu>,
     pub(crate) host: Option<super::devices::HostMenu>,
     pub(crate) pane: Option<crate::pane_menu::PaneMenu>,
     /// The new worktree dialog's tabs and the GitHub listing behind them.
@@ -256,6 +257,8 @@ impl MenuState {
             wsl_setup: None,
             wsl_remove: None,
             session_edit: None,
+            #[cfg(feature = "coder")]
+            coder: None,
             devices_scroll: ScrollHandle::new(),
             sessions_scroll: ScrollHandle::new(),
             usage_scroll: ScrollHandle::new(),
@@ -299,7 +302,6 @@ impl MenuState {
             version_notice: None,
             tab: None,
             group: None,
-            new_tab: None,
             host: None,
             pane: None,
             worktree: None,
@@ -313,13 +315,16 @@ impl MenuState {
         self.wsl_setup = None;
         self.wsl_remove = None;
         self.session_edit = None;
+        #[cfg(feature = "coder")]
+        {
+            self.coder = None;
+        }
         self.devices_scroll.set_offset(Point::default());
         self.sessions_scroll.set_offset(Point::default());
         self.usage_scroll.set_offset(Point::default());
         self.opening_right_click = false;
         self.tab = None;
         self.group = None;
-        self.new_tab = None;
         self.host = None;
         self.pane = None;
         self.github_selected = None;

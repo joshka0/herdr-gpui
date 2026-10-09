@@ -232,6 +232,9 @@ impl HerdrWindow {
                                 endpoint.toasts.enabled_since = Some(cutoff);
                             }
                         }
+                        if config.status_bar.show != this.config.status_bar.show {
+                            this.status_bar_visible = config.status_bar.show;
+                        }
                         this.config = config.clone();
                         if this.config.theme != "Follow Herdr" {
                             this.theme = theme;
@@ -392,6 +395,7 @@ impl HerdrWindow {
                 | Command::AgentNumber(_) => 1,
                 Command::NewWindow
                 | Command::ToggleSidebar
+                | Command::ToggleStatusBar
                 | Command::IncreaseFontSize
                 | Command::DecreaseFontSize
                 | Command::ResetFontSize
