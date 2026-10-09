@@ -808,7 +808,7 @@ impl HerdrWindow {
                 self.request_focus_change(Method::CommandInvoke.as_str(), None, |handle, boot| {
                     handle.request(boot, Method::CommandInvoke, params)
                 });
-                self.marked.clear();
+                self.discard_composition(cx);
             }
             Err(error) => self.local_error = Some(error.to_string()),
         }
