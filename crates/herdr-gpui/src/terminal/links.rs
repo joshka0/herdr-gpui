@@ -2,7 +2,7 @@
 //! addresses, and the local file paths a pane prints, which open only on a
 //! link-modifier click on the machine that runs the pane.
 use super::{HIDDEN, InputTarget, popup_origin, selection::shown, wheel_target};
-use herdr_client::protocol::{FrameData, PaneSurfaceFrame};
+use herdr_client::protocol::{CellData, FrameData, PaneSurfaceFrame};
 use std::ops::Range;
 
 mod path;
@@ -127,7 +127,51 @@ fn located(
     Some((pane_id, link))
 }
 
-fn frame_link(frame: &FrameData, column: u16, row: u16, start: u16, end: u16) -> Option<RowLink> {
+/// Whether an explicit hyperlink covers the pane cell under a point, whatever
+/// its destination. Herdr reads that destination for plugin link handlers,
+/// even one this client would never open itself, such as another host's
+/// `file://` link. A popup is never a pane.
+pub(crate) fn pane_hyperlink_at(
+    surface: &PaneSurfaceFrame,
+    x: f32,
+    y: f32,
+    cell_width: f32,
+    cell_height: f32,
+) -> bool {
+    let Some(InputTarget::Pane(id)) =
+        wheel_target(surface, x, y, cell_width, cell_height).map(|hit| hit.target)
+    else {
+        return false;
+    };
+    let Some(pane) = surface.panes.iter().find(|pane| pane.pane_id == id) else {
+        return false;
+    };
+    let rect = pane.inner_rect;
+    link_cell(
+        &surface.frame,
+        (x / cell_width).floor() as u16,
+        (y / cell_height).floor() as u16,
+        rect.x,
+        rect.x.saturating_add(rect.width),
+    )
+    .is_some_and(|(cells, selected, source)| {
+        cells[selected]
+            .hyperlink
+            .or(cells[source].hyperlink)
+            .is_some()
+    })
+}
+
+/// The row's cells from `start` to `end`, the index of the one at `column`,
+/// and the index of the cell that draws it, which for a wide glyph's
+/// continuation is the glyph's own; `None` off the row or on concealed text.
+fn link_cell(
+    frame: &FrameData,
+    column: u16,
+    row: u16,
+    start: u16,
+    end: u16,
+) -> Option<(&[CellData], usize, usize)> {
     if column < start || column >= end || end > frame.width || row >= frame.height {
         return None;
     }
@@ -140,10 +184,12 @@ fn frame_link(frame: &FrameData, column: u16, row: u16, start: u16, end: u16) ->
     while cells.get(source)?.skip && source > 0 {
         source -= 1;
     }
-    let cell = cells.get(source)?;
-    if cell.modifier & HIDDEN != 0 {
-        return None;
-    }
+    (cells.get(source)?.modifier & HIDDEN == 0).then_some((cells, selected, source))
+}
+
+fn frame_link(frame: &FrameData, column: u16, row: u16, start: u16, end: u16) -> Option<RowLink> {
+    let (cells, selected, source) = link_cell(frame, column, row, start, end)?;
+    let cell = &cells[source];
     // Cell indexes fit the row, whose width is a `u16`.
     let columns = |cells: Range<usize>| start + cells.start as u16..start + cells.end as u16;
     // An explicit link is authoritative, even if its destination is disallowed.

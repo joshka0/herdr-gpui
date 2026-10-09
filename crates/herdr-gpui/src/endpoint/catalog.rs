@@ -301,6 +301,29 @@ impl HerdrWindow {
             self.switch_endpoint(LOCAL, cx);
         }
         let selected_id = self.endpoints[self.selected_endpoint].id.clone();
+        for endpoint in &self.endpoints[1..] {
+            if !devices.iter().any(|device| device.id == endpoint.id) {
+                tracing::info!(
+                    category = "catalog",
+                    id = endpoint.id,
+                    "Device left the catalog"
+                );
+            }
+        }
+        for device in &devices {
+            if !self
+                .endpoints
+                .iter()
+                .any(|endpoint| endpoint.id == device.id)
+            {
+                tracing::info!(
+                    category = "catalog",
+                    id = device.id,
+                    enabled = device.enabled,
+                    "Device joined the catalog"
+                );
+            }
+        }
         let mut previous = std::mem::take(&mut self.endpoints);
         let mut next = vec![previous.remove(0)];
         for device in devices {

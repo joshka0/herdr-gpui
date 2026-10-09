@@ -603,9 +603,11 @@ impl HerdrWindow {
             return;
         }
         if index == self.endpoints.len() + 1 {
-            if self.device_setup_unavailable().is_some() {
+            if let Some(reason) = self.device_setup_unavailable() {
+                tracing::info!(category = "device_setup", reason, "Add Device unavailable");
                 return;
             }
+            tracing::info!(category = "device_setup", "Opening Add Device");
             if cfg!(windows) {
                 self.open_add_wsl(window, cx);
             } else {
