@@ -15,7 +15,7 @@ use std::{
     num::NonZeroU16,
     path::PathBuf,
     process::{Child, Command, ExitStatus},
-    sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError},
+    sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, atomic::Ordering},
     thread,
     time::{Duration, Instant},
 };
@@ -69,8 +69,6 @@ pub(super) struct Timing {
     /// How often the worker looks at the child and, until VS Code answers,
     /// asks it.
     pub(super) poll: Duration,
-    /// How long a server the app did not start is left between questions.
-    pub(super) watch: Duration,
     /// How long VS Code has to answer, download included.
     pub(super) ready_timeout: Duration,
     /// How long the child has to stop when asked, before it is killed.
@@ -81,8 +79,7 @@ pub(super) struct Timing {
 impl Default for Timing {
     fn default() -> Self {
         Self {
-            poll: Duration::from_millis(500),
-            watch: Duration::from_secs(5),
+            poll: Duration::from_millis(250),
             ready_timeout: Duration::from_secs(600),
             grace: Duration::from_secs(2),
             backoff: Backoff {
@@ -283,6 +280,14 @@ impl Supervisor {
     pub(crate) fn report_address(&self, address: Address) {
         self.shared.publish(|slot| slot.address = Some(address));
     }
+
+    /// Reports `status` and `address`, as the worker would.
+    pub(crate) fn report_as(&self, status: Status, address: Option<Address>) {
+        self.shared.publish(|slot| {
+            slot.status = Some(status);
+            slot.address = address;
+        });
+    }
 }
 
 impl Drop for Supervisor {
@@ -365,15 +370,14 @@ where
             Ok(address) => address,
             Err(error) => return failed(error),
         };
+        // Only to name the problem: whatever holds the port is never asked
+        // anything, since every question carries the token. The child's own
+        // word that it listens is what makes the port safe to ask.
         let port = address.port.get();
         match TcpListener::bind((Ipv4Addr::LOCALHOST, port)) {
             Ok(listener) => drop(listener),
             Err(error) if error.kind() == ErrorKind::AddrInUse => {
-                return if (self.probe)(&address.url).is_ok() {
-                    self.adopt(&address)
-                } else {
-                    failed(Error::PortTaken { port })
-                };
+                return failed(Error::PortTaken { port });
             }
             Err(source) => return failed(Error::PortCheck { port, source }),
         }
@@ -417,8 +421,21 @@ where
                 });
             }
         };
+        let mut child = child;
+        let listening = child.stdout.take().map(process::listening);
         tracing::info!(port = address.port.get(), "Started VS Code");
         self.shared.lock().child = Some(child);
+        let listening = match listening {
+            Some(Ok(flag)) => flag,
+            Some(Err(source)) => {
+                self.shared.end(self.timing.grace);
+                return failed(Error::Worker(source));
+            }
+            None => {
+                self.shared.end(self.timing.grace);
+                return failed(Error::Worker(ErrorKind::BrokenPipe.into()));
+            }
+        };
         let started = Instant::now();
         let mut answered: Option<Instant> = None;
         loop {
@@ -437,6 +454,10 @@ where
             match exited {
                 Ok(false) => {}
                 Ok(true) => {
+                    // Its port is free again, for anyone: no window may
+                    // send the token there meanwhile.
+                    self.shared
+                        .publish(|slot| slot.status = Some(Status::Starting));
                     let error = match self.shared.end(self.timing.grace) {
                         Some(Ok(status)) => Error::Exited(status),
                         Some(Err(source)) => Error::Watch(source),
@@ -454,7 +475,7 @@ where
                 }
             }
             if answered.is_none() {
-                if (self.probe)(&address.url).is_ok() {
+                if listening.load(Ordering::Acquire) && (self.probe)(&address.url).is_ok() {
                     answered = Some(Instant::now());
                     self.shared
                         .publish(|slot| slot.status = Some(Status::Ready));
@@ -464,30 +485,6 @@ where
                 }
             }
             self.shared.sleep(self.timing.poll);
-        }
-    }
-
-    /// A server already answers on the port, with this token: one an earlier
-    /// run of the app started and could not stop, as when it crashed. It is
-    /// used as it is but not owned, so the app never stops it; once it stops
-    /// answering, the app starts its own.
-    fn adopt(&self, address: &Address) -> Ended {
-        tracing::info!(
-            port = address.port.get(),
-            "Using the VS Code server already on its port"
-        );
-        self.shared
-            .publish(|slot| slot.status = Some(Status::Ready));
-        loop {
-            if self.shared.sleep(self.timing.watch) {
-                return Ended::Stopped;
-            }
-            if let Err(error) = (self.probe)(&address.url) {
-                return Ended::Failed {
-                    error,
-                    healthy: true,
-                };
-            }
         }
     }
 }

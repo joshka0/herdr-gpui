@@ -168,6 +168,7 @@ impl HerdrWindow {
         if wanted {
             Launcher::want(cx, &self.config.code);
         }
+        Launcher::refresh(cx);
         let startup = Launcher::startup(cx, &self.config.code);
         let Some(url) = startup.url(&self.config.code).cloned() else {
             self.forget_code_address(cx);

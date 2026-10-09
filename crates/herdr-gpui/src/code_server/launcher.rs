@@ -236,6 +236,15 @@ impl Launcher {
         .detach();
     }
 
+    /// Takes the worker's latest report now, rather than at the next poll:
+    /// a window does this before asking the server anything, since a server
+    /// that has stopped leaves its port to whoever takes it next.
+    pub(crate) fn refresh(cx: &mut App) {
+        if cx.has_global::<Self>() {
+            cx.global_mut::<Self>().poll();
+        }
+    }
+
     /// Takes the worker's latest report. Returns whether it changed.
     fn poll(&mut self) -> bool {
         let Some(report) = self.server.as_ref().map(Supervisor::report) else {
@@ -383,7 +392,12 @@ impl Launcher {
     /// Stands in for the worker's report, as the poll would take it.
     #[cfg(test)]
     pub(crate) fn set_report(cx: &mut App, report: Option<Report>) {
-        cx.global_mut::<Self>().report = report;
+        let launcher = cx.global_mut::<Self>();
+        // A running stand-in reports it too, for windows that read it live.
+        if let (Some(server), Some(report)) = (&launcher.server, &report) {
+            server.report_as(report.status.clone(), report.address.clone());
+        }
+        launcher.report = report;
     }
 }
 

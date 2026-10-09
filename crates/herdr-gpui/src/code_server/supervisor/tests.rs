@@ -29,7 +29,8 @@ mod process {
     const COMMIT: &str = "2a59476c9bfcb90b3ddc372c36762471b7dfad1c";
 
     /// A stand-in for VS Code's command line: it records its arguments and
-    /// each start in `dir`, then runs `body`. `$DIR` is `dir`.
+    /// each start in `dir`, says it listens as `serve-web` does, then runs
+    /// `body`. `$DIR` is `dir`.
     struct Fake {
         dir: tempfile::TempDir,
         program: PathBuf,
@@ -37,6 +38,13 @@ mod process {
 
     impl Fake {
         fn new(body: &str) -> Self {
+            Self::quiet(&format!(
+                "echo 'Web UI available at http://127.0.0.1/'\n{body}"
+            ))
+        }
+
+        /// One that never says it listens, as when its port was taken.
+        fn quiet(body: &str) -> Self {
             let dir = tempfile::tempdir().unwrap();
             let program = dir.path().join("code-tunnel");
             let script = format!(
@@ -104,7 +112,6 @@ mod process {
     fn fast() -> Timing {
         Timing {
             poll: Duration::from_millis(10),
-            watch: Duration::from_millis(20),
             ready_timeout: Duration::from_secs(10),
             grace: Duration::from_secs(1),
             backoff: Backoff {
@@ -206,8 +213,15 @@ mod process {
         let fake = Fake::new("exec sleep 60");
         let held = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let port = NonZeroU16::new(held.local_addr().unwrap().port()).unwrap();
-        // It does not answer as VS Code with this token.
-        let (supervisor, _) = fake.start(Some(port), |_| Err(Error::TokenRefused.into()));
+        // Whatever holds it is never asked anything: each question carries
+        // the token.
+        let asked = Arc::new(StdMutex::new(0));
+        let counted = asked.clone();
+        let (supervisor, _) = fake.start(Some(port), move |_| {
+            *counted.lock().unwrap() += 1;
+            Ok(Server::from_version(COMMIT).unwrap())
+        });
+
         until("the port check", || failure(&supervisor).is_some());
         let error = failure(&supervisor).unwrap();
         assert!(
@@ -225,21 +239,30 @@ mod process {
         // starts VS Code on a port it does not hold.
         thread::sleep(Duration::from_millis(100));
         assert_eq!(fake.runs(), 0);
+        assert_eq!(
+            *asked.lock().unwrap(),
+            0,
+            "the token went to another program"
+        );
         drop(supervisor);
     }
 
+    /// A child whose port another program took first never binds it, and
+    /// says nothing; the program that did must not be sent the token.
     #[test]
-    fn a_server_already_answering_with_the_token_is_used_as_it_is() {
-        let fake = Fake::new("exec sleep 60");
-        let held = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
-        let port = NonZeroU16::new(held.local_addr().unwrap().port()).unwrap();
-        let (supervisor, _) = fake.start(Some(port), |_| Ok(Server::from_version(COMMIT).unwrap()));
-        until("the server to be used", || {
-            matches!(supervisor.report().status, Status::Ready)
+    fn a_child_that_never_says_it_listens_is_never_asked() {
+        let fake = Fake::quiet("touch \"$DIR/ready\"\nexec sleep 60");
+        let asked = Arc::new(StdMutex::new(0));
+        let counted = asked.clone();
+        let (supervisor, _) = fake.start(None, move |_| {
+            *counted.lock().unwrap() += 1;
+            Ok(Server::from_version(COMMIT).unwrap())
         });
-        thread::sleep(Duration::from_millis(100));
-        assert_eq!(fake.runs(), 0, "not started, so never stopped");
-        drop(supervisor);
+        until("the child to start", || fake.runs() == 1);
+        thread::sleep(Duration::from_millis(200));
+        assert_eq!(*asked.lock().unwrap(), 0);
+        assert!(matches!(supervisor.report().status, Status::Starting));
+        supervisor.shutdown(Duration::from_millis(100));
     }
 
     #[test]

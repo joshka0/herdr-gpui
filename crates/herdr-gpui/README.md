@@ -1909,8 +1909,9 @@ code-tunnel serve-web --host 127.0.0.1 --port <port> \
   keeps its settings in the storage of the page's address. If another
   program holds that port, the panel and the settings page say so; quit it,
   or remove `port` to have a new one picked (VS Code then starts without the
-  settings it kept). A server still answering there with the app's token,
-  such as one left by a crash, is used as it is.
+  settings it kept). The app sends nothing to a port it does not hold, since
+  every request carries the token: it asks VS Code whether it answers only
+  once its own `serve-web` says it listens there.
 - The connection token is made once and kept in `vscode-token` in the app's
   state folder (`~/.local/state/herdr/gpui` unless `XDG_STATE_HOME` is set),
   readable only by you on macOS; on Windows it has your profile folder's
