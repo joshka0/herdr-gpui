@@ -93,6 +93,13 @@ fn only_local_network_addresses_count_as_local() {
     assert!(!local(
         "ssh: connect to host 100.101.102.103 port 22: No route to host"
     ));
+    // Tailscale's IPv6 range is unique-local, but a tunnel rather than the LAN.
+    assert!(!local(
+        "ssh: connect to host fd7a:115c:a1e0::1 port 22: No route to host"
+    ));
+    assert!(local(
+        "ssh: connect to host fd7a:115c:a1e1::1 port 22: No route to host"
+    ));
     assert!(refused_host("ssh: Could not resolve hostname box: nodename nor servname").is_none());
 }
 

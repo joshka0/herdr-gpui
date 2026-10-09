@@ -124,12 +124,20 @@ fn refused_host(stderr: &str) -> Option<&str> {
 
 /// Addresses macOS treats as the local network, which Local Network privacy
 /// gates: private and link-local ranges, not loopback or the Internet.
+/// Tailscale's ranges are a tunnel, not the LAN: its IPv4 range (100.64/10)
+/// is not private, and its IPv6 one is carved out of unique-local below.
 #[cfg(unix)]
 fn is_local(address: IpAddr) -> bool {
     match address {
         IpAddr::V4(v4) => v4.is_private() || v4.is_link_local(),
-        IpAddr::V6(v6) => v6.is_unique_local() || v6.is_unicast_link_local(),
+        IpAddr::V6(v6) => (v6.is_unique_local() && !is_tailscale(v6)) || v6.is_unicast_link_local(),
     }
+}
+
+/// Tailscale's IPv6 prefix, `fd7a:115c:a1e0::/48`.
+#[cfg(unix)]
+fn is_tailscale(address: std::net::Ipv6Addr) -> bool {
+    address.segments()[..3] == [0xfd7a, 0x115c, 0xa1e0]
 }
 
 /// How long classification waits for a hostname's addresses. `ssh` has just
