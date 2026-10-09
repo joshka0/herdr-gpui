@@ -321,4 +321,6 @@ fn quitting_saves_an_address_waiting_for_another_save(cx: &mut TestAppContext) {
 }
 
 /// Starting VS Code, its license, and the choice of an address instead.
+/// Only builds that show pages offer to start it.
+#[cfg(any(target_os = "macos", windows))]
 mod start;

@@ -201,6 +201,8 @@ fn linux_starts_nothing(cx: &mut gpui::TestAppContext) {
     });
 }
 
+// Only builds that show pages start anything.
+#[cfg(any(target_os = "macos", windows))]
 #[gpui::test]
 fn a_running_server_is_kept_unless_its_program_or_port_changes(cx: &mut gpui::TestAppContext) {
     cx.update(|cx| {
@@ -241,6 +243,8 @@ fn a_running_server_is_kept_unless_its_program_or_port_changes(cx: &mut gpui::Te
     });
 }
 
+// Only builds that show pages start anything.
+#[cfg(any(target_os = "macos", windows))]
 #[gpui::test]
 fn a_start_that_fails_is_tried_again_after_a_while(cx: &mut gpui::TestAppContext) {
     cx.update(|cx| {
