@@ -55,6 +55,7 @@ mod github;
 mod group_menu;
 mod group_terminals;
 mod herdr_settings;
+mod icon_font_notice;
 mod icons;
 mod input;
 mod integrations;
