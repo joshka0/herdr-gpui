@@ -22,6 +22,38 @@ const COLUMNS: [(&str, f32); 6] = [
 ];
 const METER_WIDTH: f32 = 64.;
 
+/// A row's cells: the device, its agents, then the load columns as one
+/// group, so a narrow tab wraps that group onto a line of its own. The header
+/// is laid out the same way, so it wraps in step with every row.
+fn cells(
+    device: impl IntoElement,
+    agents: impl IntoElement,
+    load: [AnyElement; 5],
+    selector: String,
+) -> Div {
+    div()
+        .flex()
+        .flex_wrap()
+        .items_center()
+        .gap_x_3()
+        .gap_y_2()
+        .child(div().flex_1().min_w(px(DEVICE_MIN)).child(device))
+        .child(div().flex_none().w(px(COLUMNS[0].1)).child(agents))
+        .child(
+            div()
+                .debug_selector(move || selector)
+                .flex()
+                .flex_none()
+                .items_center()
+                .gap_3()
+                .children(
+                    load.into_iter()
+                        .zip(&COLUMNS[1..])
+                        .map(|(cell, (_, width))| div().flex_none().w(px(*width)).child(cell)),
+                ),
+        )
+}
+
 pub(super) fn devices(
     look: &Look,
     shown: &[&Device],
@@ -30,22 +62,19 @@ pub(super) fn devices(
     cx: &mut Context<HerdrWindow>,
 ) -> Div {
     let theme = look.theme;
-    let header = div()
-        .flex()
-        .items_center()
-        .gap_3()
-        .px_3()
-        .py_2()
-        .border_b_1()
-        .border_color(rgb(theme.active))
-        .text_size(look.small())
-        .text_color(rgb(theme.subtext()))
-        .child(div().flex_1().min_w(px(DEVICE_MIN)).child("Device"))
-        .children(
-            COLUMNS
-                .iter()
-                .map(|(name, width)| div().flex_none().w(px(*width)).child(*name)),
-        );
+    let label = |index: usize| COLUMNS[index].0.into_any_element();
+    let header = cells(
+        "Device",
+        COLUMNS[0].0,
+        [label(1), label(2), label(3), label(4), label(5)],
+        slot.selector("devices-load-header"),
+    )
+    .px_3()
+    .py_2()
+    .border_b_1()
+    .border_color(rgb(theme.active))
+    .text_size(look.small())
+    .text_color(rgb(theme.subtext()));
     let rows = shown.iter().enumerate().map(|(position, device)| {
         let reading = device
             .host
@@ -53,78 +82,58 @@ pub(super) fn devices(
             .filter(|_| device.link == Link::Online)
             .and_then(|host| load.get(host));
         let sample = reading.and_then(system_load::Reading::latest);
+        let disk = sample.and_then(|sample| sample.disk);
         let id = device.id.clone();
-        div()
-            .id(SharedString::from(
-                slot.selector(&format!("devices-row-{}", device.id)),
-            ))
-            .debug_selector({
-                let id = device.id.clone();
-                move || slot.selector(&format!("devices-row-{id}"))
-            })
-            .flex()
-            .items_center()
-            .gap_3()
-            .px_3()
-            .py_2()
-            .cursor_pointer()
-            .hover(|style| style.bg(rgb(theme.active)))
-            .when(position > 0, |row| {
-                row.border_t_1().border_color(rgb(theme.active))
-            })
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.select_endpoint(&id, cx);
-                window.focus(&this.focus, cx);
-            }))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w(px(DEVICE_MIN))
-                    .child(name(look, device)),
-            )
-            .child(
-                div()
-                    .flex_none()
-                    .w(px(COLUMNS[0].1))
-                    .child(agents(look, device)),
-            )
-            .child(div().flex_none().w(px(COLUMNS[1].1)).child(meter(
-                look,
-                None,
-                sample.and_then(|sample| sample.cpu),
-                CPU_WARN,
-            )))
-            .child(div().flex_none().w(px(COLUMNS[2].1)).child(meter(
-                look,
-                None,
-                sample.and_then(|sample| sample.memory.map(|memory| memory.percent())),
-                MEMORY_WARN,
-            )))
-            .child(div().flex_none().w(px(COLUMNS[3].1)).child({
-                let disk = sample.and_then(|sample| sample.disk);
+        let row_id = device.id.clone();
+        cells(
+            name(look, device),
+            agents(look, device),
+            [
+                meter(look, None, sample.and_then(|sample| sample.cpu), CPU_WARN)
+                    .into_any_element(),
+                meter(
+                    look,
+                    None,
+                    sample.and_then(|sample| sample.memory.map(|memory| memory.percent())),
+                    MEMORY_WARN,
+                )
+                .into_any_element(),
                 meter(
                     look,
                     disk.map(|disk| system_load::storage(disk.available)),
                     disk.map(|disk| disk.used_percent()),
                     DISK_WARN,
                 )
-            }))
-            .child(
-                div().flex_none().w(px(COLUMNS[4].1)).child(
-                    look.mono(
-                        sample
-                            .and_then(|sample| sample.uptime)
-                            .map_or_else(|| "—".to_owned(), system_load::uptime),
-                    ),
-                ),
-            )
-            .child(
+                .into_any_element(),
+                look.mono(
+                    sample
+                        .and_then(|sample| sample.uptime)
+                        .map_or_else(|| "—".to_owned(), system_load::uptime),
+                )
+                .into_any_element(),
                 svg()
-                    .flex_none()
                     .size(px(COLUMNS[5].1))
                     .path("icons/chevron-right.svg")
-                    .text_color(rgb(theme.muted)),
-            )
+                    .text_color(rgb(theme.muted))
+                    .into_any_element(),
+            ],
+            slot.selector(&format!("devices-load-{}", device.id)),
+        )
+        .id(SharedString::from(
+            slot.selector(&format!("devices-row-{}", device.id)),
+        ))
+        .debug_selector(move || slot.selector(&format!("devices-row-{row_id}")))
+        .px_3()
+        .py_2()
+        .cursor_pointer()
+        .hover(|style| style.bg(rgb(theme.active)))
+        .when(position > 0, |row| {
+            row.border_t_1().border_color(rgb(theme.active))
+        })
+        .on_click(cx.listener(move |this, _, window, cx| {
+            this.select_endpoint(&id, cx);
+            window.focus(&this.focus, cx);
+        }))
     });
     look.panel()
         .debug_selector(move || slot.selector("devices-table"))

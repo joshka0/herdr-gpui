@@ -249,7 +249,14 @@ impl HerdrWindow {
                         noun(agents, "agent", "agents")
                     ))),
             )
-            .child(div().w(px(300.)).child(page.search.clone()))
+            // The field gives way before the button wraps under the title.
+            .child(
+                div()
+                    .flex_1()
+                    .min_w(px(160.))
+                    .max_w(px(320.))
+                    .child(page.search.clone()),
+            )
             .child(
                 div()
                     .id("devices-add")

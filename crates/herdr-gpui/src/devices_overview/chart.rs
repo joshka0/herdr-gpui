@@ -158,7 +158,7 @@ pub(super) fn activity(
         )
         .child(row(
             summary,
-            bars(padded(totals), peak, working, blocked, theme.surface),
+            bars(padded(totals), peak, [working, blocked], theme),
             None,
         ))
         .when(lanes, |panel| {
@@ -204,17 +204,26 @@ pub(super) fn activity(
 }
 
 /// Working agents stacked under blocked ones, scaled to the busiest step.
+/// A faint baseline spans the whole two hours, so the axis reads as time
+/// even before the window has seen most of it.
 fn bars(
     steps: Vec<Option<Counts>>,
     peak: u16,
-    working: u32,
-    blocked: u32,
-    surface: u32,
+    [working, blocked]: [u32; 2],
+    theme: &crate::config::Theme,
 ) -> AnyElement {
     let count = steps.len();
+    let (surface, baseline) = (theme.surface, theme.active);
     canvas(
         |_, _, _| {},
         move |bounds, _, window, _| {
+            window.paint_quad(fill(
+                Bounds::new(
+                    point(bounds.origin.x, bounds.bottom() - px(1.)),
+                    size(bounds.size.width, px(1.)),
+                ),
+                rgb(baseline),
+            ));
             let scale = f32::from(bounds.size.height) / f32::from(peak.max(1));
             for (index, left, width) in slots(bounds, count) {
                 let Some(counts) = steps[index] else {
