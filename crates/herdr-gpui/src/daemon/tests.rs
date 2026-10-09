@@ -38,6 +38,8 @@ fn local_endpoint_survives_executable_removal_and_replacement() {
     std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).unwrap();
     let dir = root.join("session");
     std::fs::create_dir(&dir).unwrap();
+    // Not the caller's umask: 002 would leave it group-writable and untrusted.
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
     let path = dir.join("herdr-client.sock");
     let listener = UnixListener::bind(&path).unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
