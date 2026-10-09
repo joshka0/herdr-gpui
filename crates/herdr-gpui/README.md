@@ -1602,10 +1602,18 @@ comments on a pull request.
   The review and an annotated page share the width, which is remembered
   with the sidebar's.
 
-- Click a line, added, removed or unchanged, or a file name, write what should
-  change, and press Enter or **Add note**. Escape drops the note being
-  written. Noted lines carry the note's number, and unsent notes stay while
-  the tab is open.
+- Click a line's gutter (its numbers and sign), added, removed or unchanged,
+  or a file name, write what should change, and press Enter or **Add note**.
+  Escape drops the note being written. Noted lines carry the note's number,
+  and unsent notes stay while the tab is open.
+- The code itself selects like an editor's: drag across it, double-click a
+  word, triple-click a line, Shift-click to extend, and Cmd-A (Ctrl-A
+  elsewhere) for the whole file at the top. Cmd-C or **Edit > Copy** copies
+  the code alone, never line numbers, `+`/`-` signs, or hunk headers; side by
+  side, a selection keeps to the side it started on, and Select All takes the
+  new side. Escape clears it. Tabs copy as the four spaces they are drawn as.
+- The copy icon on a file's header copies its path, and the one on a hunk
+  header copies the hunk as a patch reads, signs and header included.
 - Notes go to the agent in the focused pane, or else to the first agent Herdr
   reports in the focused workspace; the header names it. **Send to agent**
   turns them into one prompt: the checkout, then for each note the

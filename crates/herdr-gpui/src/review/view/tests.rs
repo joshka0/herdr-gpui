@@ -222,6 +222,7 @@ mod scale;
 mod scope;
 mod scrollbar;
 mod search;
+mod selection;
 mod split_resize;
 mod tab;
 mod wrap;
