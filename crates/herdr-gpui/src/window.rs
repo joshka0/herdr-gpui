@@ -136,6 +136,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) selection_follow: selection::Follow,
     /// The find bar, over the pane it searches.
     pub(crate) find: Option<find::FindBar>,
+    /// How the find bar was left over each pane, to bring it back there.
+    pub(crate) find_memory: crate::find::memory::Memory,
     /// Keyboard copy mode, when it holds the keyboard.
     pub(crate) copy_mode: Option<copy_mode::CopyModeState>,
     /// The brief message over the terminal, and when it stops showing.
@@ -741,6 +743,7 @@ impl HerdrWindow {
             selection_follow: Default::default(),
             find: None,
             copy_mode: None,
+            find_memory: Default::default(),
             flash: None,
             presentation: Default::default(),
             wake: endpoint::WakeClock::new(std::time::Instant::now(), std::time::SystemTime::now()),
