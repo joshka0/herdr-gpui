@@ -338,6 +338,13 @@ impl HerdrWindow {
                 return;
             }
             Command::ToggleSidebar => self.toggle_sidebar(),
+            // Window chrome only, so it runs while the daemon is still away.
+            Command::ToggleStatusBar => {
+                self.status_bar_visible = !self.status_bar_visible;
+                window.focus(&self.focus, cx);
+                cx.notify();
+                return;
+            }
             Command::IncreaseFontSize | Command::DecreaseFontSize => {
                 let step = if command == Command::IncreaseFontSize {
                     FONT_SIZE_STEP

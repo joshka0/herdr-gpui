@@ -8,6 +8,8 @@ use crate::{
     keymap::{Binding, DaemonKeys, Keymap, PaneKeys},
 };
 mod bitmap_fonts;
+mod coder;
+mod daytona;
 mod files;
 mod fonts;
 mod layout;
@@ -16,9 +18,17 @@ pub(crate) mod preferences;
 pub(crate) mod sidebar;
 mod sidebar_style;
 pub(crate) mod status_bar;
+#[cfg(feature = "cloud")]
+mod table;
 mod theme;
 pub(crate) mod watch;
 
+pub use coder::CoderConfig;
+#[cfg(feature = "coder")]
+pub(crate) use coder::CoderFields;
+pub use daytona::DaytonaConfig;
+#[cfg(feature = "daytona")]
+pub(crate) use daytona::DaytonaFields;
 use files::write_config;
 pub(crate) use fonts::FontFace;
 use fonts::FontSettings;
@@ -90,6 +100,8 @@ pub struct Config {
     pub terminal: FontConfig,
     pub ui: FontConfig,
     pub github: GitHubConfig,
+    pub coder: CoderConfig,
+    pub daytona: DaytonaConfig,
     pub features: Features,
     pub notifications: NotificationConfig,
     pub(crate) notification_overrides: NotificationSettings,
@@ -326,6 +338,8 @@ impl Default for Config {
         Self {
             theme: "Default".into(),
             github: GitHubConfig::default(),
+            coder: CoderConfig::default(),
+            daytona: DaytonaConfig::default(),
             confirm_close_tab: true,
             confirm_close_pane: true,
             show_agents: true,
@@ -383,6 +397,8 @@ struct Settings {
     terminal: FontSettings,
     ui: FontSettings,
     github: GitHubConfig,
+    coder: CoderConfig,
+    daytona: DaytonaConfig,
     features: Features,
     notifications: NotificationSettings,
     clipboard_toast: ClipboardToastSettings,
@@ -658,6 +674,14 @@ impl Config {
         };
         settings.github.client_id_with_override(None)?;
         config.github = settings.github;
+        // Check what the file says so a bad value is reported at load; the
+        // environment may still fill or override keys when Coder is used.
+        #[cfg(feature = "coder")]
+        settings.coder.check()?;
+        config.coder = settings.coder;
+        #[cfg(feature = "daytona")]
+        settings.daytona.settings_with(|_| None)?;
+        config.daytona = settings.daytona;
         config.features = settings.features;
         config.notification_overrides = settings.notifications;
         config.notifications = settings

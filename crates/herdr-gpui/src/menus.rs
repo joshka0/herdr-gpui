@@ -263,6 +263,12 @@ pub(crate) fn menus(layout: Layout) -> Vec<Menu> {
                         command: Command::ToggleSidebar,
                     },
                 ),
+                MenuItem::action(
+                    "Toggle Status Bar",
+                    RunCommand {
+                        command: Command::ToggleStatusBar,
+                    },
+                ),
                 MenuItem::separator(),
                 MenuItem::action(
                     "Reconnect",
