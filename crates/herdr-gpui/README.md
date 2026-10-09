@@ -1426,15 +1426,18 @@ next to the agent that is changing the code.
 The editor is `$VISUAL`, then `$EDITOR`, then `vi`, as the new pane's shell
 sees them, started as `EDITOR +LINE FILE`. Set `editor_command` to choose
 another, with `{file}` and `{line}` placeholders where it needs them, such as
-`editor_command = "hx {file}:{line}"`. The command is typed into the pane's
+`editor_command = "hx {file}:{line}"`. Placeholders may sit inside double
+quotes, as in `subl "{file}:{line}"`; either way the path stays one word. The command is typed into the pane's
 shell, so the file's path must not contain a quote, backslash, or control
 character; such a file opens in the system's application instead.
 
 A Neovim editor is started with `--listen` on a socket in this app's private
 state folder (`herdr/gpui/nvim` under `$XDG_STATE_HOME` or `~/.local/state`,
 created with mode 700), and
-reused with `nvim --server … --remote`, so `nvim` must be on the app's `PATH`.
-If it no longer answers, the file opens in a new split. An `editor_command`
+reused with `nvim --server … --remote-expr`, which opens the file with `:drop`,
+so `nvim` must be on the app's `PATH`. If that Neovim has quit, the file opens
+in a new split; if it is busy, such as on a swap-file prompt, its pane comes
+forward to be answered. An `editor_command`
 naming `nvim` listens too; one with `{file}` or `{line}` runs exactly as
 written and is never reused.
 On Windows, where a pane's shell has no `sh` to start the editor with, printed

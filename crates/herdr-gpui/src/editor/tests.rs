@@ -97,6 +97,22 @@ fn a_neovim_listens_on_the_socket_in_a_private_folder() {
     assert_eq!(typed(&line, "hx", Some("hx")), ["/w/a.rs:3"]);
 }
 
+#[cfg(unix)]
+#[test]
+fn a_template_that_quotes_its_placeholders_keeps_the_path_one_word() {
+    let command = |text: &str| EditorCommand::try_from(text.to_owned()).unwrap();
+    let file = "/w/My Project/*.rs";
+    let quoted = command("subl \"{file}:{line}\" --wait");
+    let line = command_line(&target(file, Some(3)), Some(&quoted), None).unwrap();
+    assert_eq!(
+        typed(&line, "subl", Some("subl")),
+        ["/w/My Project/*.rs:3", "--wait"]
+    );
+    let bare = command("subl {file}:{line}");
+    let line = command_line(&target(file, Some(3)), Some(&bare), None).unwrap();
+    assert_eq!(typed(&line, "subl", Some("subl")), ["/w/My Project/*.rs:3"]);
+}
+
 #[test]
 fn neovim_is_named_by_the_commands_first_word() {
     for (command, nvim) in [
@@ -308,6 +324,25 @@ mod flow {
     }
 }
 
+#[test]
+fn a_neovim_request_opens_and_jumps_in_one_expression() {
+    let at = |path: &str, line| EditorTarget {
+        path: PathBuf::from(path),
+        line,
+    };
+    assert_eq!(
+        nvim::request(&at("/w/it's a file.rs", Some(7))).unwrap(),
+        "execute(['drop ' .. fnameescape('/w/it''s a file.rs'), \
+         'call cursor(7, 1)', 'normal! zz'])"
+    );
+    assert_eq!(
+        nvim::request(&at("/w/a.rs", None)).unwrap(),
+        "execute(['drop ' .. fnameescape('/w/a.rs')])"
+    );
+    // A line break would end the string, and the expression with it.
+    assert!(nvim::request(&at("/w/a\nb.rs", Some(1))).is_none());
+}
+
 /// Against a real Neovim; run with
 /// `cargo test -p herdr-gpui -- --ignored editor::tests::a_listening`.
 #[cfg(unix)]
@@ -316,8 +351,10 @@ mod flow {
 fn a_listening_neovim_opens_files_at_their_line() {
     let dir = tempfile::tempdir().unwrap();
     let socket = dir.path().join("n.sock");
-    let file = dir.path().join("a file.txt");
+    let file = dir.path().join("it's a file.txt");
     std::fs::write(&file, "a\nb\nc\nd\ne\n").unwrap();
+    let other = dir.path().join("b.txt");
+    std::fs::write(&other, "a\nb\nc\n").unwrap();
     let mut server = std::process::Command::new("nvim")
         .args(["--headless", "--clean", "--listen"])
         .arg(&socket)
@@ -327,23 +364,37 @@ fn a_listening_neovim_opens_files_at_their_line() {
     while !socket.exists() && std::time::Instant::now() < deadline {
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
-    let opened = nvim::open(
+    let at = || {
+        let output = std::process::Command::new("nvim")
+            .args(["--headless", "--clean", "--server"])
+            .arg(&socket)
+            .args(["--remote-expr", "expand('%:t') . ':' . line('.')"])
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&output.stdout).trim().to_owned()
+    };
+    let first = nvim::open(
         &socket,
         &EditorTarget {
             path: file,
             line: Some(4),
         },
     );
-    let at = std::process::Command::new("nvim")
-        .args(["--headless", "--clean", "--server"])
-        .arg(&socket)
-        .args(["--remote-expr", "expand('%:t') . ':' . line('.')"])
-        .output()
-        .unwrap();
+    let first_at = at();
+    let second = nvim::open(
+        &socket,
+        &EditorTarget {
+            path: other,
+            line: Some(2),
+        },
+    );
+    let second_at = at();
     let _ = server.kill();
     let _ = server.wait();
-    opened.unwrap();
-    assert_eq!(String::from_utf8_lossy(&at.stdout).trim(), "a file.txt:4");
+    first.unwrap();
+    second.unwrap();
+    assert_eq!(first_at, "it's a file.txt:4");
+    assert_eq!(second_at, "b.txt:2");
     // Once it has gone, it says so rather than hanging.
     assert!(matches!(
         nvim::open(

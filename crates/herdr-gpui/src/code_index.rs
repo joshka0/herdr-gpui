@@ -4,7 +4,8 @@
 //! source file's lines, so it is blocking work for a background executor.
 //! Everything is bounded: the listing, the files scanned and their size, and
 //! the definitions kept. Only regular files are read, never through a
-//! symlink, so a FIFO or a device in the checkout cannot stall the build.
+//! symlink, so a FIFO or a device in the checkout cannot stall the build,
+//! and a symlinked folder cannot pass outside files off as the checkout's.
 
 mod changes;
 mod symbols;
@@ -13,7 +14,7 @@ pub(crate) use changes::Change;
 pub(crate) use symbols::{Kind, Language, scan};
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::Read,
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
@@ -75,10 +76,24 @@ impl Index {
             "list untracked files",
         )?;
         let mut index = Self::from_listing(root, &[tracked.as_slice(), &untracked].concat());
-        // A checkout with no commit yet has nothing to compare with.
-        let counts = git(&["diff", "--numstat", "-z", "HEAD"], "count changes")
-            .map(|output| changes::numstat(&output))
-            .unwrap_or_default();
+        // A checkout with no commit yet has nothing to compare with. Git's
+        // warnings share the output's stream, and a `core.autocrlf` checkout
+        // (the default on Windows) warns about line endings on every diff,
+        // which would read as the first file's counts. This read-only diff
+        // turns that warning off; the user's own commits keep their setting.
+        let counts = git(
+            &[
+                "-c",
+                "core.safecrlf=false",
+                "diff",
+                "--numstat",
+                "-z",
+                "HEAD",
+            ],
+            "count changes",
+        )
+        .map(|output| changes::numstat(&output))
+        .unwrap_or_default();
         let mut untracked: Vec<String> = untracked
             .split(|byte| *byte == 0)
             .filter_map(|name| std::str::from_utf8(name).ok())
@@ -86,6 +101,7 @@ impl Index {
             .collect();
         untracked.sort_unstable();
         index.set_changes(changes::collect(root, &index.files, &counts, &untracked));
+        let mut real = HashSet::new();
         for file in 0..index.files.len() {
             if stop() {
                 return Err(crate::Error::CodeIndexCancelled);
@@ -97,6 +113,9 @@ impl Index {
             let Some(language) = Language::of(&index.files[file]) else {
                 continue;
             };
+            if !real_folders(root, &index.files[file], &mut real) {
+                continue;
+            }
             let Some(text) = read_source(&root.join(&index.files[file])) else {
                 continue;
             };
@@ -205,6 +224,30 @@ fn relative(name: &str) -> bool {
         && Path::new(name)
             .components()
             .all(|part| matches!(part, std::path::Component::Normal(_)))
+}
+
+/// Whether every folder on the way from `root` to listed file `name` is a
+/// folder, not a symlink: Git lists `src/main.rs` even after `src` became a
+/// link to somewhere else. `real` remembers the folders already checked, so
+/// each is looked at once per build. Blocking.
+fn real_folders(root: &Path, name: &str, real: &mut HashSet<PathBuf>) -> bool {
+    let Some(parent) = Path::new(name).parent() else {
+        return true;
+    };
+    let mut folder = PathBuf::new();
+    for part in parent.components() {
+        folder.push(part);
+        if real.contains(&folder) {
+            continue;
+        }
+        let is_folder =
+            std::fs::symlink_metadata(root.join(&folder)).is_ok_and(|metadata| metadata.is_dir());
+        if !is_folder {
+            return false;
+        }
+        real.insert(folder.clone());
+    }
+    true
 }
 
 /// A regular file's text, when it is small enough and reads as UTF-8 text.

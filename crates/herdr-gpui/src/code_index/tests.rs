@@ -213,6 +213,31 @@ fn symlinks_and_special_files_are_never_read() {
     assert!(read_source(Path::new("/dev/null")).is_none());
 }
 
+#[cfg(unix)]
+#[test]
+fn a_tracked_folder_replaced_by_a_symlink_is_not_scanned() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("checkout");
+    let outside = dir.path().join("outside");
+    std::fs::create_dir_all(root.join("src/inner")).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    git(&root, &["init", "-q"]);
+    std::fs::write(root.join("src/inner/lib.rs"), "fn inside() {}\n").unwrap();
+    std::fs::write(root.join("main.rs"), "fn main() {}\n").unwrap();
+    git(&root, &["add", "."]);
+    std::fs::write(outside.join("lib.rs"), "fn outside() {}\n").unwrap();
+    std::fs::remove_dir_all(root.join("src/inner")).unwrap();
+    std::os::unix::fs::symlink(&outside, root.join("src/inner")).unwrap();
+    let index = Index::build(&root, &AtomicBool::new(false)).unwrap();
+    assert!(index.files().iter().any(|file| file == "src/inner/lib.rs"));
+    let names: Vec<_> = index
+        .symbols()
+        .iter()
+        .map(|symbol| symbol.name.as_str())
+        .collect();
+    assert_eq!(names, ["main"]);
+}
+
 #[test]
 fn numstat_reads_counts_binaries_and_renames() {
     let output = b"3\t1\tsrc/a.rs\0-\t-\tlogo.png\0" as &[u8];
@@ -231,6 +256,8 @@ fn uncommitted_changes_are_listed_newest_first() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     git(root, &["init", "-q"]);
+    // As on Windows, where Git warns about line endings on every diff.
+    git(root, &["config", "core.autocrlf", "true"]);
     for name in ["a.rs", "b.rs", "gone.rs", "same.rs"] {
         std::fs::write(root.join(name), "fn x() {}\n").unwrap();
     }

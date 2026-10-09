@@ -518,14 +518,20 @@ pub enum Error {
     EditorUnsupported,
     #[error("The Neovim in the editor pane did not answer")]
     EditorRemote,
+    #[error("Could not run nvim to reach the editor pane")]
+    EditorRemoteLaunch(#[source] io::Error),
+    #[error("The Neovim in the editor pane is busy: answer it, then try again")]
+    EditorRemoteBusy,
+    #[error("The Neovim in the editor pane could not open the file")]
+    EditorRemoteFailed,
     #[error("Another file is still opening in the editor")]
     EditorBusy,
     #[error("No local pane to open the editor beside")]
     EditorNoPane,
     #[error("Unexpected daemon response while opening the editor pane")]
     EditorResponse,
-    #[error("{0}")]
-    EditorRequest(#[source] std::sync::Arc<Error>),
+    #[error(transparent)]
+    EditorRequest(std::sync::Arc<Error>),
     #[error("neither XDG_STATE_HOME nor HOME is set")]
     MissingStateRoot,
     #[error("{} exceeds {limit} bytes", path.display())]

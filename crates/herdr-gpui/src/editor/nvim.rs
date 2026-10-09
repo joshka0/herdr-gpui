@@ -1,9 +1,9 @@
 //! Neovim, reused: an editor pane that runs Neovim listens on a socket in
 //! this app's private state folder, and later files for the same tab open
-//! in it through `nvim --server … --remote`, as herdr-nvim's sidebar does,
-//! instead of in another split. The socket is passed to the editor as an
-//! argument, never typed as text a shell would read, and the files sent to
-//! it travel as argv, so no path is ever parsed by a shell here.
+//! in it through `nvim --server … --remote-expr`, as herdr-nvim's sidebar
+//! does, instead of in another split. The socket is passed to the editor as
+//! an argument, never typed as text a shell would read, and the request
+//! travels as argv, so no path is ever parsed by a shell here.
 
 use super::EditorTarget;
 use std::{
@@ -47,20 +47,44 @@ pub(crate) fn is_nvim(command: &str) -> bool {
 
 /// Opens `target` in the Neovim listening on `socket`, at its line, and
 /// centers it. Blocking: it runs on the background executor.
+///
+/// Only [`crate::Error::EditorRemote`] means that Neovim has gone. One that
+/// still listens but is slow, such as one waiting on a swap-file prompt,
+/// may yet run the request, so its pane is kept rather than replaced by a
+/// second editor on the same file.
 pub(crate) fn open(socket: &Path, target: &EditorTarget) -> crate::Result<()> {
-    // Without a server `--remote` edits the file itself and never exits,
-    // so make sure one is listening first.
+    let request = request(target).ok_or(crate::Error::EditorPath)?;
+    // Without a server `--server` edits locally and never exits, so make
+    // sure one is listening first.
     if !listening(socket) {
         return Err(crate::Error::EditorRemote);
     }
-    // `--remote +LINE` would open a file named `+LINE`, so the line is set
-    // with an expression once the file is open.
-    run(nvim(socket).arg("--remote").arg(&target.path))?;
-    if let Some(line) = target.line {
-        let jump = format!("execute('call cursor({line}, 1) | normal! zz')");
-        run(nvim(socket).arg("--remote-expr").arg(jump))?;
+    match run(nvim(socket).arg("--remote-expr").arg(request)) {
+        Ok(()) => Ok(()),
+        Err(_) if !listening(socket) => Err(crate::Error::EditorRemote),
+        Err(error) => Err(error),
     }
-    Ok(())
+}
+
+/// One expression that opens `target` and moves to its line. Neovim runs a
+/// server's requests one at a time, so two quick opens cannot interleave
+/// and move each other's cursor, as separate open and jump requests could.
+/// `drop` goes to a window already showing the file, and splits rather
+/// than abandon unsaved changes. `None` for a path a Vim string cannot hold
+/// on one line.
+pub(super) fn request(target: &EditorTarget) -> Option<String> {
+    let path = target
+        .path
+        .to_str()
+        .filter(|path| !path.chars().any(char::is_control))?;
+    // In a single-quoted Vim string only the quote itself is special.
+    let path = path.replace('\'', "''");
+    let mut commands = vec![format!("'drop ' .. fnameescape('{path}')")];
+    if let Some(line) = target.line {
+        commands.push(format!("'call cursor({line}, 1)'"));
+        commands.push("'normal! zz'".to_owned());
+    }
+    Some(format!("execute([{}])", commands.join(", ")))
 }
 
 #[cfg(unix)]
@@ -88,16 +112,16 @@ fn nvim(socket: &Path) -> Command {
 
 /// Runs `command` to completion within [`DEADLINE`], killing it past that.
 fn run(command: &mut Command) -> crate::Result<()> {
-    let mut child = command.spawn().map_err(|_| crate::Error::EditorRemote)?;
+    let mut child = command.spawn().map_err(crate::Error::EditorRemoteLaunch)?;
     let deadline = Instant::now() + DEADLINE;
     loop {
         match child.try_wait() {
             Ok(Some(status)) if status.success() => return Ok(()),
-            Ok(Some(_)) | Err(_) => return Err(crate::Error::EditorRemote),
+            Ok(Some(_)) | Err(_) => return Err(crate::Error::EditorRemoteFailed),
             Ok(None) if Instant::now() >= deadline => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(crate::Error::EditorRemote);
+                return Err(crate::Error::EditorRemoteBusy);
             }
             Ok(None) => std::thread::sleep(Duration::from_millis(20)),
         }

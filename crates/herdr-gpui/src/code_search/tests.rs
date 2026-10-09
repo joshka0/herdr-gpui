@@ -296,3 +296,43 @@ fn outside_a_checkout_the_search_shows_why(cx: &mut TestAppContext) {
         );
     });
 }
+
+#[gpui::test]
+fn shown_hits_keep_the_index_they_were_ranked_against(cx: &mut TestAppContext) {
+    let dir = checkout();
+    let (view, cx) = window(cx, Some(dir.path()));
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_code_search(Mode::Files, window, cx)
+        })
+    });
+    cx.run_until_parked();
+    let opens = |view: &Entity<HerdrWindow>, cx: &mut VisualTestContext| {
+        search(view, cx, |code| code.target(&code.hits[0]).unwrap().path)
+    };
+    assert!(opens(&view, cx).ends_with("src/lib.rs"));
+    // A refreshed index lists other files at the same item numbers; until
+    // its ranking lands, the rows shown still open what they say.
+    let root = search(&view, cx, |code| {
+        code.index.as_ref().unwrap().root().to_owned()
+    });
+    let refreshed = Arc::new(Index::of(
+        &root,
+        &["a.rs", "b.rs", "src/lib.rs"],
+        Vec::new(),
+    ));
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            let token = view.menu.code_search.as_ref().unwrap().search.clone();
+            view.checkout_indexed(&token, Ok(refreshed), cx);
+        })
+    });
+    assert!(opens(&view, cx).ends_with("src/lib.rs"));
+    cx.run_until_parked();
+    assert!(opens(&view, cx).ends_with("a.rs"));
+    // The row the user was on stays selected where it moved to.
+    let selected = search(&view, cx, |code| {
+        code.target(&code.hits[code.selected]).unwrap().path
+    });
+    assert!(selected.ends_with("src/lib.rs"));
+}

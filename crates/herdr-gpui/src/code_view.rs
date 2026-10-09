@@ -230,20 +230,23 @@ impl HerdrWindow {
             self.show_flash(Flash::warning("Too many tabs are open"), cx);
             return;
         };
-        if self.ensure_code_view(id, cx) {
-            self.load_code_view(id, cx);
-        }
-        if let Some(view) = self.code_views.get_mut(&id) {
-            if let Some(line) = target.line {
-                view.target = Some(line);
-                if view.text().is_some() {
-                    view.go_to(line);
-                }
+        self.ensure_code_view(id, cx);
+        let Some(view) = self.code_views.get_mut(&id) else {
+            return;
+        };
+        if let Some(line) = target.line {
+            view.target = Some(line);
+            if view.text().is_some() {
+                view.go_to(line);
             }
-            let focus = view.focus.clone();
-            self.show_browser_tab(id, window, cx);
-            window.focus(&focus, cx);
         }
+        let focus = view.focus.clone();
+        // Read again even when the tab was open: an agent may have changed
+        // the file since, and the line came from a newer index. The old text
+        // shows until the new one is read.
+        self.load_code_view(id, cx);
+        self.show_browser_tab(id, window, cx);
+        window.focus(&focus, cx);
         cx.notify();
     }
 
@@ -340,6 +343,10 @@ impl HerdrWindow {
         };
         match text {
             Ok(text) => {
+                // Colours of other text would land on the wrong words.
+                if view.text().is_some_and(|old| old.source != text.source) {
+                    view.spans = Arc::default();
+                }
                 view.state = State::Loaded(text);
                 if let Some(line) = view.target.take() {
                     view.go_to(line);

@@ -73,10 +73,7 @@ impl EditorCommand {
     fn script(&self) -> String {
         let command = &self.0;
         if command.contains("{file}") || command.contains("{line}") {
-            let placed = command
-                .replace("{file}", "\"$0\"")
-                .replace("{line}", "\"$1\"");
-            format!("exec {placed}")
+            format!("exec {}", placed(command))
         } else if nvim::is_nvim(command) {
             format!(
                 "[ -n \"$2\" ] && exec {command} --listen \"$2\" \"+$1\" \"$0\"; exec {command} \"+$1\" \"$0\""
@@ -85,6 +82,37 @@ impl EditorCommand {
             format!("exec {command} \"+$1\" \"$0\"")
         }
     }
+}
+
+/// `command` with its placeholders standing for `$0` and `$1`, each read as
+/// one word with no pattern matching: quoted, or bare where the template
+/// already quotes them, as in `subl "{file}:{line}"`. Quoting there again
+/// would close the template's quotes and leave the path open to splitting.
+fn placed(command: &str) -> String {
+    let mut placed = String::with_capacity(command.len() + 8);
+    let mut quoted = false;
+    let mut rest = command;
+    while let Some(c) = rest.chars().next() {
+        let (word, len) = if rest.starts_with("{file}") {
+            ("$0", "{file}".len())
+        } else if rest.starts_with("{line}") {
+            ("$1", "{line}".len())
+        } else {
+            quoted ^= c == '"';
+            placed.push(c);
+            rest = &rest[c.len_utf8()..];
+            continue;
+        };
+        if quoted {
+            placed.push_str(word);
+        } else {
+            placed.push('"');
+            placed.push_str(word);
+            placed.push('"');
+        }
+        rest = &rest[len..];
+    }
+    placed
 }
 
 /// The pane's own editor, which listens on `$2` when it is Neovim.
@@ -192,9 +220,26 @@ impl HerdrWindow {
             return;
         }
         if let Err(error) = self.start_editor(target, beside) {
-            self.show_flash(crate::window::Flash::warning(error.to_string()), cx);
+            self.editor_failed(target, error, cx);
         }
         cx.notify();
+    }
+
+    /// Reports why `target` did not open in the editor. A path no shell
+    /// line can carry opens in the system's default app instead, as
+    /// [`crate::Error::EditorPath`] says.
+    fn editor_failed(
+        &mut self,
+        target: &EditorTarget,
+        error: crate::Error,
+        cx: &mut Context<Self>,
+    ) {
+        if matches!(error, crate::Error::EditorPath)
+            && let Ok(url) = url::Url::from_file_path(&target.path)
+        {
+            cx.open_url(url.as_str());
+        }
+        self.show_flash(crate::window::Flash::warning(error.to_string()), cx);
     }
 
     /// The editor pane started for the tab of `beside`, or of the focused
@@ -234,8 +279,9 @@ impl HerdrWindow {
     }
 
     /// Sends `target` to the Neovim in `editor` off the UI thread and brings
-    /// its pane forward; if that Neovim no longer answers, the pane is
-    /// forgotten and the file opens in a new one.
+    /// its pane forward; if that Neovim has gone, the pane is forgotten and
+    /// the file opens in a new one. A Neovim still there but busy keeps its
+    /// pane, which comes forward so its prompt can be answered.
     fn reuse_editor(
         &mut self,
         editor: EditorPane,
@@ -251,7 +297,15 @@ impl HerdrWindow {
         cx.spawn(async move |this, cx| {
             let opened = opened.await;
             let _ = this.update(cx, |this, cx| {
-                if opened.is_ok() {
+                let gone = match opened {
+                    Ok(()) => false,
+                    Err(crate::Error::EditorRemote | crate::Error::EditorRemoteLaunch(_)) => true,
+                    Err(error) => {
+                        this.editor_failed(&target, error, cx);
+                        false
+                    }
+                };
+                if !gone {
                     this.navigate_endpoint(
                         &editor.endpoint_id,
                         NavigationTarget::Pane(&editor.pane_id),
@@ -261,7 +315,7 @@ impl HerdrWindow {
                 }
                 this.editor_panes.retain(|kept| *kept != editor);
                 if let Err(error) = this.start_editor(&target, beside.as_deref()) {
-                    this.show_flash(crate::window::Flash::warning(error.to_string()), cx);
+                    this.editor_failed(&target, error, cx);
                 }
                 cx.notify();
             });

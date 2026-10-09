@@ -184,3 +184,31 @@ fn a_restored_code_tab_reads_its_file_and_a_closed_one_is_forgotten(cx: &mut Tes
         })
     });
 }
+
+#[gpui::test]
+fn reopening_a_code_tab_reads_its_file_again(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("main.rs");
+    std::fs::write(&path, "fn old() {}\n").unwrap();
+    let (view, cx) = window(cx);
+    let open = |line: u32, view: &Entity<HerdrWindow>, cx: &mut VisualTestContext| {
+        let target = EditorTarget {
+            path: path.clone(),
+            line: Some(line),
+        };
+        cx.update(|window, cx| {
+            view.update(cx, |view, cx| view.open_code_view(&target, window, cx))
+        });
+        cx.run_until_parked();
+    };
+    open(1, &view, cx);
+    // An agent edits the file, and a newer index points into the new text.
+    std::fs::write(&path, "fn old() {}\nfn new() {}\nfn newer() {}\n").unwrap();
+    open(3, &view, cx);
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.code_views.len(), 1);
+        let code = view.code_views.values().next().unwrap();
+        assert_eq!(code.shown(), (Some(3), Some(3)));
+        assert_eq!(code.text().unwrap().line(2), "fn newer() {}");
+    });
+}

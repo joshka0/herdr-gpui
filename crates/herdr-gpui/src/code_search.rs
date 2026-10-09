@@ -65,7 +65,12 @@ pub(crate) struct CodeSearch {
     search: Entity<SearchInput>,
     mode: Mode,
     query: String,
+    /// The index `hits` were ranked against, which shows them and opens
+    /// them: a hit's item number means nothing in any other index.
     index: Option<Arc<Index>>,
+    /// The newest index, which the next ranking reads. It replaces `index`
+    /// only together with that ranking's hits.
+    latest: Option<Arc<Index>>,
     status: Status,
     hits: Vec<Hit>,
     selected: usize,
@@ -144,6 +149,7 @@ impl HerdrWindow {
             mode,
             query: String::new(),
             index: None,
+            latest: None,
             status: Status::Locating,
             hits: Vec::new(),
             selected: 0,
@@ -199,7 +205,7 @@ impl HerdrWindow {
             .as_ref()
             .is_none_or(|(_, built)| built.elapsed() >= FRESH);
         if let Some((index, _)) = cached {
-            code.index = Some(index);
+            code.latest = Some(index);
             code.status = Status::Ready;
         } else {
             code.status = Status::Indexing;
@@ -240,15 +246,15 @@ impl HerdrWindow {
             return;
         }
         if let Some(code) = &mut self.menu.code_search {
-            code.index = Some(index);
+            code.latest = Some(index);
             code.status = Status::Ready;
         }
-        self.rank_code_search(cx);
+        self.rerank_code_search(cx);
     }
 
     fn fail_code_search(&mut self, error: crate::Error, cx: &mut Context<Self>) {
         if let Some(code) = &mut self.menu.code_search
-            && code.index.is_none()
+            && code.latest.is_none()
         {
             code.status = Status::Failed(error.to_string());
         }
@@ -258,16 +264,28 @@ impl HerdrWindow {
     /// Ranks the index against the query on the background executor. A
     /// newer ranking drops an unfinished one with its task.
     fn rank_code_search(&mut self, cx: &mut Context<Self>) {
+        self.rank_code_search_keeping(false, cx);
+    }
+
+    /// [`Self::rank_code_search`] for a refreshed index: the query has not
+    /// changed, so the row the user moved to stays selected wherever it
+    /// lands, rather than Enter opening another one after a background read.
+    fn rerank_code_search(&mut self, cx: &mut Context<Self>) {
+        self.rank_code_search_keeping(true, cx);
+    }
+
+    fn rank_code_search_keeping(&mut self, keep: bool, cx: &mut Context<Self>) {
         let Some(code) = &mut self.menu.code_search else {
             return;
         };
-        let Some(index) = code.index.clone() else {
+        let Some(index) = code.latest.clone() else {
             return;
         };
         let (mode, query, token) = (code.mode, code.query(), code.search.clone());
+        let ranked = index.clone();
         let ranking = cx
             .background_executor()
-            .spawn(async move { rank::rank(&index, mode, &query) });
+            .spawn(async move { rank::rank(&ranked, mode, &query) });
         code.rank_task = Some(cx.spawn(async move |this, cx| {
             let hits = ranking.await;
             let _ = this.update(cx, |this, cx| {
@@ -277,10 +295,26 @@ impl HerdrWindow {
                 if code.search != token || code.mode != mode {
                     return;
                 }
+                let chosen = keep
+                    .then(|| {
+                        code.hits
+                            .get(code.selected)
+                            .and_then(|hit| code.target(hit))
+                    })
+                    .flatten();
+                code.index = Some(index);
                 code.hits = hits;
-                code.selected = 0;
                 code.rank_task = None;
-                code.scroll.scroll_to_item(0, ScrollStrategy::Top);
+                let kept = chosen.and_then(|chosen| {
+                    code.hits
+                        .iter()
+                        .position(|hit| code.target(hit).as_ref() == Some(&chosen))
+                });
+                code.selected = kept.unwrap_or(0);
+                match kept {
+                    Some(row) => code.scroll.scroll_to_item(row, ScrollStrategy::Center),
+                    None => code.scroll.scroll_to_item(0, ScrollStrategy::Top),
+                }
                 cx.notify();
             });
         }));
