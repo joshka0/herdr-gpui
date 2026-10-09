@@ -168,6 +168,10 @@ pub(crate) struct HerdrWindow {
     pub(crate) removal: Option<menu::Removal>,
     /// The worktree script being located, read, trusted, or opened.
     pub(crate) worktree_script: Option<crate::worktree_scripts::Job>,
+    /// The editor pane being opened, if any.
+    pub(crate) editor_open: Option<crate::editor::Job>,
+    /// Editor panes whose Neovim later files open in.
+    pub(crate) editor_panes: Vec<crate::editor::EditorPane>,
     /// A teleport being set up or under way; a move outlives its dialog.
     pub(crate) teleport: Option<crate::teleport::Teleport>,
     /// Checkouts this client teleported away from, marked in the sidebar.
@@ -190,6 +194,11 @@ pub(crate) struct HerdrWindow {
     pub(crate) review_files_width: crate::panel_resize::PanelWidth,
     /// Each review tab's state, by its tab.
     pub(crate) reviews: std::collections::HashMap<crate::browser::TabId, crate::review::Review>,
+    /// Code tabs' views, by tab.
+    pub(crate) code_views:
+        std::collections::HashMap<crate::browser::TabId, crate::code_view::CodeView>,
+    /// Checkouts indexed for Go to Symbol and Go to File.
+    pub(crate) code_indexes: crate::code_search::Indexes,
     /// The window's width at its last render, which caps side panels.
     pub(crate) viewport_width: f32,
     /// Comment, merge, and review reads for the focused branch's open PR.
@@ -455,6 +464,7 @@ impl HerdrWindow {
         self.poll_dispatch(window, cx);
         self.poll_device_setup(window, cx);
         self.poll_worktree_script(window, cx);
+        self.poll_editor_open(cx);
         self.poll_worktree_source(cx);
         self.poll_hover_menu(std::time::Instant::now(), window, cx);
         if self.tick_flash(std::time::Instant::now()) {
@@ -778,6 +788,8 @@ impl HerdrWindow {
             menu: menu::MenuState::new(cx),
             removal: None,
             worktree_script: None,
+            editor_open: None,
+            editor_panes: Vec::new(),
             teleport: None,
             teleport_marks: crate::teleport::Marks::start(),
             teleport_follow: None,
@@ -789,6 +801,8 @@ impl HerdrWindow {
             notes_width: crate::panel_resize::NOTES,
             review_files_width: crate::panel_resize::REVIEW_FILES,
             reviews: Default::default(),
+            code_views: Default::default(),
+            code_indexes: Default::default(),
             viewport_width: 0.,
             pr_actions: Default::default(),
             usage: Default::default(),

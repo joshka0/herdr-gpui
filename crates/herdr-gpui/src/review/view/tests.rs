@@ -213,6 +213,7 @@ fn notes_go_to_the_focused_agent_or_the_workspace_s_first() {
 }
 
 mod colours;
+mod editor;
 mod files;
 mod find_again;
 mod keys;

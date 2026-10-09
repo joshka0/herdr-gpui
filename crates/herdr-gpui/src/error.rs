@@ -513,6 +513,38 @@ pub enum Error {
     WorktreeScriptsResponse,
     #[error("This workspace is not a Git checkout Herdr knows yet")]
     WorktreeScriptsNotGit,
+    #[error(
+        "editor_command must be at most 1024 bytes without quotes, backslashes, or control characters"
+    )]
+    EditorCommand,
+    #[error("A code tab must name an absolute file path without control characters")]
+    InvalidCodeFile,
+    #[error("This file is missing, larger than 1 MiB, or not UTF-8 text")]
+    CodeFileUnreadable,
+    #[error("Only a local Git checkout can be searched for files and symbols")]
+    CodeIndexRoot,
+    #[error("Reading the checkout was cancelled")]
+    CodeIndexCancelled,
+    #[error("This path cannot be typed into a shell safely, so it opens in the default app")]
+    EditorPath,
+    #[error("Opening a terminal editor needs a Unix shell in the pane")]
+    EditorUnsupported,
+    #[error("The Neovim in the editor pane did not answer")]
+    EditorRemote,
+    #[error("Could not run nvim to reach the editor pane")]
+    EditorRemoteLaunch(#[source] io::Error),
+    #[error("The Neovim in the editor pane is busy: answer it, then try again")]
+    EditorRemoteBusy,
+    #[error("The Neovim in the editor pane could not open the file")]
+    EditorRemoteFailed,
+    #[error("Another file is still opening in the editor")]
+    EditorBusy,
+    #[error("No local pane to open the editor beside")]
+    EditorNoPane,
+    #[error("Unexpected daemon response while opening the editor pane")]
+    EditorResponse,
+    #[error(transparent)]
+    EditorRequest(std::sync::Arc<Error>),
     #[error("neither XDG_STATE_HOME nor HOME is set")]
     MissingStateRoot,
     #[error("{} exceeds {limit} bytes", path.display())]
