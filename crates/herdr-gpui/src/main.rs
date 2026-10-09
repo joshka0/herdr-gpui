@@ -27,6 +27,7 @@ mod copy_mode;
 mod daemon;
 mod diagnostics;
 mod dialog_input;
+mod dispatch;
 mod endpoint;
 mod error;
 mod fan_out;

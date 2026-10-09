@@ -164,6 +164,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) teleport_marks: crate::teleport::Marks,
     /// The workspace a finished teleport keeps steering to until focused.
     pub(crate) teleport_follow: Option<crate::teleport::Follow>,
+    /// A worktree or workspace being created on another host.
+    pub(crate) dispatch_job: Option<crate::dispatch::Job>,
     /// A prompt fanned out to several agents; once launched it outlives its
     /// dialog so the lanes can be compared later.
     pub(crate) fan_out: Option<crate::fan_out::FanOut>,
@@ -432,6 +434,7 @@ impl HerdrWindow {
         self.update_workspace_dialog(window, cx);
         self.poll_teleport(window, cx);
         self.poll_fan_out(window, cx);
+        self.poll_dispatch(window, cx);
         self.poll_device_setup(window, cx);
         self.poll_worktree_script(window, cx);
         self.poll_worktree_source(cx);
@@ -507,9 +510,10 @@ impl HerdrWindow {
         changed
     }
 
-    /// CPU and memory are sampled for every enabled host.
+    /// CPU and memory are sampled for every enabled host, while they are
+    /// shown or a host picker ranks hosts by them.
     fn update_system_load(&mut self) -> bool {
-        if !self.config.show_system_load {
+        if !self.config.show_system_load && !self.dispatch_sampling() {
             return self.system_load.poll(Vec::new());
         }
         let hosts = self.watched_hosts();
@@ -756,6 +760,7 @@ impl HerdrWindow {
             teleport: None,
             teleport_marks: crate::teleport::Marks::start(),
             teleport_follow: None,
+            dispatch_job: None,
             fan_out: None,
             git: git::Git::default(),
             deliveries: Default::default(),

@@ -11,7 +11,10 @@ use super::{
     job::{self, Checkout, Progress, Report, Request},
     plan::{self, DiffStat, Lane, Picks},
 };
-use crate::teleport::{AgentKind, Host};
+use crate::{
+    dispatch::{Candidate, Picker},
+    teleport::{AgentKind, FreshOrigin, Host, HostRepositories, Place},
+};
 use herdr_client::protocol::{AgentStatus, ClientShellSnapshot};
 use std::{
     sync::{
@@ -33,9 +36,26 @@ pub(crate) struct Origin {
     pub(crate) host: Host,
     /// The main checkout's workspace, which new worktrees are created through.
     pub(crate) workspace_id: String,
+    /// The repository's Git common directory, for shipping its commit.
+    pub(crate) repo_key: String,
     pub(crate) repo_label: String,
     /// The ref lanes branch from: the linked checkout's branch, or `HEAD`.
     pub(crate) base: String,
+}
+
+impl Origin {
+    fn fresh(&self) -> FreshOrigin {
+        FreshOrigin {
+            place: Place {
+                endpoint_id: self.endpoint_id.clone(),
+                label: self.endpoint_label.clone(),
+                host: self.host.clone(),
+            },
+            workspace_id: self.workspace_id.clone(),
+            repo_key: self.repo_key.clone(),
+            repo_label: self.repo_label.clone(),
+        }
+    }
 }
 
 enum Event {
@@ -49,6 +69,7 @@ enum Event {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum LaneState {
     Waiting,
+    SettingUp,
     CreatingWorktree,
     StartingAgent,
     Prompting,
@@ -61,6 +82,7 @@ impl LaneState {
     pub(super) fn label(&self) -> &str {
         match self {
             Self::Waiting => "Waiting",
+            Self::SettingUp => "Setting up the host",
             Self::CreatingWorktree => "Creating worktree",
             Self::StartingAgent => "Starting agent",
             Self::Prompting => "Sending prompt",
@@ -96,6 +118,12 @@ pub(crate) struct FanOut {
     pub(super) origin: Origin,
     pub(super) stage: Stage,
     pub(super) picks: Picks,
+    /// Every host lanes could run on, ranked.
+    pub(super) hosts: Picker,
+    /// Whether lanes are spread over the best hosts instead of the origin.
+    pub(super) spread: bool,
+    /// Hosts the user chose for single lanes, by lane, over the spread.
+    pub(super) overrides: Vec<Option<String>>,
     pub(super) prompt: String,
     pub(super) lanes: Vec<LaneView>,
     /// The commit every lane branched from, once the first one resolved it.
@@ -132,10 +160,14 @@ impl FanOut {
     /// Opens on the prompt at once, looking up the host's agents meanwhile.
     pub(crate) fn start(origin: Origin) -> Self {
         let (sender, events) = mpsc::channel();
+        let hosts = Picker::new(&origin.endpoint_id, Instant::now());
         let mut fan_out = Self {
             origin,
             stage: Stage::Compose(None),
             picks: Picks::default(),
+            hosts,
+            spread: false,
+            overrides: Vec::new(),
             prompt: String::new(),
             lanes: Vec::new(),
             base: None,
@@ -179,6 +211,76 @@ impl FanOut {
         self.picks.total()
     }
 
+    #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+    pub(crate) fn lane_hosts_for_test(&self) -> Vec<String> {
+        self.lane_hosts()
+    }
+
+    pub(crate) fn repo_label(&self) -> &str {
+        &self.origin.repo_label
+    }
+
+    /// Take freshly gathered hosts while composing.
+    pub(crate) fn update_hosts(&mut self, candidates: Vec<Candidate>, now: Instant) -> bool {
+        self.composing() && self.hosts.update(candidates, now)
+    }
+
+    pub(crate) fn hosts_mut(&mut self) -> &mut Picker {
+        &mut self.hosts
+    }
+
+    /// Whether lanes may go to other hosts at all.
+    pub(super) fn can_spread(&self) -> bool {
+        self.composing() && self.hosts.offers_choice()
+    }
+
+    pub(super) fn toggle_spread(&mut self) -> bool {
+        if !self.can_spread() {
+            return false;
+        }
+        self.spread = !self.spread;
+        self.overrides.clear();
+        self.hosts.close();
+        true
+    }
+
+    /// Send lane `lane` to `endpoint_id`, over the spread.
+    pub(crate) fn assign(&mut self, lane: usize, endpoint_id: &str) -> bool {
+        self.hosts.close();
+        if !self.spread || self.hosts.online(endpoint_id).is_none() || lane >= self.picks.total() {
+            return false;
+        }
+        self.overrides.resize(self.picks.total(), None);
+        self.overrides[lane] = Some(endpoint_id.to_owned());
+        true
+    }
+
+    /// Each lane's host by endpoint ID, in lane order: the origin unless
+    /// spreading, else the spread over the best hosts with the user's
+    /// choices on top.
+    pub(super) fn lane_hosts(&self) -> Vec<String> {
+        let lanes = self.picks.total();
+        if !self.spread || !self.hosts.offers_choice() {
+            return vec![self.origin.endpoint_id.clone(); lanes];
+        }
+        let mut hosts = self.hosts.spread(lanes);
+        hosts.resize(lanes, self.origin.endpoint_id.clone());
+        for (host, chosen) in hosts.iter_mut().zip(&self.overrides) {
+            if let Some(chosen) = chosen.as_ref().filter(|id| self.hosts.online(id).is_some()) {
+                host.clone_from(chosen);
+            }
+        }
+        hosts
+    }
+
+    /// How many hosts the lanes run on.
+    pub(super) fn host_count(&self) -> usize {
+        let mut hosts = self.lane_hosts();
+        hosts.sort();
+        hosts.dedup();
+        hosts.len()
+    }
+
     fn probe(&mut self, work: impl FnOnce(&AtomicBool) -> Event + Send + 'static) {
         self.probe.store(true, Ordering::Release);
         let cancelled = Arc::new(AtomicBool::new(false));
@@ -201,6 +303,9 @@ impl FanOut {
         if !self.composing() {
             return false;
         }
+        // Lanes shift with every pick, so a lane's chosen host would land
+        // on another agent.
+        self.overrides.clear();
         if add {
             self.picks.add(kind)
         } else {
@@ -224,11 +329,30 @@ impl FanOut {
     }
 
     /// Start every lane. `seed` names the branches; see [`plan::lanes`].
-    pub(super) fn launch(&mut self, prompt: &str, seed: u64) -> bool {
+    /// `destination` describes another host lanes go to.
+    pub(super) fn launch(
+        &mut self,
+        prompt: &str,
+        seed: u64,
+        destination: impl Fn(&str) -> Option<HostRepositories>,
+    ) -> bool {
         if self.not_ready(prompt).is_some() {
             return false;
         }
+        let mut hosts = Vec::new();
+        for endpoint in self.lane_hosts() {
+            if endpoint == self.origin.endpoint_id {
+                hosts.push(None);
+                continue;
+            }
+            let Some(found) = destination(&endpoint) else {
+                self.error = Some(format!("{endpoint} cannot be reached by script"));
+                return false;
+            };
+            hosts.push(Some(found));
+        }
         self.stop_probe();
+        self.hosts.close();
         let lanes = plan::lanes(&self.picks, seed);
         self.prompt = prompt.trim().to_owned();
         self.lanes = lanes
@@ -241,11 +365,11 @@ impl FanOut {
             })
             .collect();
         let request = Request {
-            host: self.origin.host.clone(),
-            workspace_id: self.origin.workspace_id.clone(),
+            origin: self.origin.fresh(),
             base: self.origin.base.clone(),
             prompt: self.prompt.clone(),
             lanes,
+            hosts,
         };
         let (sender, cancelled) = (self.sender.clone(), self.work.clone());
         spawn(move || {
@@ -259,13 +383,13 @@ impl FanOut {
         true
     }
 
-    fn checkouts(&self) -> Vec<String> {
+    fn checkouts(&self) -> Vec<Option<(Host, String)>> {
         self.lanes
             .iter()
             .map(|lane| {
                 lane.checkout
                     .as_ref()
-                    .map_or_else(String::new, |c| c.path.clone())
+                    .map(|c| (c.host.clone(), c.path.clone()))
             })
             .collect()
     }
@@ -282,8 +406,8 @@ impl FanOut {
             return false;
         }
         self.next_refresh = Some(now + REFRESH_EVERY);
-        let (host, checkouts) = (self.origin.host.clone(), self.checkouts());
-        self.probe(move |cancelled| Event::Stats(job::stats(&host, &checkouts, &base, cancelled)));
+        let checkouts = self.checkouts();
+        self.probe(move |cancelled| Event::Stats(job::stats(&checkouts, &base, cancelled)));
         true
     }
 
@@ -296,16 +420,19 @@ impl FanOut {
             return false;
         }
         self.stop_probe();
-        let doomed = self.doomed(winner);
-        let (host, sender, cancelled) = (
-            self.origin.host.clone(),
-            self.sender.clone(),
-            self.work.clone(),
-        );
+        let doomed: Vec<(usize, Host, String)> = self
+            .doomed(winner)
+            .into_iter()
+            .filter_map(|(index, workspace)| {
+                let host = self.lanes[index].checkout.as_ref()?.host.clone();
+                Some((index, host, workspace))
+            })
+            .collect();
+        let (sender, cancelled) = (self.sender.clone(), self.work.clone());
         spawn(move || {
             let removed = doomed
                 .into_iter()
-                .map(|(index, workspace)| (index, job::remove(&host, &workspace, &cancelled)))
+                .map(|(index, host, workspace)| (index, job::remove(&host, &workspace, &cancelled)))
                 .collect();
             let _ = sender.send(Event::Removed(removed));
         });
@@ -325,9 +452,9 @@ impl FanOut {
             .collect()
     }
 
-    /// Apply finished work. Returns the kept lane's workspace once every
-    /// other lane is gone.
-    pub(super) fn poll(&mut self) -> (bool, Option<String>) {
+    /// Apply finished work. Returns the kept lane's endpoint and workspace
+    /// once every other lane is gone.
+    pub(super) fn poll(&mut self) -> (bool, Option<(String, String)>) {
         let mut changed = false;
         while let Ok(event) = self.events.try_recv() {
             changed = true;
@@ -347,6 +474,7 @@ impl FanOut {
                         continue;
                     };
                     lane.state = match progress {
+                        Progress::SettingUp => LaneState::SettingUp,
                         Progress::CreatingWorktree => LaneState::CreatingWorktree,
                         Progress::Created(checkout) => {
                             lane.checkout = Some(checkout);
@@ -399,7 +527,9 @@ impl FanOut {
                     }
                     if failures.is_empty() {
                         let workspace = self.lanes.get(winner).and_then(|lane| {
-                            lane.checkout.as_ref().map(|c| c.workspace_id.clone())
+                            lane.checkout
+                                .as_ref()
+                                .map(|c| (c.endpoint_id.clone(), c.workspace_id.clone()))
                         });
                         return (true, workspace);
                     }
