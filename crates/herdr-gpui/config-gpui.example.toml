@@ -38,7 +38,7 @@ confirm_close_pane = true
 show_agents = true
 # Show CPU and memory: the selected host's in the status bar, and each host's
 # on its sidebar row. Connected remote hosts are read over SSH every couple of
-# seconds; false stops all sampling. Also under Settings > General.
+# seconds; false stops all sampling. Also under Settings > Status bar.
 show_system_load = true
 # Checkpoint a worktree each time one of its agents starts or finishes a turn,
 # locally or over SSH, so its files can be rolled back from the workspace
@@ -161,7 +161,8 @@ project_roots = []
 # command_palette = "cmd-shift-p"
 # open_notification_target = "cmd-alt-n"
 # quit = "cmd-q"
-# Unbound by default: themes, reconnect, logs, about.
+# Unbound by default: themes, reconnect, logs, about, worktree_notes,
+# edit_worktree_note.
 
 # What the focused pane receives instead of a keystroke, as Ghostty's text:
 # binds do. The value is a key a terminal can receive (ctrl-a, home, alt-b,
@@ -298,6 +299,21 @@ size = 12
 # is saved in its own 0600 daytona-api-key file. Default is false.
 # allow_plaintext_credentials = false
 
+# What the status bar shows, also under Settings > Status bar. Whether usage
+# and CPU/memory show at all is [usage] show and show_system_load.
+# [status_bar]
+# "detailed" draws a meter and a service's two tightest windows; "compact"
+# shows each service's tightest limit as one share.
+# usage = "detailed"
+# "detailed" draws a CPU graph and a memory meter; "compact" shows the shares.
+# system_load = "detailed"
+# The cup that keeps the display awake; it stays while holding, so it can stop.
+# keep_awake = true
+# Buttons: "label" for icon and name, "icon" for the icon alone, or "hidden".
+# theme = "label"
+# shortcuts = "label"
+# report_issue = "label"
+
 # Optional behaviors, all off unless turned on here.
 # [features]
 # Open a space's menu when the pointer rests on its sidebar row, without a
@@ -309,6 +325,7 @@ size = 12
 # (read over SSH for a remote host, and never copied off it), or a key or
 # cookie set below on this machine.
 # [usage]
+# Also under Settings > Status bar.
 # show = true
 # Daemon toolbar segments, including plugin usage percentages; independent of show.
 # topbar = true

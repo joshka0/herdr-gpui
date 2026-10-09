@@ -10,7 +10,8 @@ use fonts::verify_fonts;
 use themes::verify_themes;
 
 #[derive(Default)]
-struct Layout([Option<Bounds<Pixels>>; 8]);
+/// One probe per section, so the count follows the sections this build has.
+struct Layout([Option<Bounds<Pixels>>; Section::ALL.len()]);
 impl Global for Layout {}
 
 pub(super) fn probe(index: usize) -> impl IntoElement {

@@ -79,24 +79,7 @@ impl HerdrWindow {
             .hover(|button| button.bg(rgb(theme.surface)))
             .text_color(rgb(theme.muted))
             .font_weight(FontWeight::NORMAL)
-            .child(
-                div()
-                    .size(px(12.))
-                    .rounded(px(2.))
-                    .border_1()
-                    .border_color(rgb(theme.muted))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .when(viewed, |check| {
-                        check.bg(rgb(theme.primary())).child(
-                            svg()
-                                .path("icons/check.svg")
-                                .size(px(10.))
-                                .text_color(rgb(theme.text_on(theme.primary()))),
-                        )
-                    }),
-            )
+            .child(crate::toggles::checkbox(theme, 12., viewed))
             .child("Viewed")
             .on_click(cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();

@@ -215,6 +215,7 @@ impl HerdrWindow {
                             reading,
                             theme,
                             Some(super::metrics::glyph_width(font)),
+                            crate::config::status_bar::Detail::Detailed,
                         ))
                         .tooltip(crate::system_load::tooltip(reading, &host, theme)),
                 )

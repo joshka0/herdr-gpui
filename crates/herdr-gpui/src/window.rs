@@ -28,6 +28,7 @@ mod regions;
 mod render;
 mod selection;
 mod server_keys;
+mod status_bar;
 pub(crate) mod system_notifications;
 mod tab_drag;
 mod tab_strip;
@@ -243,6 +244,8 @@ pub(crate) struct HerdrWindow {
     /// Browser tabs this window shows, and its pages for them.
     pub(crate) browser: crate::browser::Browser,
     pub(crate) _browser_tabs: Subscription,
+    /// Another window may edit a note this one shows.
+    pub(crate) _worktree_notes: Subscription,
     /// The daemon's prefix was typed, so the next keystroke completes a chord.
     pub(crate) prefix_armed: bool,
     /// Herdr's resize mode: direction keys resize the focused pane until
@@ -281,6 +284,15 @@ impl HerdrWindow {
                 view.set_indicators(indicators, cx);
                 cx.notify();
             });
+        })
+    }
+
+    /// Another window may edit a note: redraw the sidebar, and rebuild an
+    /// open palette's rows without waiting for the next tick.
+    pub(crate) fn observe_worktree_notes(window: &Window, cx: &mut Context<Self>) -> Subscription {
+        cx.observe_global_in::<crate::worktree_notes::Notes>(window, |this, window, cx| {
+            this.refresh_palette(window, cx);
+            cx.notify();
         })
     }
 
@@ -794,6 +806,7 @@ impl HerdrWindow {
             browser: crate::browser::Browser::new(cx),
             // Another window, or an agent, may open or close a tab.
             _browser_tabs: cx.observe_global::<crate::browser::Store>(|_, cx| cx.notify()),
+            _worktree_notes: Self::observe_worktree_notes(window, cx),
             prefix_armed: false,
             resize_mode: false,
             server_keys: None,

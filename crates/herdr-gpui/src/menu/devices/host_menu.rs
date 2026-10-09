@@ -398,7 +398,11 @@ impl HerdrWindow {
                         .gap(px(8.))
                         .cursor_pointer()
                         .when(toggle, |row| {
-                            row.child(if server_keys { "☑" } else { "☐" })
+                            row.child(crate::toggles::checkbox(
+                                theme,
+                                self.config.ui.size + 2.,
+                                server_keys,
+                            ))
                         })
                         .when(action == Action::Remove, |row| {
                             row.text_color(crate::menu::danger(theme))
@@ -463,9 +467,14 @@ impl HerdrWindow {
                         .id("remove-device-github")
                         .debug_selector(|| "remove-device-github".into())
                         .flex()
+                        .items_center()
                         .gap(px(8.))
                         .cursor_pointer()
-                        .child(if host.forget_github { "☑" } else { "☐" })
+                        .child(crate::toggles::checkbox(
+                            theme,
+                            self.config.ui.size + 2.,
+                            host.forget_github,
+                        ))
                         .child("Also delete its GitHub sign-in from this computer")
                         .on_click(cx.listener(|this, _, _, cx| {
                             if let Some(host) = &mut this.menu.host {

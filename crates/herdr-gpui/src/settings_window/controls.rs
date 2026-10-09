@@ -1,6 +1,7 @@
 //! Prepared controls for the standalone window; persistence belongs to its serial save path.
 mod fonts;
 mod preferences;
+mod status_bar;
 
 use super::{Section, SettingsWindow, remote_history::HostState};
 use crate::{
@@ -401,6 +402,7 @@ impl SettingsWindow {
             Section::Indicators => self.render_indicator_controls(cx),
             Section::Sound => self.render_sound_controls(cx),
             Section::Notifications => self.render_notification_controls(cx),
+            Section::StatusBar => self.render_status_bar_controls(cx),
             Section::General => self.render_general_controls(cx),
             Section::Appearance | Section::Integrations => div(),
             #[cfg(feature = "cloud")]
@@ -673,22 +675,6 @@ impl SettingsWindow {
     fn render_general_controls(&self, cx: &mut Context<Self>) -> Div {
         let general = self
             .control_card("Interface")
-            .child(
-                self.control_switch("settings-usage", "Show usage", self.config.usage.show, true)
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        let show = !this.config.usage.show;
-                        this.save_native(move || Config::save_usage_visibility(show), cx);
-                    })),
-            )
-            .child(self.preference_switch(
-                "settings-system-load",
-                "Show CPU and memory",
-                self.config.show_system_load,
-                crate::config::preferences::Preference::ShowSystemLoad(
-                    !self.config.show_system_load,
-                ),
-                cx,
-            ))
             .child(self.preference_switch(
                 "settings-agent-checkpoints",
                 "Checkpoint agent turns",

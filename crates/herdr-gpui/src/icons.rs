@@ -92,6 +92,28 @@ pub(super) fn uncommitted(theme: &crate::config::Theme, size: f32) -> gpui::Div 
         )
 }
 
+/// A checkout the user keeps a note on, beside the working-tree marker and
+/// in a hue of its own so the two never read as one.
+pub(super) fn note(theme: &crate::config::Theme, size: f32) -> gpui::Div {
+    use gpui::{div, prelude::*, px, rgb, rgba, svg};
+    div()
+        .size(px(size))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(px(crate::config::corners::SMALL))
+        .bg(rgba((theme.palette[4] << 8) | 0x30))
+        .border_1()
+        .border_color(rgba((theme.palette[4] << 8) | 0x90))
+        .child(
+            svg()
+                .path("icons/note.svg")
+                .size(px(size - 4.))
+                .text_color(rgb(theme.ink(theme.palette[4]))),
+        )
+}
+
 /// A checkout whose work was teleported to another host.
 pub(super) fn teleported(theme: &crate::config::Theme, size: f32) -> gpui::Div {
     use gpui::{Rgba, div, prelude::*, px, svg};
@@ -130,6 +152,7 @@ impl AssetSource for Icons {
             "icons/user.svg" => include_bytes!("../../../assets/icons/user.svg"),
             "icons/x.svg" => include_bytes!("../../../assets/icons/x.svg"),
             "icons/pencil.svg" => include_bytes!("../../../assets/icons/pencil.svg"),
+            "icons/note.svg" => include_bytes!("../../../assets/icons/note.svg"),
             "icons/trash.svg" => include_bytes!("../../../assets/icons/trash.svg"),
             "icons/chevron-up.svg" => include_bytes!("../../../assets/icons/chevron-up.svg"),
             "icons/chevron-down.svg" => include_bytes!("../../../assets/icons/chevron-down.svg"),
@@ -167,6 +190,7 @@ impl AssetSource for Icons {
             "icons/check.svg" => include_bytes!("../../../assets/icons/check.svg"),
             "icons/panel-left.svg" => include_bytes!("../../../assets/icons/panel-left.svg"),
             "icons/panel-right.svg" => include_bytes!("../../../assets/icons/panel-right.svg"),
+            "icons/status-bar.svg" => include_bytes!("../../../assets/icons/status-bar.svg"),
             "icons/window-minimize.svg" => {
                 include_bytes!("../../../assets/icons/window-minimize.svg")
             }
@@ -228,6 +252,7 @@ impl AssetSource for Icons {
             "icons/check.svg",
             "icons/panel-left.svg",
             "icons/panel-right.svg",
+            "icons/status-bar.svg",
             "icons/window-minimize.svg",
             "icons/window-maximize.svg",
             "icons/window-restore.svg",
@@ -268,7 +293,7 @@ mod tests {
         assert!(Icons.load("unknown.svg").unwrap().is_none());
         assert_eq!(
             Icons.list("icons/").unwrap().len(),
-            45 + AgentIcon::ALL.len() + crate::usage::icon_paths().count()
+            46 + AgentIcon::ALL.len() + crate::usage::icon_paths().count()
         );
     }
 
