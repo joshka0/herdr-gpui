@@ -2227,12 +2227,16 @@ records when reporting the failure.
    branch, so renamed local branches can identify fork PRs. Without an upstream,
    lookup uses the local branch name and requires the origin owner as before.
    Unsupported upstreams fail closed rather than matching an unrelated fork.
-  On macOS, all socket modes (including explicit/inherited sockets) require a
-  same-user kernel peer at the standard configured session socket, with owned,
+  On macOS and Linux, all socket modes (including explicit/inherited sockets)
+  require a same-user kernel peer (`getpeereid` on macOS, `SO_PEERCRED` on
+  Linux) at the standard configured session socket, with owned,
   non-group/world-writable socket and parent. Executable upgrades/removal do not
   invalidate this local endpoint trust. Sockets elsewhere remain blocked; a
   same-user proxy deliberately replacing the trusted socket is not detectable.
-  Reconnect rechecks the endpoint.
+  Reconnect rechecks the endpoint. A refused endpoint hides local Git actions and
+  reviews and logs `Daemon endpoint not trusted as local` with the failed check.
+  `DirectoryPermissions` usually means a umask of 002 created the session
+  directory group-writable; `chmod g-w` on it and reconnect.
   On a saved SSH device, the checkout lives on that host, so local Git cannot
   verify it. The worker instead reads the repository's `remote.origin.url` over
   the same noninteractive SSH options as the bridge (`BatchMode=yes`, strict host
