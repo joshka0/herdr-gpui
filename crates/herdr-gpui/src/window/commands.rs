@@ -78,7 +78,7 @@ impl HerdrWindow {
                     NavigationTarget::Pane(id) => handle.focus_pane(boot, id),
                 }
             });
-        self.marked.clear();
+        self.discard_composition(cx);
         cx.notify();
         queued
     }
@@ -303,6 +303,33 @@ impl HerdrWindow {
                 }
                 return;
             }
+            // Repeats the search in use: the review's, else the pane's find
+            // bar, opening the bar when nothing is being searched yet.
+            Command::FindNext | Command::FindPrevious => {
+                let back = command == Command::FindPrevious;
+                if let Some(id) = self.focused_review(window, cx) {
+                    self.review_find_again(id, back, window, cx);
+                } else if self.find.is_some() {
+                    // The bar's next match is the next older one, as Enter.
+                    let step = if back {
+                        crate::find::Step::Newer
+                    } else {
+                        crate::find::Step::Older
+                    };
+                    self.find_step(step, cx);
+                } else {
+                    self.open_find(window, cx);
+                }
+                return;
+            }
+            Command::ToggleFullScreen => {
+                window.toggle_fullscreen();
+                return;
+            }
+            Command::CycleWindows => {
+                cycle_windows(window, cx);
+                return;
+            }
             Command::CopyMode => {
                 self.enter_copy_mode(window, cx);
                 return;
@@ -410,7 +437,7 @@ impl HerdrWindow {
             self.request_focus_change(method.as_str(), None, |handle, boot| {
                 handle.request(boot, method, params)
             });
-            self.marked.clear();
+            self.discard_composition(cx);
         }
         window.focus(&self.focus, cx);
         cx.notify();
@@ -577,4 +604,25 @@ impl HerdrWindow {
                     ))),
             )
     }
+}
+
+/// Brings the app's next window forward, in the order the windows opened,
+/// as macOS's Cmd-` does: a front-to-back order would only ever swap the two
+/// most recent. Deferred, since activating a window updates it.
+fn cycle_windows(window: &Window, cx: &mut Context<HerdrWindow>) {
+    let Some(next) = next_window(&cx.windows(), window.window_handle()) else {
+        return;
+    };
+    cx.defer(move |cx| {
+        next.update(cx, |_, window, _| window.activate_window())
+            .ok();
+    });
+}
+
+/// The window after `current` in `windows`, wrapping; none when `current`
+/// is alone or unknown.
+pub(super) fn next_window<T: Copy + PartialEq>(windows: &[T], current: T) -> Option<T> {
+    let at = windows.iter().position(|window| *window == current)?;
+    let next = windows[(at + 1) % windows.len()];
+    (next != current).then_some(next)
 }

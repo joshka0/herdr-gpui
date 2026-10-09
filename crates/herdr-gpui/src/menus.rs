@@ -171,6 +171,13 @@ pub(crate) fn menus(layout: Layout) -> Vec<Menu> {
                 ),
                 MenuItem::separator(),
                 layout_menu(layout.mode),
+                MenuItem::separator(),
+                MenuItem::action(
+                    "Toggle Full Screen",
+                    RunCommand {
+                        command: Command::ToggleFullScreen,
+                    },
+                ),
             ],
         },
         Menu {
@@ -221,6 +228,18 @@ pub(crate) fn menus(layout: Layout) -> Vec<Menu> {
                     },
                 ),
                 MenuItem::action(
+                    "Find Next",
+                    RunCommand {
+                        command: Command::FindNext,
+                    },
+                ),
+                MenuItem::action(
+                    "Find Previous",
+                    RunCommand {
+                        command: Command::FindPrevious,
+                    },
+                ),
+                MenuItem::action(
                     "Copy Mode",
                     RunCommand {
                         command: Command::CopyMode,
@@ -267,6 +286,12 @@ pub(crate) fn menus(layout: Layout) -> Vec<Menu> {
                     "New Window",
                     RunCommand {
                         command: Command::NewWindow,
+                    },
+                ),
+                MenuItem::action(
+                    "Cycle Through Windows",
+                    RunCommand {
+                        command: Command::CycleWindows,
                     },
                 ),
                 MenuItem::separator(),

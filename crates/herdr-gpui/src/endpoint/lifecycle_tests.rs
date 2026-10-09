@@ -17,6 +17,7 @@ use std::{
 };
 
 mod close_pane;
+mod dead_keys;
 mod endpoint_switch;
 mod focus_fences;
 mod horizontal_wheel;

@@ -426,6 +426,7 @@ impl HerdrWindow {
         self.split_drag = None;
         self.pressed_terminal_link = None;
         self.marked.clear();
+        self.marked_selection = None;
         self.wheel = Default::default();
         self.sent_focus = None;
         self.activation_deadline = None;

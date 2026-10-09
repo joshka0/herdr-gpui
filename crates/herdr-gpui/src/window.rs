@@ -44,6 +44,8 @@ mod key_action_tests;
 #[cfg(all(test, feature = "integration-test"))]
 mod resize_tests;
 #[cfg(test)]
+mod shortcut_tests;
+#[cfg(test)]
 mod tests;
 
 #[cfg(feature = "integration-test")]
@@ -148,6 +150,9 @@ pub(crate) struct HerdrWindow {
     /// The terminal grid's cached regions; see `regions`.
     pub(crate) regions: Vec<regions::RegionLayers>,
     pub(crate) marked: String,
+    /// Where the IME's caret or converted clause is within `marked`, in
+    /// UTF-16; `None` puts the caret after it.
+    pub(crate) marked_selection: Option<std::ops::Range<usize>>,
     /// The sidebar row the pointer is resting on, waiting to open its menu.
     pub(crate) hover: Option<sidebar::HoverRest>,
     /// The menu that resting opened, which the pointer closes by leaving it.
@@ -449,7 +454,7 @@ impl HerdrWindow {
                 .as_ref()
                 .and_then(|s| s.focused_pane_id.clone())
         {
-            self.marked.clear();
+            self.discard_composition(cx);
         }
         self.poll_github(window, cx);
         if self.update_workspace_pr() {
@@ -747,6 +752,7 @@ impl HerdrWindow {
             painter: Default::default(),
             regions: Vec::new(),
             marked: String::new(),
+            marked_selection: None,
             hover: None,
             hover_menu: None,
             local_error: error,

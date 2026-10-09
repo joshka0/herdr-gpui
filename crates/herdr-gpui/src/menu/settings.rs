@@ -349,6 +349,8 @@ impl HerdrWindow {
                 | Command::Zoom
                 | Command::ClearPane
                 | Command::Find
+                | Command::FindNext
+                | Command::FindPrevious
                 | Command::CopyMode
                 | Command::EditScrollback
                 | Command::ClosePane
@@ -403,6 +405,8 @@ impl HerdrWindow {
                 | Command::Logs
                 | Command::About
                 | Command::InstallBrowserSkill
+                | Command::ToggleFullScreen
+                | Command::CycleWindows
                 | Command::ReloadConfig => 2,
                 Command::OpenNotificationTarget => 1,
             };

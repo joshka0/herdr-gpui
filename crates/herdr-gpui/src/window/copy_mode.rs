@@ -52,7 +52,7 @@ impl HerdrWindow {
         };
         self.leave_copy_mode(cx);
         self.selection = None;
-        self.marked.clear();
+        self.discard_composition(cx);
         self.copy_mode = Some(CopyModeState {
             mode,
             boot_id,

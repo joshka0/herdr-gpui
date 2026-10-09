@@ -484,6 +484,7 @@ impl HerdrWindow {
         self.flash = None;
         self.local_error = None;
         self.marked.clear();
+        self.marked_selection = None;
         self.last_queued_options = None;
         self.sent_focus = None;
         self.wheel = WheelAccumulator::default();

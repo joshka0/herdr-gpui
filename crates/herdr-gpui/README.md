@@ -2056,7 +2056,9 @@ Windows setup) nothing is saved and the window says so.
   daemon's `pane.copy_search`. Matches are tinted, the current one more
   strongly, and shown as "3 of 17". Enter or Up moves to the next older match
   and Shift-Enter or Down to the next newer one (Cmd-G and Cmd-Shift-G work
-  too), scrolling the pane to it.
+  too, also once the terminal has the keyboard back; with no bar open, Cmd-G
+  opens it), scrolling the pane to it. In a review, Cmd-G and Cmd-Shift-G
+  step through its matches.
   Escape closes the bar. Lowercase queries ignore case; any uppercase letter
   makes the search case-sensitive, as Herdr's copy mode does. Text typed in
   the bar, IME composition included, never reaches the terminal. Daemons that
@@ -2225,10 +2227,20 @@ Windows setup) nothing is saved and the window says so.
 - Server popup text surfaces centered above the main surface, with popup input
   routing while one is active.
 - Native committed text through `EntityInputHandler`, including Unicode and
-  composition. In-progress marked text is shown in the status bar.
+  composition. In-progress marked text is drawn inline at the input cursor,
+  and the input method's caret or converted clause anchors its candidate
+  window. Moving to another pane or running a command drops a composition in
+  progress, in the input method too, so it never carries into the new pane.
 - Enter, Tab/BackTab, Escape, Backspace, arrows, navigation/editing keys,
   F1-F24, Control characters and modifiers on special keys. Option-printable
-  input follows the macOS keyboard layout, including dead keys.
+  input follows the macOS keyboard layout, including dead keys. With the
+  default `option_as_alt = "auto"` on the U.S. and ABC layouts, the left
+  Option sends Alt shortcuts and the right Option types accents and dead keys
+  (right Option-E, then E, types é); `"left"` and `"right"` pick a side on
+  any layout. Option-Left and Option-Right move a word back and forward
+  (Esc-b and Esc-f), Cmd-Left and Cmd-Right to the line's start and end.
+- Ctrl-Cmd-F toggles full screen and Cmd-` brings the app's next window
+  forward, as in other Mac apps.
 - Pointer selection of terminal cells, copied to the clipboard on release with
   a configurable flash. Selections stay within one pane or the popup above it,
   anchor on half cells, and never reach the daemon.
@@ -2326,7 +2338,8 @@ GPUI native action/menu/keybinding patterns.
 - No server-owned keybindings, session picker, saved-host editing, or daemon
   stop/upgrade management.
 - IME uses a minimal transient buffer, not a local editable terminal document;
-  composition appears in the status bar rather than inline. Key releases are
+  the composition is drawn inline at the cursor with one underline, not a
+  thicker one under the clause being converted. Key releases are
   reported only while Herdr says the focused pane asks for every key (kitty
   report-all), and only for keys sent as key events: typed text still arrives
   as text rather than escape codes, so IME and dead keys keep working.
