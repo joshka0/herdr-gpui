@@ -4,8 +4,9 @@ use crate::{code_server::Server, controls::Command};
 
 const COMMIT: &str = "2a59476c9bfcb90b3ddc372c36762471b7dfad1c";
 
-/// A folder that is absolute where the test runs: Windows needs a drive.
-#[cfg(unix)]
+/// The workspace's folder, which must be absolute where the test runs, and
+/// how it reads in the address.
+#[cfg(not(windows))]
 const FOLDER: (&str, &str) = ("/Users/me/project", "%2FUsers%2Fme%2Fproject");
 #[cfg(windows)]
 const FOLDER: (&str, &str) = (r"C:\Users\me\project", "C%3A%5CUsers%5Cme%5Cproject");
