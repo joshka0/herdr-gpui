@@ -697,6 +697,7 @@ impl Render for SettingsWindow {
             .track_focus(&self.focus)
             .on_action(cx.listener(|this, action: &crate::RunCommand, window, cx| {
                 match action.command {
+                    command if crate::window::run_window_command(command, window, cx) => {}
                     crate::controls::Command::Settings => window.activate_window(),
                     crate::controls::Command::NewWindow => {
                         if let Some(target) = this.additional_window_target(cx) {

@@ -201,6 +201,7 @@ impl Review {
         }
         let top = self.top_row();
         self.layout = layout;
+        self.selection = None;
         self.rebuild_starts();
         let top = top.and_then(|row| self.position_of(row)).unwrap_or(0);
         self.reset_scroll(top);
@@ -219,6 +220,13 @@ impl Review {
         }
         entry.folded = folded;
         let path = entry.path.clone();
+        if folded
+            && self
+                .selection
+                .is_some_and(|selection| selection.file == file)
+        {
+            self.selection = None;
+        }
         self.folds.insert(path, folded);
         if folded
             && self
@@ -240,6 +248,13 @@ impl Review {
         };
         entry.set_body(body);
         self.colours.forget(file);
+        // Its lines are new: offsets into the old ones mean nothing.
+        if self
+            .selection
+            .is_some_and(|selection| selection.file == file)
+        {
+            self.selection = None;
+        }
         self.refresh_file(file);
     }
 }

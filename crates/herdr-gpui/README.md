@@ -1789,10 +1789,19 @@ comments on a pull request.
   The review and an annotated page share the width, which is remembered
   with the sidebar's.
 
-- Click a line, added, removed or unchanged, or a file name, write what should
-  change, and press Enter or **Add note**. Escape drops the note being
-  written. Noted lines carry the note's number, and unsent notes stay while
-  the tab is open.
+- Click a line's gutter (its numbers and sign), added, removed or unchanged,
+  or a file name, write what should change, and press Enter or **Add note**.
+  Escape drops the note being written. Noted lines carry the note's number,
+  and unsent notes stay while the tab is open.
+- The code itself selects like an editor's: drag across it, double-click a
+  word, triple-click a line, Shift-click to extend, and Cmd-A (Ctrl-A
+  elsewhere) for the whole file at the top. Cmd-C or **Edit > Copy** copies
+  the code alone, never line numbers, `+`/`-` signs, or hunk headers; side by
+  side, a selection keeps to the side it started on, and Select All takes the
+  side last clicked in that file, else the new side (the old side of a deleted
+  file). A folded file has no code to select. Escape clears it. Tabs copy as the four spaces they are drawn as.
+- The copy icon on a file's header copies its path, and the one on a hunk
+  header copies the hunk as a patch reads, signs and header included.
 - Notes go to the agent in the focused pane, or else to the first agent Herdr
   reports in the focused workspace; the header names it. **Send to agent**
   turns them into one prompt: the checkout, then for each note the
@@ -2251,7 +2260,9 @@ records when reporting the failure.
   daemon's `pane.copy_search`. Matches are tinted, the current one more
   strongly, and shown as "3 of 17". Enter or Up moves to the next older match
   and Shift-Enter or Down to the next newer one (Cmd-G and Cmd-Shift-G work
-  too), scrolling the pane to it.
+  too, also once the terminal has the keyboard back; with no bar open, Cmd-G
+  opens it), scrolling the pane to it. In a review, Cmd-G and Cmd-Shift-G
+  step through its matches.
   Escape closes the bar. Lowercase queries ignore case; any uppercase letter
   makes the search case-sensitive, as Herdr's copy mode does. Text typed in
   the bar, IME composition included, never reaches the terminal. Daemons that
@@ -2331,7 +2342,8 @@ records when reporting the failure.
   like Ghostty's `text:` binds. On macOS, Cmd-Left, Cmd-Right, and
   Cmd-Backspace send Ctrl-A, Ctrl-E, and Ctrl-U by default, so zsh and agent
   prompts jump to the line's ends or delete back to its start as in every
-  other Mac terminal. A value is a key a terminal can receive (`ctrl-a`,
+  other Mac terminal, and Option-Left and Option-Right send Esc-b and Esc-f
+  to move by word. A value is a key a terminal can receive (`ctrl-a`,
   `home`, `alt-b`, `shift-enter`), and an empty string removes a default. A
   pane key takes its keystroke from a default or daemon command, so
   `"cmd-k" = "ctrl-l"` replaces Clear; listing it under `[keybindings]` as well
@@ -2420,10 +2432,21 @@ records when reporting the failure.
 - Server popup text surfaces centered above the main surface, with popup input
   routing while one is active.
 - Native committed text through `EntityInputHandler`, including Unicode and
-  composition. In-progress marked text is shown in the status bar.
+  composition. In-progress marked text is drawn inline at the input cursor,
+  and the input method's caret or converted clause anchors its candidate
+  window. Moving to another pane or running a command drops a composition in
+  progress, in the input method too, so it never carries into the new pane.
 - Enter, Tab/BackTab, Escape, Backspace, arrows, navigation/editing keys,
   F1-F24, Control characters and modifiers on special keys. Option-printable
-  input follows the macOS keyboard layout, including dead keys.
+  input follows the macOS keyboard layout, including dead keys. With the
+  default `option_as_alt = "auto"` on the U.S. and ABC layouts, the left
+  Option sends Alt shortcuts and the right Option types accents and dead keys
+  (right Option-E, then E, types é); `"left"` and `"right"` pick a side on
+  any layout. Option-Left and Option-Right move a word back and forward
+  (Esc-b and Esc-f), Cmd-Left and Cmd-Right to the line's start and end.
+- Ctrl-Cmd-F toggles full screen and Cmd-` brings the app's next window
+  forward, as in other Mac apps, from the Settings and Log windows too. The
+  cycle visits every window in a stable order, not front to back.
 - Pointer selection of terminal cells, copied to the clipboard on release with
   a configurable flash. Selections stay within one pane or the popup above it,
   anchor on half cells, and never reach the daemon.
@@ -2521,7 +2544,8 @@ GPUI native action/menu/keybinding patterns.
 - No server-owned keybindings, session picker, saved-host editing, or daemon
   stop/upgrade management.
 - IME uses a minimal transient buffer, not a local editable terminal document;
-  composition appears in the status bar rather than inline. Key releases are
+  the composition is drawn inline at the cursor with one underline, not a
+  thicker one under the clause being converted. Key releases are
   reported only while Herdr says the focused pane asks for every key (kitty
   report-all), and only for keys sent as key events: typed text still arrives
   as text rather than escape codes, so IME and dead keys keep working.

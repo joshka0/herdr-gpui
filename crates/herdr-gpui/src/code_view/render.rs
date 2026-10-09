@@ -72,6 +72,7 @@ impl HerdrWindow {
                 spans,
                 &[],
                 None,
+                None,
             ))
             .on_click(cx.listener(move |this, _, _, cx| {
                 if let Some(view) = this.code_views.get_mut(&id) {

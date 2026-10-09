@@ -223,7 +223,7 @@ mod flow {
         };
         cx.update(|_, cx| {
             view.update(cx, |view, cx| {
-                connect(view, &peer);
+                connect(view, &peer, cx);
                 view.open_in_editor(&target, Some("w1:p1"), cx);
                 assert!(view.editor_open.is_some());
                 // One editor opens at a time.
@@ -312,7 +312,7 @@ mod flow {
         };
         cx.update(|_, cx| {
             view.update(cx, |view, cx| {
-                connect(view, &peer);
+                connect(view, &peer, cx);
                 view.open_in_editor(&target, None, cx);
                 assert!(view.editor_open.is_some());
                 view.selection_epoch += 1;

@@ -52,7 +52,7 @@ impl HerdrWindow {
         };
         self.leave_copy_mode(cx);
         self.selection = None;
-        self.marked.clear();
+        self.discard_composition(cx);
         self.copy_mode = Some(CopyModeState {
             mode,
             boot_id,
@@ -367,7 +367,7 @@ mod tests {
             MockPeer::advertising(&["pane.copy_motion", "pane.selection.read", "pane.scroll"]);
         let (view, cx) = cx.add_window_view(|window, cx| {
             let mut view = fixture_window(window, cx);
-            peer.prepare(&mut view);
+            peer.prepare(&mut view, cx);
             view.live.supports_copy_motion = true;
             let surface = Arc::make_mut(view.live.surface.as_mut().unwrap());
             surface.panes[0].content_revision = 2;

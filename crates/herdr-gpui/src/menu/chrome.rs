@@ -34,7 +34,7 @@ impl HerdrWindow {
             self.endpoints[self.selected_endpoint].generation,
         );
         self.menu.page = Some(Page::Menu);
-        self.marked.clear();
+        self.discard_composition(cx);
         window.focus(&self.menu.focus, cx);
         cx.notify();
         true
@@ -161,11 +161,11 @@ impl HerdrWindow {
                 self.dismiss_menu(window, cx);
             }
             "detach" => {
-                self.detach_endpoint();
+                self.detach_endpoint(cx);
                 self.dismiss_menu(window, cx);
             }
             "reconnect" => {
-                self.reconnect();
+                self.reconnect(cx);
                 self.dismiss_menu(window, cx);
             }
             _ => {}

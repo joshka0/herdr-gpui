@@ -24,6 +24,8 @@ pub enum Command {
     Zoom,
     ClearPane,
     Find,
+    FindNext,
+    FindPrevious,
     CopyMode,
     EditScrollback,
     ClosePane,
@@ -52,6 +54,8 @@ pub enum Command {
     NewBrowserTab,
     InstallBrowserSkill,
     SplitEditor,
+    ToggleFullScreen,
+    CycleWindows,
     MoveTabPrevious,
     MoveTabNext,
     RenameTab,
@@ -376,6 +380,18 @@ pub const COMMANDS: &[CommandInfo] = &[
         shortcuts: &["cmd-f"],
     },
     CommandInfo {
+        command: Command::FindNext,
+        name: "find_next",
+        label: "Find Next",
+        shortcuts: &["cmd-g"],
+    },
+    CommandInfo {
+        command: Command::FindPrevious,
+        name: "find_previous",
+        label: "Find Previous",
+        shortcuts: &["cmd-shift-g"],
+    },
+    CommandInfo {
         command: Command::CopyMode,
         name: "copy_mode",
         label: "Copy Mode",
@@ -639,6 +655,18 @@ pub const COMMANDS: &[CommandInfo] = &[
         label: "Split Editor",
         shortcuts: &["cmd-\\"],
     },
+    CommandInfo {
+        command: Command::ToggleFullScreen,
+        name: "toggle_full_screen",
+        label: "Toggle Full Screen",
+        shortcuts: &["ctrl-cmd-f"],
+    },
+    CommandInfo {
+        command: Command::CycleWindows,
+        name: "cycle_windows",
+        label: "Cycle Through Windows",
+        shortcuts: &["cmd-`"],
+    },
 ];
 
 pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Method, Value)> {
@@ -780,6 +808,8 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::WorktreeNotes
         | Command::EditWorktreeNote
         | Command::Find
+        | Command::FindNext
+        | Command::FindPrevious
         | Command::CopyMode
         | Command::ToggleSidebar
         | Command::ToggleStatusBar
@@ -802,6 +832,8 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::NewBrowserTab
         | Command::InstallBrowserSkill
         | Command::SplitEditor
+        | Command::ToggleFullScreen
+        | Command::CycleWindows
         // These need state beyond the snapshot, such as the sidebar's order
         // or a dialog, so the window runs them.
         | Command::RenameTab

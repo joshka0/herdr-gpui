@@ -54,9 +54,12 @@ agent_checkpoints = true
 show_listening_ports = true
 # macOS only: whether Option-letter reaches a pane as an Alt shortcut (Alt-P
 # for Option-P) or types the character the keyboard layout puts there. "auto"
-# sends Alt on the U.S. and ABC layouts and types elsewhere, so layouts that
-# keep @, [, or letters on Option still type them. true always sends Alt,
-# false always types. Alt always reaches the pane on Linux and Windows.
+# sends Alt from the left Option on the U.S. and ABC layouts, while the right
+# Option still types accents and dead keys (Option-E then E types é); it types
+# with both elsewhere, so layouts that keep @, [, or letters on Option still
+# type them. "left" or "right" sends Alt from that Option key alone on any
+# layout, true from both, and false never. Alt always reaches the pane on
+# Linux and Windows.
 option_as_alt = "auto"
 # Where a clicked terminal link opens: "system" (the default browser) or
 # "browser-tab" (a browser tab beside the workspace's terminals, macOS and
@@ -174,6 +177,10 @@ project_roots = []
 # go_to_file = "cmd-o"
 # open_notification_target = "cmd-alt-n"
 # quit = "cmd-q"
+# find_next = "cmd-g"
+# find_previous = "cmd-shift-g"
+# toggle_full_screen = "ctrl-cmd-f"
+# cycle_windows = "cmd-`"
 # Unbound by default: themes, reconnect, logs, about, worktree_notes,
 # edit_worktree_note.
 
@@ -186,6 +193,8 @@ project_roots = []
 # "cmd-left" = "ctrl-a"
 # "cmd-right" = "ctrl-e"
 # "cmd-backspace" = "ctrl-u"
+# "alt-left" = "alt-b"
+# "alt-right" = "alt-f"
 
 # Saved SSH devices use the local keybindings above, as `herdr --remote` does.
 # "server" uses the [keys] profile that device's Herdr publishes instead, like
