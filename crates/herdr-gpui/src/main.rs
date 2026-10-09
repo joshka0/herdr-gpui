@@ -67,7 +67,6 @@ mod menus;
 mod mockup;
 mod motion;
 mod navigation;
-mod new_tab_menu;
 mod notifications;
 mod osc52;
 mod palette;

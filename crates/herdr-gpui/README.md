@@ -1531,12 +1531,12 @@ the same tab. Splitting opens nothing new.
   or padded. Pressing that group brings the live tab there. A page shown in
   another group is stood in for with **Show Here**.
 - The group in use has the keyboard, and its chosen tab carries the accent.
-  **+** opens a menu of what to add to that group: **New Terminal Tab**
-  (`cmd-t`), **New Browser Tab** (`cmd-shift-b`), **Review Changes** when
-  the Git chip tracks a checkout, and the workspace's listening ports, each
-  opening its page. The shortcuts skip the menu and open in the group in
-  use, where Close Tab acts too. Close Tab in an empty group closes the
-  group.
+  **+** opens a terminal tab in that group. The group's **…**, at the end
+  of its strip, offers the other kinds of tab: **New Browser Tab**
+  (`cmd-shift-b`), **Review Changes** when the Git chip tracks a checkout,
+  and the workspace's listening ports, each opening its page. `cmd-t` and
+  `cmd-shift-b` open in the group in use, where Close Tab acts too. Close
+  Tab in an empty group closes the group.
 - Drag a divider to resize the groups beside it. Groups are the window's own,
   per workspace. A group's own connection closes with the group, or when the
   window leaves the workspace or host; returning reconnects it.
@@ -1577,7 +1577,7 @@ own page for each one. Tabs are saved in
 `$XDG_STATE_HOME/herdr/gpui/browser-tabs.json` (default `~/.local/state/`) and
 come back after a restart; closing a workspace in Herdr removes its tabs.
 
-- Open one from a group's **+** menu, with **New Browser Tab** (`cmd-shift-b`)
+- Open one from a group's **…** menu, with **New Browser Tab** (`cmd-shift-b`)
   in the command palette, from a clicked link
   (see [Terminal Links](#terminal-links)), or from an agent (below). A new
   tab starts blank with its address field focused, and lists the
@@ -1643,7 +1643,7 @@ them to the agent that opened it, so it can change the page.
 
 ### Reviewing An Agent's Changes
 
-**Review Changes** in a group's **+** menu opens a review tab on the focused
+**Review Changes** in a group's **…** menu opens a review tab on the focused
 local checkout's changes, with untracked text files as wholly added,
 and lets you send review notes to the agent that made them, like inline
 comments on a pull request.

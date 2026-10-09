@@ -39,10 +39,9 @@ pub(crate) enum Page {
     AgentSkill,
     Tab,
     RenameTab,
-    /// A group's "…" menu: closing tabs and splitting.
+    /// A group's "…" menu: opening tabs other than a terminal, closing
+    /// tabs, and splitting.
     Group,
-    /// A group's "+" menu: the kinds of tab to open in it.
-    NewTab,
     Pane,
     RenamePane,
     /// The processes under the pane menu's pane.
