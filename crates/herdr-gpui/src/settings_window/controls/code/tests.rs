@@ -269,3 +269,20 @@ fn showing_the_page_during_a_save_leaves_it_to_finish(cx: &mut TestAppContext) {
     });
     assert_eq!(text(&view, cx), "http://127.0.0.1:9000/?tkn=new");
 }
+
+/// A reload that shows another address forgets the last test's result, and
+/// an answer still on its way, which were of the address shown before.
+#[gpui::test]
+fn a_reload_to_another_address_forgets_the_last_test(cx: &mut TestAppContext) {
+    let (view, cx, _) = page(cx);
+    view.update(cx, |view, cx| {
+        view.config.code.url = Some(WebUrl::try_from("http://127.0.0.1:8000/?tkn=x").unwrap());
+        view.sync_code_field(cx);
+        view.code.test = Test::Passed(Server::from_version(COMMIT).unwrap());
+        let before = view.code.generation;
+        view.config.code.url = Some(WebUrl::try_from("http://127.0.0.1:9000/?tkn=y").unwrap());
+        view.sync_code_field(cx);
+        assert_eq!(view.code.test, Test::Idle);
+        assert_ne!(view.code.generation, before);
+    });
+}

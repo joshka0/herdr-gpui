@@ -149,6 +149,10 @@ impl SettingsWindow {
             return;
         }
         field.show(&saved, cx);
+        // A test was of the address shown before: its result, or its
+        // answer still on the way, is not this one's.
+        self.code.test = Test::Idle;
+        self.code.generation += 1;
     }
 
     /// Saves the field's address when `save`, else puts the saved one back.
