@@ -39,8 +39,7 @@ impl HerdrWindow {
         #[cfg(any(target_os = "macos", windows))]
         {
             use crate::menu::Cover;
-            let mut live = self.live_pages(cx);
-            live.extend(self.code_page(cx));
+            let live = self.live_pages(cx);
             let open = self.menu.page;
             let measured_for = std::mem::replace(&mut self.browser.cover_page, open);
             // A dimmed dialog's cover is known before it is laid out, so the
@@ -48,7 +47,7 @@ impl HerdrWindow {
             // measured as it is laid out. Without a menu, a status bar
             // tooltip may show above the bar.
             let cover = match (open, self.browser.tooltip_band) {
-                (Some(_), _) if self.menu_dims() => Cover::dimmed(self.herdr_realm()),
+                (Some(_), _) if self.menu_dims() => Cover::All,
                 (Some(_), _) => self.menu.cover.get().settled(measured_for, open),
                 (None, Some(band)) => Cover::Panel(band),
                 (None, None) => {

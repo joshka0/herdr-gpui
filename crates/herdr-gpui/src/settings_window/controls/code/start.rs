@@ -95,7 +95,7 @@ impl SettingsWindow {
     /// The server the app starts: its license until accepted, then how it is.
     pub(super) fn render_code_start(&self, cx: &mut Context<Self>) -> Div {
         let card = self.control_card("Server").child(self.control_note(
-            "The app runs `code serve-web` on 127.0.0.1 when a VS Code panel first needs it, \
+            "The app runs `code serve-web` on 127.0.0.1 when a VS Code tab first needs it, \
              and stops it when it quits.",
         ));
         match Launcher::startup(cx, &self.config.code) {

@@ -217,10 +217,7 @@ impl HerdrWindow {
         }
         let visible_limit =
             ((viewport.height.to_f64() as usize).saturating_sub(108) / 108).clamp(1, VISIBLE_LIMIT);
-        // Toasts keep left of the VS Code column, however narrow, since its
-        // page would hide them.
-        let realm = self.beside_code().unwrap_or(viewport.width);
-        let beside = viewport.width - realm;
+        let realm = viewport.width;
         let narrow = realm < px(720.);
         let width = (realm - px(24.)).max(px(0.)).min(px(340.));
         let visible: Vec<_> = self
@@ -398,7 +395,7 @@ impl HerdrWindow {
                             position,
                             ToastHerdrPosition::TopRight | ToastHerdrPosition::BottomRight
                         ),
-                        |d| d.right(px(12.) + beside),
+                        |d| d.right(px(12.)),
                     )
                     .children(cards)
                     .into_any_element(),

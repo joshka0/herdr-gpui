@@ -10,7 +10,7 @@ fn snapshot() -> ClientShellSnapshot {
 #[test]
 fn catalog_has_all_native_commands_and_gpui_shortcuts() {
     use Command::*;
-    let expected: [(Command, &[&str]); 99] = [
+    let expected: [(Command, &[&str]); 97] = [
         (OpenNotificationTarget, &["cmd-alt-n"]),
         (Logs, &[]),
         (NewWindow, &["cmd-alt-shift-n"]),
@@ -105,9 +105,7 @@ fn catalog_has_all_native_commands_and_gpui_shortcuts() {
         (NewBrowserTab, &["cmd-shift-b"]),
         (InstallBrowserSkill, &[]),
         (SplitEditor, &["cmd-\\"]),
-        (ToggleCode, &[]),
-        (MoveCodeToGroup, &[]),
-        (MoveCodeToPanel, &[]),
+        (OpenCode, &[]),
         (ToggleFullScreen, &["ctrl-cmd-f"]),
         (CycleWindows, &["cmd-`"]),
     ];
@@ -182,9 +180,7 @@ fn gui_commands_never_send_daemon_requests() {
         Command::NewBrowserTab,
         Command::InstallBrowserSkill,
         Command::SplitEditor,
-        Command::ToggleCode,
-        Command::MoveCodeToGroup,
-        Command::MoveCodeToPanel,
+        Command::OpenCode,
         Command::ToggleFullScreen,
         Command::CycleWindows,
         Command::RenameTab,

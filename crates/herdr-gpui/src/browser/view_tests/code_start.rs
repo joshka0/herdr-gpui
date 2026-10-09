@@ -1,4 +1,4 @@
-//! The VS Code panel when the app starts VS Code itself. The launcher is a
+//! The VS Code tab when the app starts VS Code itself. The launcher is a
 //! stand-in that runs nothing; its reports are set by hand.
 use super::*;
 use crate::{
@@ -76,9 +76,9 @@ fn running(cx: &mut VisualTestContext) -> bool {
 #[gpui::test]
 fn a_found_vs_code_asks_for_its_license_before_starting(cx: &mut gpui::TestAppContext) {
     let (view, cx) = found(cx);
-    // No address is set, yet the panel is offered.
-    assert!(cx.debug_bounds("toggle-code").is_some());
-    run(&view, cx, Command::ToggleCode);
+    // No address is set, yet VS Code is offered.
+    assert!(view.read_with(cx, |view, cx| view.code_offered(cx)));
+    run(&view, cx, Command::OpenCode);
     assert!(cx.debug_bounds("code-consent").is_some());
     assert!(cx.debug_bounds("code-accept").is_some());
     tick(&view, cx);
@@ -104,45 +104,60 @@ fn vs_code_starts_only_once_a_page_needs_it(cx: &mut gpui::TestAppContext) {
     tick(&view, cx);
     tick(&view, cx);
     assert!(!running(cx), "no panel, no page, no server");
-    run(&view, cx, Command::ToggleCode);
+    run(&view, cx, Command::OpenCode);
     assert!(running(cx));
     assert!(cx.debug_bounds("code-placeholder").is_some());
     assert!(cx.debug_bounds("code-unreachable").is_none());
+}
+
+/// The VS Code tab, and whether its page was made: a headless window may
+/// record why it could not be instead.
+fn page(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) -> (crate::browser::Tab, bool) {
+    cx.update(|_, cx| {
+        let view = view.read(cx);
+        let tab_scope = scope(&view.endpoints[0]);
+        let tab = cx
+            .global::<Store>()
+            .code_tab(&tab_scope, "w0")
+            .cloned()
+            .unwrap();
+        let made = view.browser.pages.contains(tab.id) || view.browser.failed.contains_key(&tab.id);
+        (tab, made)
+    })
 }
 
 #[gpui::test]
 fn a_started_server_opens_the_page_on_its_own_address(cx: &mut gpui::TestAppContext) {
     let (view, cx) = found(cx);
     accept(&view, cx);
-    run(&view, cx, Command::ToggleCode);
+    run(&view, cx, Command::OpenCode);
+    // The tab is there at once, waiting for its server's address.
+    let (tab, made) = page(&view, cx);
+    assert_eq!(tab.location, None);
+    assert!(!made);
     // Its address is made, but VS Code has not answered yet.
     set_report(cx, Status::Starting, Some(51234));
     tick(&view, cx);
-    let tab = |view: &Entity<HerdrWindow>, cx: &mut VisualTestContext| {
-        cx.update(|_, cx| {
-            let tab_scope = scope(&view.read(cx).endpoints[0]);
-            cx.global::<Store>().code_tab(&tab_scope, "w0").cloned()
-        })
-    };
-    assert!(tab(&view, cx).is_none());
+    let (tab, made) = page(&view, cx);
+    assert_eq!(
+        tab.location,
+        Some(url("http://127.0.0.1:51234/?tkn=secret"))
+    );
+    assert!(!made);
     assert!(cx.debug_bounds("code-placeholder").is_some());
 
     set_report(cx, Status::Ready, Some(51234));
     tick(&view, cx);
-    // The server answered; the next tick opens the tab.
+    // The server answered; the next tick makes the page.
     tick(&view, cx);
-    let opened = tab(&view, cx).unwrap();
-    assert_eq!(
-        opened.location,
-        Some(url("http://127.0.0.1:51234/?tkn=secret"))
-    );
+    assert!(page(&view, cx).1);
 }
 
 #[gpui::test]
-fn a_server_that_stopped_says_why_in_the_panel(cx: &mut gpui::TestAppContext) {
+fn a_server_that_stopped_says_why_in_the_tab(cx: &mut gpui::TestAppContext) {
     let (view, cx) = found(cx);
     accept(&view, cx);
-    run(&view, cx, Command::ToggleCode);
+    run(&view, cx, Command::OpenCode);
     let error = crate::code_server::Error::PortTaken { port: 51234 };
     set_report(
         cx,
@@ -166,7 +181,7 @@ fn an_address_keeps_the_server_the_user_runs(cx: &mut gpui::TestAppContext) {
         // The user's own server is asked as before, token included.
         view.browser.code_server.probe = answers;
     });
-    run(&view, cx, Command::ToggleCode);
+    run(&view, cx, Command::OpenCode);
     tick(&view, cx);
     tick(&view, cx);
     assert!(!running(cx), "an older config's address is used as before");
@@ -189,8 +204,8 @@ fn starting_without_vs_code_installed_says_so(cx: &mut gpui::TestAppContext) {
         view.config.code.license_accepted = true;
     });
     draw(cx);
-    assert!(cx.debug_bounds("toggle-code").is_some());
-    run(&view, cx, Command::ToggleCode);
+    assert!(view.read_with(cx, |view, cx| view.code_offered(cx)));
+    run(&view, cx, Command::OpenCode);
     tick(&view, cx);
     assert!(!running(cx));
     assert!(cx.debug_bounds("code-placeholder").is_some());
@@ -202,15 +217,11 @@ fn starting_without_vs_code_installed_says_so(cx: &mut gpui::TestAppContext) {
 fn no_page_is_made_for_a_started_server_that_stopped(cx: &mut gpui::TestAppContext) {
     let (view, cx) = found(cx);
     accept(&view, cx);
-    run(&view, cx, Command::ToggleCode);
+    run(&view, cx, Command::OpenCode);
     set_report(cx, Status::Ready, Some(51234));
     // Its child exits while the report still says Ready.
     cx.update(|_, cx| Launcher::stand_in_exits(cx));
     tick(&view, cx);
     tick(&view, cx);
-    let opened = cx.update(|_, cx| {
-        let tab_scope = scope(&view.read(cx).endpoints[0]);
-        cx.global::<Store>().code_tab(&tab_scope, "w0").cloned()
-    });
-    assert!(opened.is_none());
+    assert!(!page(&view, cx).1);
 }

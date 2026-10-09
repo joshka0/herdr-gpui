@@ -186,7 +186,7 @@ pub enum LinkTarget {
     BrowserTab,
 }
 
-/// The VS Code panel beside a space's editor groups, served by
+/// VS Code as a tab of a space's editor groups, served by
 /// `code serve-web`. Each space that shows it gets
 /// its own page, which starts at the server's address and then goes
 /// wherever it navigates.
@@ -207,7 +207,7 @@ pub struct CodeConfig {
     pub(crate) license_accepted: bool,
 }
 
-/// Where the VS Code panel's server comes from.
+/// Where VS Code tabs' server comes from.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum CodeMode {

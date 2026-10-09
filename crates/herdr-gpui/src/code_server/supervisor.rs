@@ -1,4 +1,4 @@
-//! The `code serve-web` child the app starts for the VS Code panel. One
+//! The `code serve-web` child the app starts for VS Code tabs. One
 //! worker thread owns it: it makes the address (the token and the port),
 //! checks that the port is free, starts the child, waits for VS Code to
 //! answer, and starts it again with backoff whenever it stops. The UI thread
@@ -33,7 +33,7 @@ pub(crate) struct Plan {
 }
 
 /// Where the server listens, and the address with its token that the
-/// panel loads.
+/// VS Code tab loads.
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct Address {
     pub(crate) port: NonZeroU16,

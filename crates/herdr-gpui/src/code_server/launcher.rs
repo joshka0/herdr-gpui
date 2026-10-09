@@ -1,8 +1,8 @@
 //! The VS Code server the app starts, one for the whole app: VS Code's
 //! command line is found once at launch, `code serve-web` starts the first
-//! time a panel or a grouped VS Code tab needs a page, and it stops when the
+//! time a VS Code tab needs a page, and it stops when the
 //! app quits. Windows and the settings page read [`Startup`], which says
-//! where the panel's server is or why it is not there yet.
+//! where the VS Code tabs' server is or why it is not there yet.
 //!
 //! Builds that cannot show pages (Linux) find and start nothing.
 use super::{
@@ -47,7 +47,7 @@ pub(crate) enum Cli {
     Missing,
 }
 
-/// Where the panel's server is, or why there is none yet.
+/// Where the VS Code tabs' server is, or why there is none yet.
 #[derive(Clone, Debug)]
 pub(crate) enum Startup {
     /// The configured address, which may be unset.
@@ -75,7 +75,7 @@ pub(crate) enum Startup {
 }
 
 impl Startup {
-    /// The address the panel's pages use, kept while the server restarts so
+    /// The address VS Code pages use, kept while the server restarts so
     /// its pages are not closed meanwhile.
     pub(crate) fn url<'a>(&'a self, code: &'a CodeConfig) -> Option<&'a WebUrl> {
         match self {
@@ -91,7 +91,7 @@ impl Startup {
         matches!(self, Self::Address | Self::Ready { .. })
     }
 
-    /// Whether the title bar offers the panel: once there is an address, or
+    /// Whether VS Code is offered: once there is an address, or
     /// the app starts VS Code.
     pub(crate) fn offered(&self, code: &CodeConfig) -> bool {
         match self {
@@ -273,7 +273,7 @@ impl Launcher {
         cx.try_global::<Self>().map(|launcher| &launcher.cli)
     }
 
-    /// Where the panel's server is for `code`. Without a launcher, as in
+    /// Where the VS Code tabs' server is for `code`. Without a launcher, as in
     /// native test modes, VS Code counts as not installed.
     pub(crate) fn startup(cx: &App, code: &CodeConfig) -> Startup {
         match cx.try_global::<Self>() {

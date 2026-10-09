@@ -1,9 +1,9 @@
 //! Asking a `code serve-web` server whether it is there. A page that cannot
-//! load reports nothing back through the web view, so the VS Code panel and
+//! load reports nothing back through the web view, so the VS Code tab and
 //! its settings page probe the server over plain HTTP first. Blocking: run it
 //! off the UI thread.
 //!
-//! The submodules start such a server for the panel: [`cli`] finds VS Code's
+//! The submodules start such a server for VS Code tabs: [`cli`] finds VS Code's
 //! command, [`token`] keeps the connection token, [`supervisor`] runs the
 //! child process, and [`launcher`] ties them to the windows and the config.
 mod cli;

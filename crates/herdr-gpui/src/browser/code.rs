@@ -1,22 +1,19 @@
-//! The VS Code panel beside a workspace's editor groups: one page per
-//! workspace, served by `code serve-web`, opened on the address `[code] url`
-//! names and then wherever it goes.
-//! The page is a browser tab placed in the panel rather than a strip, so it
-//! is saved and dropped with its workspace like any other tab. Each
-//! workspace shows or hides its panel on its own, and a hidden page stays
-//! alive, keeping its state.
+//! A workspace's VS Code tab: one page per workspace, served by
+//! `code serve-web`, opened on its server's address and then wherever it
+//! goes. It is a tab in the editor groups like a browser tab, so the user
+//! splits it beside a terminal or shows it alone, and it is saved and
+//! dropped with its workspace like any other tab. A page no group shows
+//! stays alive, keeping its state.
 //!
 //! A page that cannot load says nothing back through the web view, so the
 //! window first asks the server whether it is there, and creates each page
-//! only after an answer of its own. Until then the panel says why it is
+//! only after an answer of its own. Until then the tab says why it is
 //! empty. The server is the one at `[code] url`, or the one the app starts
 //! (see [`crate::code_server::launcher`]).
-#[cfg(any(target_os = "macos", windows))]
-use super::{Location, TabId};
-use super::{Scope, Store, WebUrl, store::Place, view::store};
+use super::{GroupId, Location, Scope, Store, TabId, WebUrl, view::store};
 use crate::{
     HerdrWindow,
-    code_server::{self, Launcher, Server},
+    code_server::{self, Launcher, Server, Startup},
     window::Flash,
 };
 use gpui::{prelude::*, *};
@@ -67,39 +64,48 @@ pub(super) enum Reach {
 }
 
 impl HerdrWindow {
-    /// Whether the focused workspace shows its VS Code panel.
-    pub(crate) fn shown_code(&self) -> bool {
-        self.browser_key()
-            .and_then(|key| self.browser.layouts.get(&key))
-            .is_some_and(|layout| layout.code)
+    /// The focused workspace's VS Code tab, if it has one.
+    pub(crate) fn code_tab_id(&self, cx: &App) -> Option<TabId> {
+        let (scope, workspace) = self.browser_key()?;
+        Some(store(cx)?.code_tab(&scope, &workspace)?.id)
     }
 
-    /// Shows or hides the focused workspace's panel. A hidden page keeps
-    /// running, but no longer holds the keyboard. A VS Code tab the user
-    /// moved to the groups is shown there instead.
-    pub(crate) fn toggle_code(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(id) = self.grouped_code_tab(cx) {
-            self.show_browser_tab_in(None, id, window, cx);
-            return;
-        }
-        let Some(layout) = self.ensure_layout() else {
+    /// Opens the focused workspace's VS Code tab in `group`, or in the group
+    /// in use: a tab like any other, to split beside a terminal or show
+    /// alone. A workspace has one, so opening it again shows that one here.
+    /// Its page waits for its server; the tab says why until it answers.
+    pub(crate) fn open_code(
+        &mut self,
+        group: Option<GroupId>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((scope, workspace)) = self.browser_key() else {
             self.show_flash(Flash::warning("Open a workspace first"), cx);
             return;
         };
-        layout.code = !layout.code;
-        if layout.code {
-            self.open_code_page(true, window, cx);
-        } else {
-            #[cfg(any(target_os = "macos", windows))]
-            if let Some(tab) = self
-                .browser_key()
-                .and_then(|(scope, workspace)| store(cx)?.code_tab(&scope, &workspace))
-            {
-                self.browser.pages.blur(tab.id, cx);
-            }
-            window.focus(&self.focus, cx);
+        let startup = Launcher::startup(cx, &self.config.code);
+        if !super::EMBEDDED {
+            self.show_flash(Flash::warning("This build cannot show pages"), cx);
+            return;
         }
-        cx.notify();
+        if !startup.offered(&self.config.code) {
+            let why = match startup {
+                Startup::Finding => "Still looking for VS Code",
+                _ => "Set the VS Code server in Settings",
+            };
+            self.show_flash(Flash::warning(why), cx);
+            return;
+        }
+        let location = startup.url(&self.config.code).map(|url| Location::Web {
+            url: self.code_start(url),
+        });
+        let Some(id) = Store::update(cx, |store| store.open_code_tab(scope, &workspace, location))
+        else {
+            self.show_flash(Flash::warning("Too many browser tabs are open"), cx);
+            return;
+        };
+        self.show_browser_tab_in(group, id, window, cx);
     }
 
     /// Closes this window's VS Code pages, keeping their tabs, and forgets why
@@ -117,53 +123,25 @@ impl HerdrWindow {
         self.browser.failed.retain(|id, _| !code(*id));
     }
 
-    /// The focused workspace's panel page, when the panel shows and the
-    /// page exists, for the window to present.
-    #[cfg(any(target_os = "macos", windows))]
-    pub(super) fn code_page(&self, cx: &App) -> Option<TabId> {
-        if !self.shown_code() {
-            return None;
-        }
-        let (scope, workspace) = self.browser_key()?;
-        let tab = store(cx)?.code_tab(&scope, &workspace)?;
-        // A tab in the groups is presented with the groups' pages.
-        (tab.place == Place::Code && self.browser.pages.contains(tab.id)).then_some(tab.id)
-    }
-
     /// Runs on every window tick, and when a group shows the VS Code tab: a
-    /// shown panel, or a group showing the tab, gets its page, such as one
-    /// restored at startup or that of a workspace just switched to.
+    /// group showing the tab gets its page, such as one restored at startup
+    /// or that of a workspace just switched to.
     pub(super) fn ensure_code_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.open_code_page(false, window, cx);
+        self.open_code_page(window, cx);
     }
 
-    /// Whether the focused workspace needs its VS Code page: its panel
-    /// shows, or a group shows its tab.
-    fn code_page_wanted(&mut self, cx: &App) -> bool {
-        let Some((scope, workspace)) = self.browser_key() else {
-            return false;
-        };
-        match store(cx).and_then(|store| store.code_tab(&scope, &workspace)) {
-            Some(tab) if tab.place == Place::CodeGroup => {
-                let id = tab.id;
-                // The tab is in the groups, so the panel no longer shows,
-                // as when another window moved it there.
-                if let Some(layout) = self.browser.layouts.get_mut(&(scope, workspace)) {
-                    layout.code = false;
-                }
-                self.group_shows_page(id, cx)
-            }
-            _ => self.shown_code(),
-        }
+    /// Whether some group of the focused workspace shows its VS Code tab.
+    fn code_page_wanted(&self, cx: &App) -> bool {
+        self.code_tab_id(cx)
+            .is_some_and(|id| self.group_shows_page(id, cx))
     }
 
-    /// Opens the focused workspace's VS Code tab, and creates its page, if
-    /// the panel shows it or a group does, and its server answers. A server
-    /// the app starts is started here, the first time a page needs it.
-    /// Creating a page starts the platform's web content processes, so this
-    /// runs from input and ticks, never from render. `report` says why a tab
-    /// could not open.
-    fn open_code_page(&mut self, report: bool, window: &mut Window, cx: &mut Context<Self>) {
+    /// Creates the page of the focused workspace's VS Code tab, if a group
+    /// shows it and its server answers. A server the app starts is started
+    /// here, the first time a page needs it. Creating a page starts the
+    /// platform's web content processes, so this runs from input and ticks,
+    /// never from render.
+    fn open_code_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !super::EMBEDDED {
             return;
         }
@@ -183,13 +161,24 @@ impl HerdrWindow {
         };
         self.follow_code_address(&url, cx);
         // A page left on a server that stopped would show VS Code's own
-        // reconnecting screen; the panel says why instead, and the page is
+        // reconnecting screen; the tab says why instead, and the page is
         // made again, where it was, once the server is back.
         #[cfg(any(target_os = "macos", windows))]
-        if matches!(startup, code_server::Startup::Failed { .. }) {
+        if matches!(startup, Startup::Failed { .. }) {
             self.close_code_pages(cx);
         }
-        let started = !matches!(startup, code_server::Startup::Address);
+        // A tab opened before its server's address was known starts at it
+        // now, on the workspace's folder.
+        if let Some(tab) = store(cx)
+            .and_then(|store| store.code_tab(&scope, &workspace))
+            .filter(|tab| tab.location.is_none())
+        {
+            let (id, start) = (tab.id, self.code_start(&url));
+            Store::update(cx, |store| {
+                store.visited(id, Some(Location::Web { url: start }), None)
+            });
+        }
+        let started = !matches!(startup, Startup::Address);
         // The page carries the token, so a server the app started must run
         // right now, holding its port, as the page is made.
         if !wanted
@@ -201,27 +190,16 @@ impl HerdrWindow {
             return;
         }
         #[cfg(not(any(target_os = "macos", windows)))]
-        let _ = (report, window, scope, workspace);
+        let _ = window;
         #[cfg(any(target_os = "macos", windows))]
         {
-            let opened = match store(cx).and_then(|store| store.code_tab(&scope, &workspace)) {
-                Some(tab) => Some(tab.id),
-                None => {
-                    let start = self.code_start(&url);
-                    Store::update(cx, |store| {
-                        store.open_code_tab(scope, &workspace, Location::Web { url: start })
-                    })
-                }
-            };
-            let Some(id) = opened else {
-                if report {
-                    self.show_flash(Flash::warning("Too many browser tabs are open"), cx);
-                }
+            let Some(mut tab) = store(cx)
+                .and_then(|store| store.code_tab(&scope, &workspace))
+                .cloned()
+            else {
                 return;
             };
-            let Some(mut tab) = store(cx).and_then(|store| store.get(id)).cloned() else {
-                return;
-            };
+            let id = tab.id;
             if let Some(Location::Web { url: page }) = &tab.location {
                 tab.location = Some(Location::Web {
                     url: with_token(page, &url),
@@ -238,7 +216,7 @@ impl HerdrWindow {
         }
     }
 
-    /// Whether the workspace's panel page exists, so VS Code reconnects to
+    /// Whether the workspace's VS Code page exists, so VS Code reconnects to
     /// its server on its own, or could not be created and is not retried
     /// every tick. Either way the server need not be asked.
     fn code_page_settled(&self, scope: &Scope, workspace: &str, cx: &App) -> bool {
@@ -255,22 +233,19 @@ impl HerdrWindow {
         self.browser.failed.contains_key(&id)
     }
 
-    /// Starts over when `url` is a new address: it closes the panel tabs
-    /// still on another server, so they reopen on this one, moves the tabs in
-    /// the groups to it, where they stay, and closes the pages of the rest,
-    /// so they reopen with its token.
+    /// Starts over when `url` is a new address: it moves the VS Code tabs
+    /// still on another server to this one, where they stay in their groups
+    /// with their folders, and closes their pages, so each reopens there
+    /// with its token.
     fn follow_code_address(&mut self, url: &WebUrl, cx: &mut Context<Self>) {
         if self.browser.code_server.url.as_ref() != Some(url) {
             let server = &mut self.browser.code_server;
             server.url = Some(url.clone());
             server.state = Reach::Unknown;
             server.generation += 1;
-            let gone = Store::update(cx, |store| {
+            Store::update(cx, |store| {
                 store.follow_code_server(url, |page| on_server(page, url))
             });
-            if !gone.is_empty() {
-                self.forget_browser_tabs(|id| gone.contains(&id));
-            }
             #[cfg(any(target_os = "macos", windows))]
             self.close_code_pages(cx);
         }
@@ -296,7 +271,7 @@ impl HerdrWindow {
     }
 
     /// Forgets the server once its address is removed, closing the pages
-    /// still showing it, so the panel asks for an address instead.
+    /// still showing it, so their tabs ask for an address instead.
     fn forget_code_address(&mut self, cx: &App) {
         let server = &mut self.browser.code_server;
         if server.url.take().is_none() {
@@ -360,7 +335,7 @@ impl HerdrWindow {
     }
 }
 
-/// The address a panel page loads: where its tab last was, carrying the
+/// The address a VS Code page loads: where its tab last was, carrying the
 /// token of the configured address `configured`, in place of any it had.
 /// The server takes the token, sets its cookie, and redirects to the same
 /// path and query without it, so a page keeps its folder across a restart

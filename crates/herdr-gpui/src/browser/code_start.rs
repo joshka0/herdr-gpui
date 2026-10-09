@@ -1,4 +1,4 @@
-//! The VS Code panel's request for the license the app accepts for VS Code's
+//! The VS Code tab's request for the license the app accepts for VS Code's
 //! server when it starts one. Until the user accepts it, here or in
 //! Settings > Code, the app starts nothing.
 use super::code_view::centered;

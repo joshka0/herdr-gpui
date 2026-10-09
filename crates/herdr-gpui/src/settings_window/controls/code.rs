@@ -1,4 +1,4 @@
-//! The Code page: where the VS Code panel's `code serve-web` server comes
+//! The Code page: where VS Code tabs' `code serve-web` server comes
 //! from. The app starts one itself (see [`start`]), or the user gives the
 //! address of their own, which a check asks whether it answers.
 use super::*;
