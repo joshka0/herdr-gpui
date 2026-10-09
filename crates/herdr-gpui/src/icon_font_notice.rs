@@ -24,10 +24,13 @@ pub(crate) struct IconFontNotice {
     /// Latched once a frame showed an icon, so a prompt that scrolls away
     /// does not take the explanation with it.
     shown_icon: bool,
-    /// The last frame scanned, by revision, so a tick without a new frame
-    /// costs nothing.
-    scanned: Option<(u64, u64)>,
+    /// The last frame scanned, so a tick without a new frame costs nothing.
+    /// Revisions restart with each daemon boot, so the boot is part of it.
+    scanned: Option<(String, u64, u64)>,
     card: ConfigDiagnostic,
+    /// Holds for the session: a reload that hides and restores the card must
+    /// not bring back an explanation the user already read.
+    dismissed: bool,
 }
 
 impl IconFontNotice {
@@ -40,9 +43,20 @@ impl IconFontNotice {
             && !self.shown_icon
             && let Some(surface) = surface
         {
-            let revision = (surface.projection_revision, surface.surface_revision);
-            if self.scanned != Some(revision) {
-                self.scanned = Some(revision);
+            let scanned = self
+                .scanned
+                .as_ref()
+                .is_some_and(|(boot, projection, revision)| {
+                    *boot == surface.boot_id
+                        && *projection == surface.projection_revision
+                        && *revision == surface.surface_revision
+                });
+            if !scanned {
+                self.scanned = Some((
+                    surface.boot_id.clone(),
+                    surface.projection_revision,
+                    surface.surface_revision,
+                ));
                 self.shown_icon = shows_icon(&surface.frame);
             }
         }
@@ -51,11 +65,13 @@ impl IconFontNotice {
     }
 
     pub(crate) fn visible(&self) -> Option<&Arc<[String]>> {
-        self.card.visible()
+        self.card.visible().filter(|_| !self.dismissed)
     }
 
     pub(crate) fn dismiss(&mut self, lines: &Arc<[String]>) -> bool {
-        self.card.dismiss(lines)
+        let current = self.visible().is_some_and(|own| own == lines);
+        self.dismissed |= current;
+        current
     }
 }
 

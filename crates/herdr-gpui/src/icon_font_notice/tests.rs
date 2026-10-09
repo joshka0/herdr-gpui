@@ -68,6 +68,27 @@ fn appears_only_when_an_icon_font_is_missing_and_an_icon_is_shown() {
 }
 
 #[test]
+fn a_new_boot_with_the_same_revisions_is_scanned() {
+    let mut notice = IconFontNotice::default();
+    notice.observe(true, Some(&frame(1, &["a"])));
+    let mut restarted = frame(1, &["\u{f179}"]);
+    restarted.boot_id = "another boot".into();
+    assert!(notice.observe(true, Some(&restarted)));
+}
+
+#[test]
+fn dismissal_holds_across_a_reload_that_hides_the_card() {
+    let mut notice = IconFontNotice::default();
+    notice.observe(true, Some(&frame(1, &["\u{f179}"])));
+    let lines = notice.visible().cloned();
+    assert!(lines.is_some_and(|lines| notice.dismiss(&lines)));
+    // `fallback = []` added, then removed again.
+    assert!(!notice.observe(false, Some(&frame(1, &["\u{f179}"]))));
+    assert!(!notice.observe(true, Some(&frame(2, &["\u{f179}"]))));
+    assert!(notice.visible().is_none());
+}
+
+#[test]
 fn a_frame_is_scanned_once_and_dismissal_holds() {
     let mut notice = IconFontNotice::default();
     let plain = frame(1, &["a"]);
