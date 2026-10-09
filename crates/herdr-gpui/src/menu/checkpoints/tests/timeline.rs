@@ -1,4 +1,3 @@
-use super::*;
 use crate::menu::checkpoints::timeline::{clock, day_heading};
 use chrono::FixedOffset;
 
@@ -44,6 +43,7 @@ fn day_headings_name_yesterday_weekdays_and_other_years() {
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[gpui::test]
 fn a_day_break_starts_each_earlier_day(cx: &mut gpui::TestAppContext) {
+    use super::local;
     use crate::checkpoint::{Checkpoint, Diff, Listing};
     let now: i64 = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
