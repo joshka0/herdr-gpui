@@ -132,15 +132,18 @@ fn switches_edit_shared_rows_only_when_ready(cx: &mut TestAppContext) {
     ] {
         click(cx, id);
     }
-    assert_eq!(
-        recorded(&view, cx),
-        [
+    // Shared settings are read-only on Windows, so its switches stay inert.
+    let expected: Vec<(SidebarScope, String, bool)> = if cfg!(unix) {
+        vec![
             (SidebarScope::Agents, "$summary".into(), false),
             (SidebarScope::Agents, "$old".into(), false),
             (SidebarScope::Agents, "state_text".into(), true),
             (SidebarScope::Spaces, "$ci".into(), true),
         ]
-    );
+    } else {
+        Vec::new()
+    };
+    assert_eq!(recorded(&view, cx), expected);
 
     // A save in flight disables them again.
     view.update(cx, |view, cx| {
@@ -148,7 +151,7 @@ fn switches_edit_shared_rows_only_when_ready(cx: &mut TestAppContext) {
         cx.notify();
     });
     click(cx, "plugin-value-spaces-$ci");
-    assert_eq!(recorded(&view, cx).len(), 4);
+    assert_eq!(recorded(&view, cx), expected);
 }
 
 #[gpui::test]
