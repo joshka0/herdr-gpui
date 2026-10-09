@@ -11,10 +11,16 @@ use crate::{
 use chrono::{DateTime, Datelike, Days, TimeZone};
 use gpui::{prelude::*, *};
 
-/// Each line's height; the rail's dot sits on its center line.
-const ROW: f32 = 26.;
+/// The least height of a line; the rail's dot sits on its center line.
+const MIN_ROW: f32 = 26.;
 const GUTTER: f32 = 20.;
 const STROKE: f32 = 2.;
+
+/// Each line's height: the face's own line height plus a little air, so a
+/// large terminal font grows the rows instead of spilling into the next.
+pub(super) fn row_height(face: &crate::config::FontConfig) -> f32 {
+    (face.line_height() + 6.).max(MIN_ROW).ceil()
+}
 
 /// `created` (Unix seconds) as a wall-clock time in `zone`.
 pub(super) fn clock<Z: TimeZone>(created: i64, zone: &Z) -> String
@@ -73,6 +79,7 @@ impl HerdrWindow {
         let theme = &self.theme;
         let face = &self.config.terminal;
         let zone = chrono::Local;
+        let height = row_height(face);
         let rail = rgb(mix(theme.surface, theme.muted, 60));
         let muted = rgb(theme.muted);
         // A segment of the rail: the half above or below a line's center.
@@ -84,7 +91,7 @@ impl HerdrWindow {
                 .bg(rail);
             match top {
                 Some(top) => line.top(px(top)).bottom_0(),
-                None => line.top_0().h(px(ROW / 2.)),
+                None => line.top_0().h(px(height / 2.)),
             }
         };
         let gutter = || div().relative().flex_none().w(px(GUTTER)).h_full();
@@ -92,7 +99,8 @@ impl HerdrWindow {
             .flex()
             .flex_col()
             .text_font(face)
-            .text_size(px(face.size));
+            .text_size(px(face.size))
+            .line_height(px(face.line_height()));
         let mut previous = day(now, &zone);
         let last = list.len().saturating_sub(1);
         for (index, checkpoint) in list.iter().enumerate() {
@@ -107,11 +115,11 @@ impl HerdrWindow {
                             .items_center()
                             .gap(px(6.))
                             .pl(px(4.))
-                            .h(px(ROW))
+                            .h(px(height))
                             .child(
                                 gutter()
                                     .when(index > 0, |gutter| gutter.child(segment(None)))
-                                    .child(segment(Some(ROW / 2.))),
+                                    .child(segment(Some(height / 2.))),
                             )
                             .child(div().min_w_0().truncate().text_color(muted).child(heading)),
                     );
@@ -143,19 +151,21 @@ impl HerdrWindow {
                 .gap(px(6.))
                 .pl(px(4.))
                 .pr(px(8.))
-                .h(px(ROW))
+                .h(px(height))
                 .rounded(px(corners::SMALL))
                 .when(selected, |row| row.bg(rgb(theme.active)))
                 .hover(|row| row.bg(rgb(theme.active)))
                 .child(
                     gutter()
                         .when(index > 0, |gutter| gutter.child(segment(None)))
-                        .when(index < last, |gutter| gutter.child(segment(Some(ROW / 2.))))
+                        .when(index < last, |gutter| {
+                            gutter.child(segment(Some(height / 2.)))
+                        })
                         .child(
                             div()
                                 .absolute()
                                 .left(px((GUTTER - size) / 2.))
-                                .top(px((ROW - size) / 2.))
+                                .top(px((height - size) / 2.))
                                 .size(px(size))
                                 .rounded_full()
                                 .bg(rgb(dot)),

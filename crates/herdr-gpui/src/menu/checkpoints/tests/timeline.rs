@@ -1,4 +1,4 @@
-use crate::menu::checkpoints::timeline::{clock, day_heading};
+use crate::menu::checkpoints::timeline::{clock, day_heading, row_height};
 use chrono::FixedOffset;
 
 /// 2026-10-08 14:33:00 UTC, a Thursday.
@@ -39,6 +39,19 @@ fn day_headings_name_yesterday_weekdays_and_other_years() {
     );
 }
 
+#[test]
+fn rows_grow_with_the_terminal_font() {
+    let mut face = crate::config::Config::default().terminal;
+    face.size = 14.;
+    face.line_height_multiple = None;
+    assert_eq!(row_height(&face), 26.);
+    // The largest size Settings allows still leaves air around the text.
+    face.size = *crate::config::FONT_SIZE_RANGE.end();
+    assert!(row_height(&face) >= face.line_height() + 6.);
+    face.line_height_multiple = Some(2.);
+    assert!(row_height(&face) >= face.size * 2. + 6.);
+}
+
 // Host scripts need a POSIX client, so other clients offer no dialog.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[gpui::test]
@@ -66,6 +79,8 @@ fn a_day_break_starts_each_earlier_day(cx: &mut gpui::TestAppContext) {
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
             local(view);
+            // The largest terminal font, so rows must grow to hold it.
+            view.config.terminal.size = *crate::config::FONT_SIZE_RANGE.end();
             view.open_workspace_menu("w4", Default::default(), window, cx);
             view.activate_workspace_menu(
                 crate::menu::page::WorkspaceMenuAction::Checkpoints,
@@ -89,6 +104,8 @@ fn a_day_break_starts_each_earlier_day(cx: &mut gpui::TestAppContext) {
     let first = cx.debug_bounds("checkpoint-0").unwrap();
     let second = cx.debug_bounds("checkpoint-1").unwrap();
     assert_eq!(first.size.height, second.size.height);
+    let face = cx.update(|_, cx| view.read(cx).config.terminal.clone());
+    assert_eq!(first.size.height, gpui::px(row_height(&face)));
     let icon = cx.debug_bounds("checkpoint-restore-0").unwrap();
     assert!(first.contains(&icon.center()));
     // Clicking the icon asks before restoring.
