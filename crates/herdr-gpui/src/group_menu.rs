@@ -86,6 +86,19 @@ impl Action {
 pub(crate) struct GroupMenu {
     group: GroupId,
     selected: Option<usize>,
+    /// The panel's own scroll, so a row the keyboard selects past a long
+    /// list of ports scrolls into view.
+    scroll: ScrollHandle,
+}
+
+/// The panel child that draws `actions[index]`: the "Listening" heading
+/// before the first port is a child of its own.
+fn child_index(actions: &[Action], index: usize) -> usize {
+    let heading = actions
+        .iter()
+        .take(index + 1)
+        .any(|action| matches!(action, Action::Port { .. }));
+    index + usize::from(heading)
 }
 
 impl HerdrWindow {
@@ -139,6 +152,7 @@ impl HerdrWindow {
         self.menu.group = Some(GroupMenu {
             group,
             selected: None,
+            scroll: ScrollHandle::new(),
         });
     }
 
@@ -214,12 +228,14 @@ impl HerdrWindow {
         match key {
             "escape" => self.dismiss_menu(window, cx),
             "up" | "down" => {
-                menu.selected = Some(match (menu.selected, key) {
+                let selected = match (menu.selected, key) {
                     (None, "up") => count - 1,
                     (None, _) => 0,
                     (Some(i), "up") => (i + count - 1) % count,
                     (Some(i), _) => (i + 1) % count,
-                });
+                };
+                menu.selected = Some(selected);
+                menu.scroll.scroll_to_item(child_index(&actions, selected));
                 cx.notify();
             }
             "enter" => {
@@ -231,20 +247,27 @@ impl HerdrWindow {
         }
     }
 
-    pub(crate) fn render_group_menu(&self, cx: &mut Context<Self>) -> Div {
+    /// Fills the menu's `panel` with its rows. They are the panel's own
+    /// children, which the panel's scroll handle addresses by index.
+    pub(crate) fn render_group_menu(
+        &self,
+        panel: Stateful<Div>,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
         let Some(menu) = &self.menu.group else {
-            return div();
+            return panel;
         };
         let theme = &self.theme;
-        let mut body = div().flex().flex_col();
+        let mut panel = panel.track_scroll(&menu.scroll).flex().flex_col();
         let mut section = None;
         for (index, action) in self.group_actions(menu.group, cx).into_iter().enumerate() {
             let starts_section = section.is_some_and(|last| last != action.section());
             let first_port = matches!(action, Action::Port { .. }) && section != Some(1);
             section = Some(action.section());
             if first_port {
-                body = body.child(
+                panel = panel.child(
                     div()
+                        .flex_none()
                         .when(starts_section, |heading| {
                             heading
                                 .mt(px(4.))
@@ -271,9 +294,10 @@ impl HerdrWindow {
             let selector = action.selector();
             let (label, process) = (format!("{selector}-label"), format!("{selector}-detail"));
             let capped = matches!(action, Action::Port { .. });
-            body = body.child(
+            panel = panel.child(
                 div()
                     .id(("group-menu-action", index))
+                    .flex_none()
                     .debug_selector(move || selector.clone())
                     .when(starts_section && !first_port, |row| {
                         row.mt(px(4.)).border_t_1().border_color(rgb(theme.active))
@@ -326,7 +350,7 @@ impl HerdrWindow {
                     })),
             );
         }
-        body
+        panel
     }
 }
 

@@ -599,7 +599,7 @@ impl HerdrWindow {
         } else if matches!(page, Page::Tab | Page::RenameTab) {
             panel = panel.child(self.render_tab_menu(cx));
         } else if page == Page::Group {
-            panel = panel.child(self.render_group_menu(cx));
+            panel = self.render_group_menu(panel, cx);
         } else if matches!(
             page,
             Page::Pane | Page::RenamePane | Page::PaneProcesses | Page::KillProcesses

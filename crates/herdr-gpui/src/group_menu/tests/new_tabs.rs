@@ -207,3 +207,49 @@ fn a_long_process_name_leaves_the_port_address_readable(cx: &mut TestAppContext)
     let shortcut = cx.debug_bounds("group-menu-NewBrowserTab-detail").unwrap();
     assert!(shortcut.size.width > px(0.));
 }
+
+#[gpui::test]
+fn the_keyboard_scrolls_a_long_menu_to_the_selected_row(cx: &mut TestAppContext) {
+    let (view, cx) = window(cx);
+    let scan: String = (3000..3040)
+        .map(|port| format!("L 1 127.0.0.1:{port} node\n"))
+        .chain(["E 1 w0\n".to_owned()])
+        .collect();
+    // A short window, which the listed ports outgrow.
+    cx.simulate_resize(size(px(1200.), px(500.)));
+    seed(&view, cx, &scan);
+    click(cx, "tab-actions");
+    let panel = cx.debug_bounds("menu-panel").unwrap();
+    // Split Right starts out of view.
+    let split = cx.debug_bounds("group-menu-Split").unwrap();
+    assert!(split.bottom() > panel.bottom(), "{split:?} {panel:?}");
+
+    // Up wraps to the last row, which scrolls into the panel.
+    cx.simulate_keystrokes("up");
+    draw(cx);
+    let split = cx.debug_bounds("group-menu-Split").unwrap();
+    assert!(
+        split.top() >= panel.top() && split.bottom() <= panel.bottom(),
+        "{split:?} {panel:?}"
+    );
+
+    // Down wraps back to the first, which scrolls back up to it.
+    cx.simulate_keystrokes("down");
+    draw(cx);
+    let first = cx.debug_bounds("group-menu-NewBrowserTab").unwrap();
+    assert!(first.top() >= panel.top(), "{first:?} {panel:?}");
+}
+
+#[test]
+fn the_listening_heading_shifts_the_rows_after_it() {
+    let port = Action::Port {
+        number: 3000,
+        process: "node".into(),
+        link: Link::Page(WebUrl::try_from("http://localhost:3000/").unwrap()),
+    };
+    let actions = [Action::NewBrowserTab, port, Action::Split];
+    assert_eq!(child_index(&actions, 0), 0);
+    assert_eq!(child_index(&actions, 1), 2);
+    assert_eq!(child_index(&actions, 2), 3);
+    assert_eq!(child_index(&actions[..1], 0), 0);
+}
