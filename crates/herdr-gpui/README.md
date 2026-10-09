@@ -1515,6 +1515,54 @@ nothing.
 Set `open_links_in = "browser-tab"` to open links in a [browser tab](#browser-tabs)
 instead. Alt-click (Option-click on macOS) opens a link in the other target.
 
+With a daemon that offers it, a link click, a file path or `file://` hyperlink
+included, first goes to the daemon so a plugin's `[[link_handlers]]` entry can
+claim it; see [Herdr Plugins](#herdr-plugins).
+
+## Herdr Plugins
+
+Herdr runs plugins; this client never reads plugin manifests, runs plugin
+commands, or touches the plugin registry. It works with the parts of a plugin
+the daemon exposes to clients:
+
+- **Actions.** Bind a plugin action in Herdr's own config with
+  `[[keys.command]] type = "plugin_action"`. It then runs from its key, as a
+  direct shortcut or a prefix chord, from the command palette, and is listed in
+  the shortcut reference. Herdr does not offer clients a list of plugin actions
+  nobody bound, so an unbound action cannot be run from here.
+- **Selected text.** A plugin action run while text is highlighted in the focused
+  pane, by a mouse selection kept after release or a copy-mode mark, is given that
+  text as `selected_text` in `HERDR_PLUGIN_CONTEXT_JSON`. The client sends the
+  selection's cells and Herdr reads the text from its own terminal, so the plugin
+  gets exactly what was highlighted on the host that runs the pane, without going
+  through the clipboard. As in Herdr's terminal client, only plugin actions receive
+  it, only from the focused pane, and never from a popup. The palette takes the
+  selection when it opens. Herdr reads the highlighted cells as they are in the
+  frame on screen when the action runs, and refuses the action, showing the
+  error, if the pane changed after that frame was drawn; run it again. With
+  `copy_on_select` on and
+  `keep_selection_after_copy = false`, a mouse selection is cleared on release, so
+  there is none to send.
+- **Link handlers.** A link click that a handler claims opens nothing here. If the
+  handler fails, its error is shown and nothing opens in its place. A click that
+  nothing claims opens here as described in [Terminal Links](#terminal-links).
+  Herdr matches handlers against the URL it reads at the click (a terminal
+  hyperlink's target, or a web address in the text), so a plain printed path is
+  never claimed. A link-modifier click on any terminal hyperlink is offered to
+  the daemon, including one this client never opens itself, such as an SSH
+  host's own `file://` link, so a handler on that host can still claim it.
+- **Popups and panes.** Plugin popups, splits, and tabs are ordinary daemon
+  terminals: keys, paste, input methods, and the mouse go to a popup while it is
+  open, and focus is whatever the daemon reports, including after a plugin's
+  process exits and its popup closes.
+- **Metadata.** Tab-bar status segments, custom sidebar tokens and row rules, and
+  agent views from `agent.view.set` are shown as the daemon reports them; see
+  [`[usage]`](#configuration) for the switches that hide them.
+- **Clipboard.** A plugin terminal that copies with OSC 52 reaches this machine's
+  clipboard, local or remote, through the same bounded path as any pane. A plugin
+  that runs a clipboard command such as `pbcopy` on a remote host writes that
+  host's clipboard, not this one.
+
 ## Code Navigation
 
 Herdr GPUI is not an editor, but it can get you to the right line quickly,

@@ -23,6 +23,7 @@ mod links;
 pub(crate) use links::PressedLink;
 mod mouse;
 mod pending_input;
+mod plugin_selection;
 mod prefix;
 mod reconnecting;
 mod regions;
