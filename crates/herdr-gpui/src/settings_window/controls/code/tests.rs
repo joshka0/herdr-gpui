@@ -286,3 +286,34 @@ fn a_reload_to_another_address_forgets_the_last_test(cx: &mut TestAppContext) {
         assert_ne!(view.code.generation, before);
     });
 }
+
+/// Quitting while an address waits for another save still saves it, after
+/// that save.
+#[gpui::test]
+fn quitting_saves_an_address_waiting_for_another_save(cx: &mut TestAppContext) {
+    let (view, cx, saves) = page(cx);
+    view.update(cx, |view, _| view.saving = true);
+    type_address(&view, cx, "127.0.0.1:9000/?tkn=later");
+    cx.simulate_keystrokes("enter");
+    cx.run_until_parked();
+    assert!(saves.lock().unwrap().is_empty());
+
+    let quit = view.update(cx, |view, cx| {
+        view.shutdown_with(|_| panic!("no font edits"), cx)
+    });
+    cx.run_until_parked();
+    let (done, result) = std::sync::mpsc::sync_channel(1);
+    cx.executor()
+        .spawn(async move {
+            done.send(quit.await).unwrap();
+        })
+        .detach();
+    cx.run_until_parked();
+    result.recv().unwrap().unwrap();
+    assert_eq!(
+        saves.lock().unwrap().as_slice(),
+        [Some(
+            WebUrl::try_from("http://127.0.0.1:9000/?tkn=later").unwrap()
+        )]
+    );
+}

@@ -218,6 +218,24 @@ impl SettingsWindow {
         self.save_code_url(url, cx);
     }
 
+    /// The address still waiting for another save to finish, as a write for
+    /// quitting to run after that save: quitting ends the wait, so the
+    /// address would otherwise be lost.
+    pub(in crate::settings_window) fn take_shutdown_code_url(
+        &mut self,
+    ) -> Option<impl FnOnce() -> crate::Result<()> + Send + 'static + use<>> {
+        let url = self.code.pending.take()?;
+        #[cfg(test)]
+        let io = self.code.io.as_ref().map(|io| io.write.clone());
+        Some(move || {
+            #[cfg(test)]
+            if let Some(write) = io {
+                return write(url);
+            }
+            Config::save_code_url(url)
+        })
+    }
+
     fn save_code_url(&mut self, url: Option<WebUrl>, cx: &mut Context<Self>) {
         #[cfg(test)]
         if let Some(io) = self.code.io.clone() {
