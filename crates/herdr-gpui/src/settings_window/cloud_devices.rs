@@ -119,10 +119,11 @@ impl SettingsWindow {
         cx: &mut Context<Self>,
     ) {
         let finished = source.read(cx).cloud_jobs.finished();
-        if finished != self.cloud_jobs_seen {
-            self.cloud_jobs_seen = finished;
-            self.cloud_config_changed(cx);
+        if finished == self.cloud_jobs_seen {
+            return;
         }
+        self.cloud_jobs_seen = finished;
+        self.cloud_config_changed(cx);
     }
 
     fn cloud_tabs(&self, cx: &mut Context<Self>) -> Div {

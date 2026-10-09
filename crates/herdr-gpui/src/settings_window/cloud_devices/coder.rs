@@ -278,15 +278,18 @@ impl SettingsWindow {
         });
     }
 
-    /// Called after the config file reloads, so the account line follows a
-    /// deployment that was just saved or edited by hand.
+    /// Called after the config file reloads, or a cloud job may have saved a
+    /// device, so the account line and device list follow. Reading the card
+    /// again replaces its job, which would cancel a sign-in waiting on the
+    /// browser; that sign-in reads the card again itself when it finishes.
     pub(super) fn coder_config_changed(&mut self, cx: &mut Context<Self>) {
-        if let Some(card) = &mut self.coder_card {
-            let loaded = CoderFields::from_config(&self.config.coder);
-            follow_config(&card.fields, texts(&card.loaded), texts(&loaded), cx);
-            card.loaded = loaded;
-        }
-        if self.coder_card.is_some() && self.section == Section::CloudDevices {
+        let Some(card) = &mut self.coder_card else {
+            return;
+        };
+        let loaded = CoderFields::from_config(&self.config.coder);
+        follow_config(&card.fields, texts(&card.loaded), texts(&loaded), cx);
+        card.loaded = loaded;
+        if card.account != Account::SigningIn && self.section == Section::CloudDevices {
             self.refresh_cloud(cx);
         }
     }

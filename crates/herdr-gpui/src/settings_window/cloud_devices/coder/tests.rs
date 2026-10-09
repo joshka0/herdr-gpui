@@ -123,3 +123,24 @@ fn a_reloaded_config_updates_untouched_fields_and_keeps_edits(cx: &mut TestAppCo
         assert_eq!(values.organization, "typed-org", "an unsaved edit is kept");
     });
 }
+
+#[gpui::test]
+fn a_finished_cloud_job_does_not_cancel_a_sign_in(cx: &mut TestAppContext) {
+    let (view, cx) = open(cx);
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            view.coder_card.as_mut().unwrap().account = Account::SigningIn;
+            view.cloud_jobs_seen = 0;
+            let source = view.source.upgrade().unwrap();
+            source.update(cx, |source, _| source.cloud_jobs.finish_for_test());
+            view.cloud_source_changed(&source, cx);
+        })
+    });
+    view.read_with(cx, |view, _| {
+        assert_eq!(
+            view.coder_card.as_ref().unwrap().account,
+            Account::SigningIn
+        );
+        assert_eq!(view.cloud_jobs_seen, 1, "the finish is still noted");
+    });
+}
