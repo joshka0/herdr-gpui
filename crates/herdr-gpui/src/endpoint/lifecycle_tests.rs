@@ -26,6 +26,7 @@ mod input_gap;
 mod keyboard;
 mod mouse_gestures;
 mod mouse_targets;
+mod plugin_selection;
 mod prompts;
 mod reconnect_backoff;
 mod remote_drop;

@@ -82,6 +82,16 @@ impl HerdrWindow {
         cx.notify();
     }
 
+    /// The cells copy mode has marked in `pane`, while it walks that pane
+    /// for the connection and session it began on.
+    pub(super) fn copy_mode_marked(&self, boot: &str, pane: &PaneSurfacePane) -> Option<TextRange> {
+        let state = self.copy_mode.as_ref()?;
+        let current = &self.endpoints[self.selected_endpoint].connection.scrollback;
+        (state.boot_id == boot && Arc::ptr_eq(&state.inbox, current))
+            .then(|| state.mode.marked(pane))
+            .flatten()
+    }
+
     /// Whether copy mode holds the keyboard, so nothing typed reaches the
     /// terminal.
     pub(crate) fn copy_mode_active(&self) -> bool {
