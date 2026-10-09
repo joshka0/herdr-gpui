@@ -245,7 +245,7 @@ fn live_pane(
     use herdr_client::protocol::{FrameData, PaneSurfaceFrame, PaneSurfacePane, SurfaceRect};
     // Initialize surface interest without connecting to a personal daemon.
     // A cancelled handle lets queue-failure paths run deterministically.
-    v.reconnect();
+    v.reconnect(cx);
     let client = herdr_client::connect(
         herdr_client::ConnectTarget::Socket("/unused-pane-menu-test.sock".into()),
         v.options,
