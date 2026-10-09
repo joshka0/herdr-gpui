@@ -59,3 +59,16 @@ fn unsupported_plus_labels_keep_the_plus_key() {
         ]
     );
 }
+
+#[test]
+fn a_malformed_label_never_hides_a_working_one_that_reads_alike() {
+    let keymap = Keymap::default();
+    // `ctrl+alt+++` is rejected, yet reads as `ctrl-alt-+` too.
+    for written in [["ctrl+alt+++", "ctrl+alt++"], ["ctrl+alt++", "ctrl+alt+++"]] {
+        assert_eq!(
+            labels(&keymap, &[custom("plus", &written)]),
+            [entry("ctrl-alt-+", Reach::Runs)],
+            "{written:?}"
+        );
+    }
+}
