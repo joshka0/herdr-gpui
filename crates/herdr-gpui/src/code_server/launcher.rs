@@ -384,13 +384,15 @@ impl Launcher {
     }
 
     /// The worker's report as a window would see it now.
-    #[cfg(test)]
+    // Only the tests that start VS Code, where pages show, use it.
+    #[cfg(all(test, any(target_os = "macos", windows)))]
     pub(crate) fn report(cx: &App) -> Option<Report> {
         cx.try_global::<Self>()?.report.clone()
     }
 
     /// Stands in for the worker's report, as the poll would take it.
-    #[cfg(test)]
+    // Only the tests that start VS Code, where pages show, use it.
+    #[cfg(all(test, any(target_os = "macos", windows)))]
     pub(crate) fn set_report(cx: &mut App, report: Option<Report>) {
         let launcher = cx.global_mut::<Self>();
         // A running stand-in reports it too, for windows that read it live.

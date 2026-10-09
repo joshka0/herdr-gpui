@@ -277,11 +277,13 @@ impl Supervisor {
     }
 
     /// Reports `address`, as the worker does once it has made it.
+    #[cfg(all(test, any(target_os = "macos", windows)))]
     pub(crate) fn report_address(&self, address: Address) {
         self.shared.publish(|slot| slot.address = Some(address));
     }
 
     /// Reports `status` and `address`, as the worker would.
+    #[cfg(all(test, any(target_os = "macos", windows)))]
     pub(crate) fn report_as(&self, status: Status, address: Option<Address>) {
         self.shared.publish(|slot| {
             slot.status = Some(status);
