@@ -17,10 +17,12 @@ use std::{
 /// Finder does not inherit a login shell's PATH, so PATH alone is not enough.
 const SEARCH: &[&str] = &["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"];
 
-/// The `coder` executable: the configured path, else PATH, else the usual roots.
+/// The `coder` executable: the configured path, else PATH, else the usual
+/// roots. A configured path that cannot run is an error here, before anything
+/// is created, rather than after a workspace that may be billed is built.
 pub(crate) fn cli(settings: &Settings) -> Result<PathBuf> {
     if let Some(path) = &settings.cli {
-        return Ok(path.clone());
+        return executable(path).then(|| path.clone()).ok_or(Error::Cli);
     }
     let home = std::env::var_os("HOME").map(PathBuf::from);
     std::env::var_os("PATH")

@@ -46,9 +46,18 @@ fn coder_ssh_carries_the_token_only_in_the_child_environment() {
     }
 }
 
+// Windows checks only that the file exists; this test covers permissions.
+#[cfg(unix)]
 #[test]
-fn a_configured_cli_path_wins_over_discovery() {
+fn a_configured_cli_path_wins_over_discovery_only_when_it_can_run() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("coder");
     let mut settings = settings();
-    settings.cli = Some("/custom/coder".into());
-    assert_eq!(cli(&settings).unwrap(), PathBuf::from("/custom/coder"));
+    settings.cli = Some(path.clone());
+    assert!(matches!(cli(&settings), Err(Error::Cli)), "missing");
+    std::fs::write(&path, "#!/bin/sh\n").unwrap();
+    assert!(matches!(cli(&settings), Err(Error::Cli)), "not executable");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(cli(&settings).unwrap(), path);
 }
