@@ -25,6 +25,9 @@ use std::time::{Duration, Instant};
 #[cfg(any(target_os = "macos", windows, test))]
 const TOKEN: &str = "tkn";
 
+/// The query parameter naming the folder `code serve-web` opens.
+const FOLDER: &str = "folder";
+
 /// How long an answer is trusted when a page is created, and how long an
 /// unreachable server is left before it is asked again.
 const RETRY: Duration = Duration::from_secs(5);
@@ -175,9 +178,12 @@ impl HerdrWindow {
         {
             let opened = match store(cx).and_then(|store| store.code_tab(&scope, &workspace)) {
                 Some(tab) => Some(tab.id),
-                None => Store::update(cx, |store| {
-                    store.open_code_tab(scope, &workspace, Location::Web { url: url.clone() })
-                }),
+                None => {
+                    let start = self.code_start(&url);
+                    Store::update(cx, |store| {
+                        store.open_code_tab(scope, &workspace, Location::Web { url: start })
+                    })
+                }
             };
             let Some(id) = opened else {
                 if report {
@@ -238,6 +244,25 @@ impl HerdrWindow {
             #[cfg(any(target_os = "macos", windows))]
             self.close_code_pages(cx);
         }
+    }
+
+    /// Where the focused workspace's new VS Code tab opens: the configured
+    /// `url`, on the folder the workspace started in, as its first tab's
+    /// first pane reports it. Only a workspace on this computer names one,
+    /// since a remote one's folder is on another machine than the server.
+    pub(super) fn code_start(&self, url: &WebUrl) -> WebUrl {
+        let local = self
+            .endpoints
+            .get(self.selected_endpoint)
+            .is_some_and(|endpoint| !endpoint.connection.target.is_remote());
+        let folder = self
+            .browser_key()
+            .zip(self.live.snapshot.as_deref())
+            .and_then(|((_, workspace), snapshot)| {
+                crate::palette::launch_root(snapshot, &workspace)
+            })
+            .filter(|folder| local && std::path::Path::new(folder).is_absolute());
+        folder.map_or_else(|| url.clone(), |folder| with_folder(url, folder))
     }
 
     /// Forgets the server once its address is removed, closing the pages
@@ -330,6 +355,27 @@ fn with_token(page: &WebUrl, configured: &WebUrl) -> WebUrl {
     let mut url = page.0.clone();
     url.set_query(Some(&query.join("&")));
     WebUrl::try_from(url.as_str()).unwrap_or_else(|_| page.clone())
+}
+
+/// `url` opening `folder`, which `code serve-web` takes as its `folder`
+/// query parameter, in place of any it had. The rest of the query stays
+/// exactly as written, so the token is passed on unchanged.
+fn with_folder(url: &WebUrl, folder: &str) -> WebUrl {
+    let is_folder = |pair: &&str| pair.split('=').next() == Some(FOLDER);
+    let param = url::form_urlencoded::Serializer::new(String::new())
+        .append_pair(FOLDER, folder)
+        .finish();
+    let query: Vec<&str> = url
+        .0
+        .query()
+        .unwrap_or_default()
+        .split('&')
+        .filter(|pair| !pair.is_empty() && !is_folder(pair))
+        .chain([param.as_str()])
+        .collect();
+    let mut opened = url.0.clone();
+    opened.set_query(Some(&query.join("&")));
+    WebUrl::try_from(opened.as_str()).unwrap_or_else(|_| url.clone())
 }
 
 #[cfg(test)]

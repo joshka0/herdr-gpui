@@ -46,9 +46,12 @@ impl HerdrWindow {
             .map(|tab| tab.id);
         let id = match (existing, self.config.code.url.clone()) {
             (Some(id), _) => Some(id),
-            (None, Some(url)) if super::EMBEDDED => Store::update(cx, |store| {
-                store.open_code_tab(scope, &workspace, Location::Web { url })
-            }),
+            (None, Some(url)) if super::EMBEDDED => {
+                let start = self.code_start(&url);
+                Store::update(cx, |store| {
+                    store.open_code_tab(scope, &workspace, Location::Web { url: start })
+                })
+            }
             (None, _) => {
                 self.show_flash(Flash::warning("Set the VS Code server in Settings"), cx);
                 return;

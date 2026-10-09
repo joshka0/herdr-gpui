@@ -18,6 +18,7 @@ mod go_to;
 mod interaction_tests;
 mod project_open;
 mod projects;
+pub(crate) use projects::launch_root;
 mod render;
 mod search;
 

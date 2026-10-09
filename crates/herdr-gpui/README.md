@@ -1716,8 +1716,11 @@ belongs to one address.
 - Each space shows or hides the panel on its own and has its own page. The page
   opens on the address above, then goes wherever it navigates, and comes back
   there after a restart. A hidden page keeps running, so it keeps its state;
-  closing the space in Herdr closes its page. Each space opens an empty window,
-  and **Open Folder** in VS Code picks the folder; the page then remembers it.
+  closing the space in Herdr closes its page. A space's page first opens the
+  folder the space started in, as its first tab's first terminal reports it,
+  when the space is on this computer; a space on an SSH host opens an empty
+  window, since its folder is on another machine than the server. **Open
+  Folder** in VS Code picks another; the page then remembers it.
 - The app asks the server whether it answers before it opens a page, since a
   page that cannot load stays blank. While the server does not answer, the
   panel says so and why, and asks again every 5 seconds. Setting a new address

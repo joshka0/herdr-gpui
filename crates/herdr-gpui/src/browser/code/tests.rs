@@ -37,3 +37,20 @@ fn a_page_without_a_configured_token_or_on_another_server_is_left_alone() {
         page
     );
 }
+
+#[test]
+fn a_new_page_opens_the_folder_keeping_the_token() {
+    assert_eq!(
+        with_folder(&url("http://127.0.0.1:8000/?tkn=x"), "/Users/me/my project"),
+        url("http://127.0.0.1:8000/?tkn=x&folder=%2FUsers%2Fme%2Fmy+project")
+    );
+    // A folder already named is replaced, not repeated.
+    assert_eq!(
+        with_folder(&url("http://127.0.0.1:8000/?folder=/old&tkn=x"), "/new"),
+        url("http://127.0.0.1:8000/?tkn=x&folder=%2Fnew")
+    );
+    assert_eq!(
+        with_folder(&url("http://127.0.0.1:8000/"), "/new"),
+        url("http://127.0.0.1:8000/?folder=%2Fnew")
+    );
+}
