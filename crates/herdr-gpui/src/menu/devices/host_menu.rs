@@ -362,8 +362,12 @@ impl HerdrWindow {
             // Name the device first, so the destructive row below cannot be
             // mistaken for acting on another host.
             body = body.child(
+                // No width of its own, so a long name or target ends with
+                // "…" instead of widening the menu past its actions.
                 div()
                     .debug_selector(|| "host-menu-header".into())
+                    .w_0()
+                    .min_w_full()
                     .px(px(8.))
                     .pt(px(4.))
                     .pb(px(8.))

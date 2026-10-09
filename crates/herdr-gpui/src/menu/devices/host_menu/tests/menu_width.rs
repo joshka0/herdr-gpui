@@ -73,15 +73,13 @@ fn host_menu_header_does_not_widen_the_menu(cx: &mut TestAppContext) {
     if cfg!(windows) {
         return;
     }
-    let name = "a-very-long-device-name-".repeat(4);
-    let (_, cx) = open_menu(&name, 800., cx);
+    let short = {
+        let (_, cx) = open_menu("m5max-ms", 800., cx);
+        cx.debug_bounds("menu-panel").unwrap().size.width
+    };
+    let (_, cx) = open_menu(&"a-very-long-device-name-".repeat(4), 800., cx);
     let panel = cx.debug_bounds("menu-panel").unwrap();
-    let widest_row = ROWS
-        .into_iter()
-        .map(|row| cx.debug_bounds(row).unwrap().size.width)
-        .fold(px(0.), |a, b| a.max(b));
-    // The rows fill the panel inside its 6px inset and border.
-    assert!(panel.size.width <= widest_row + px(16.), "{panel:?}");
+    assert_eq!(panel.size.width, short);
     let header = cx.debug_bounds("host-menu-header").unwrap();
     assert!(header.right() <= panel.right(), "{header:?} {panel:?}");
 }
