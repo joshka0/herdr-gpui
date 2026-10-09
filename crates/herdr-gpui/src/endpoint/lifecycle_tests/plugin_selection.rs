@@ -31,8 +31,8 @@ fn commands() -> Vec<ClientShellCommand> {
 
 /// Two panes side by side, `w1:p1` focused at content revision 6, with a
 /// plugin action and a shell command bound to keys.
-fn prepare(view: &mut HerdrWindow, endpoint: Endpoint) {
-    prepare_mouse(view, endpoint);
+fn prepare(view: &mut HerdrWindow, endpoint: Endpoint, cx: &mut Context<HerdrWindow>) {
+    prepare_mouse(view, endpoint, cx);
     Arc::make_mut(view.live.surface.as_mut().unwrap()).panes[0].content_revision = 6;
     Arc::make_mut(view.live.snapshot.as_mut().unwrap()).commands = commands();
     let mut inbox = view.endpoints[1].connection.inbox.lock().unwrap();
@@ -137,8 +137,8 @@ fn plugin_actions_carry_the_focused_panes_selection(cx: &mut gpui::TestAppContex
     ] {
         let (endpoint, mut server) = connected_endpoint("plugin-selection");
         cx.update(|_, cx| {
-            view.update(cx, |view, _| {
-                prepare(view, endpoint);
+            view.update(cx, |view, cx| {
+                prepare(view, endpoint, cx);
                 match case {
                     Case::NoSelection => {}
                     Case::OtherPane => select(view, (43., 2.), (47., 3.), true),
@@ -179,14 +179,14 @@ fn a_selection_never_outlives_its_session(cx: &mut gpui::TestAppContext) {
     let view = fixture.update(cx, |fixture, _| fixture.0.clone());
     let (endpoint, _server) = connected_endpoint("plugin-selection");
     cx.update(|_, cx| {
-        view.update(cx, |view, _| {
-            prepare(view, endpoint);
+        view.update(cx, |view, cx| {
+            prepare(view, endpoint, cx);
             select(view, (3., 2.), (7., 3.), true);
             assert!(view.plugin_selection().is_some());
             let snapshot = Arc::make_mut(view.live.snapshot.as_mut().unwrap());
             snapshot.boot_id.push_str("-restarted");
             assert_eq!(view.plugin_selection(), None);
-            view.reset_selected();
+            view.reset_selected(cx);
             assert!(view.selection.is_none());
             assert_eq!(view.plugin_selection(), None);
         })
@@ -209,7 +209,7 @@ fn a_copy_mode_mark_is_the_selection_of_its_connection(cx: &mut gpui::TestAppCon
     };
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
-            prepare(view, endpoint);
+            prepare(view, endpoint, cx);
             view.live.supports_copy_motion = true;
             view.enter_copy_mode(window, cx);
             // No visible cursor: copy mode starts on the last row's first cell.
@@ -247,7 +247,7 @@ fn the_palette_sends_the_selection_captured_when_it_opened(cx: &mut gpui::TestAp
     let (endpoint, mut server) = connected_endpoint("plugin-selection");
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
-            prepare(view, endpoint);
+            prepare(view, endpoint, cx);
             select(view, (3., 2.), (7., 3.), true);
             view.open_palette(crate::palette::Filter::Commands, window, cx);
             view.selection = None;
