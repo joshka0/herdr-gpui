@@ -105,8 +105,8 @@ impl HerdrWindow {
 
     /// Whether something the window draws may cover pages, so those it
     /// covers step aside and show their picture: an open menu, or a status
-    /// bar tooltip.
-    #[cfg(any(target_os = "macos", windows))]
+    /// bar tooltip. Only macOS freezes pages into a picture, so only it asks.
+    #[cfg(target_os = "macos")]
     pub(in crate::browser) fn pages_covered(&self) -> bool {
         self.menu.page.is_some() || self.browser.tooltip_band.is_some()
     }
