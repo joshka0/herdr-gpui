@@ -31,7 +31,6 @@ fn hovering_the_status_bar_covers_the_band_above_it(cx: &mut gpui::TestAppContex
     draw(cx);
     view.read_with(cx, |view, _| {
         assert!(view.browser.tooltip_band.is_none());
-        #[cfg(target_os = "macos")]
         assert!(!view.pages_covered());
     });
 }
