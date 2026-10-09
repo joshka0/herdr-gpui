@@ -59,7 +59,7 @@ fn token_colour(theme: &Theme, token: Token) -> Rgba {
 /// A line's code, coloured by its syntax where known, its changed words on
 /// a stronger tint. The two may overlap, so the text is cut at every edge
 /// of either.
-fn code(
+pub(crate) fn code(
     theme: &Theme,
     text: &str,
     spans: &[Span],

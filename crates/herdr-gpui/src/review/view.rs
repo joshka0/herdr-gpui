@@ -20,6 +20,7 @@ use std::{
 };
 
 mod colours;
+pub(crate) use rows::code as styled_code;
 mod file_rows;
 mod files;
 mod header;

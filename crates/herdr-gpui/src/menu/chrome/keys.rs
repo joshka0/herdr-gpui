@@ -166,6 +166,10 @@ impl HerdrWindow {
             self.palette_key(event, window, cx);
             return;
         }
+        if self.menu.page == Some(Page::CodeSearch) {
+            self.code_search_key(event, window, cx);
+            return;
+        }
         if self.menu.page == Some(Page::ConfirmClose) {
             self.close_confirmation_key(event, window, cx);
             return;

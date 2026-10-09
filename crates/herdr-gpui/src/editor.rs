@@ -18,6 +18,10 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
+/// Whether this build starts the editor: the typed line runs POSIX `sh`,
+/// which the shells of a Windows pane do not have.
+pub(crate) const SUPPORTED: bool = cfg!(unix);
+
 /// The longest command template accepted from the config.
 const MAX_COMMAND_BYTES: usize = 1024;
 
@@ -100,6 +104,9 @@ pub(crate) fn command_line(
     target: &EditorTarget,
     command: Option<&EditorCommand>,
 ) -> crate::Result<String> {
+    if !SUPPORTED {
+        return Err(crate::Error::EditorUnsupported);
+    }
     let path = target
         .path
         .to_str()

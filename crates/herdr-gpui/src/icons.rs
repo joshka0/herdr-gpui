@@ -153,6 +153,7 @@ impl AssetSource for Icons {
             "icons/x.svg" => include_bytes!("../../../assets/icons/x.svg"),
             "icons/pencil.svg" => include_bytes!("../../../assets/icons/pencil.svg"),
             "icons/note.svg" => include_bytes!("../../../assets/icons/note.svg"),
+            "icons/code.svg" => include_bytes!("../../../assets/icons/code.svg"),
             "icons/trash.svg" => include_bytes!("../../../assets/icons/trash.svg"),
             "icons/chevron-up.svg" => include_bytes!("../../../assets/icons/chevron-up.svg"),
             "icons/chevron-down.svg" => include_bytes!("../../../assets/icons/chevron-down.svg"),

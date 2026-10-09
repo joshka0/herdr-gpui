@@ -178,6 +178,11 @@ pub(crate) struct HerdrWindow {
     pub(crate) review_files_width: crate::panel_resize::PanelWidth,
     /// Each review tab's state, by its tab.
     pub(crate) reviews: std::collections::HashMap<crate::browser::TabId, crate::review::Review>,
+    /// Code tabs' views, by tab.
+    pub(crate) code_views:
+        std::collections::HashMap<crate::browser::TabId, crate::code_view::CodeView>,
+    /// Checkouts indexed for Go to Symbol and Go to File.
+    pub(crate) code_indexes: crate::code_search::Indexes,
     /// The window's width at its last render, which caps side panels.
     pub(crate) viewport_width: f32,
     /// Comment, merge, and review reads for the focused branch's open PR.
@@ -766,6 +771,8 @@ impl HerdrWindow {
             notes_width: crate::panel_resize::NOTES,
             review_files_width: crate::panel_resize::REVIEW_FILES,
             reviews: Default::default(),
+            code_views: Default::default(),
+            code_indexes: Default::default(),
             viewport_width: 0.,
             pr_actions: Default::default(),
             usage: Default::default(),

@@ -10,7 +10,7 @@ fn snapshot() -> ClientShellSnapshot {
 #[test]
 fn catalog_has_all_native_commands_and_gpui_shortcuts() {
     use Command::*;
-    let expected: [(Command, &[&str]); 89] = [
+    let expected: [(Command, &[&str]); 91] = [
         (OpenNotificationTarget, &["cmd-alt-n"]),
         (Logs, &[]),
         (NewWindow, &["cmd-alt-shift-n"]),
@@ -94,6 +94,8 @@ fn catalog_has_all_native_commands_and_gpui_shortcuts() {
         (Themes, &[]),
         (WorkspacePicker, &["cmd-p"]),
         (Palette, &["cmd-shift-p"]),
+        (GoToSymbol, &["cmd-shift-o"]),
+        (GoToFile, &["cmd-o"]),
         (Reconnect, &[]),
         (Quit, &["cmd-q"]),
         (About, &[]),

@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 
+#[cfg(unix)]
 fn target(path: &str, line: Option<u32>) -> EditorTarget {
     EditorTarget {
         path: PathBuf::from(path),
@@ -122,6 +123,8 @@ fn media_files_are_left_to_the_system() {
     assert!(!EditorTarget::editable(dir.path(), &metadata));
 }
 
+// The editor starts from a Unix shell; see `SUPPORTED`.
+#[cfg(unix)]
 mod flow {
     // Not a glob: the parent's imports would shadow `#[test]`.
     use super::{EditorTarget, PathBuf, command_line, json};
@@ -131,7 +134,6 @@ mod flow {
     };
     use herdr_client::protocol::{ClientMessage, ClientPaneInputEvent};
 
-    #[cfg(unix)]
     #[gpui::test]
     fn a_file_opens_in_a_split_beside_its_pane_with_the_editor_typed(
         cx: &mut gpui::TestAppContext,

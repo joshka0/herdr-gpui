@@ -118,6 +118,18 @@ pub(crate) fn menus(layout: Layout) -> Vec<Menu> {
                         command: Command::WorkspacePicker,
                     },
                 ),
+                MenuItem::action(
+                    "Go to Symbol...",
+                    RunCommand {
+                        command: Command::GoToSymbol,
+                    },
+                ),
+                MenuItem::action(
+                    "Go to File...",
+                    RunCommand {
+                        command: Command::GoToFile,
+                    },
+                ),
                 MenuItem::separator(),
                 MenuItem::action(
                     "Close Pane...",

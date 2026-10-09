@@ -504,8 +504,18 @@ pub enum Error {
         "editor_command must be at most 1024 bytes without quotes, backslashes, or control characters"
     )]
     EditorCommand,
+    #[error("A code tab must name an absolute file path without control characters")]
+    InvalidCodeFile,
+    #[error("This file is missing, larger than 1 MiB, or not UTF-8 text")]
+    CodeFileUnreadable,
+    #[error("Only a local Git checkout can be searched for files and symbols")]
+    CodeIndexRoot,
+    #[error("Reading the checkout was cancelled")]
+    CodeIndexCancelled,
     #[error("This path cannot be typed into a shell safely, so it opens in the default app")]
     EditorPath,
+    #[error("Opening a terminal editor needs a Unix shell in the pane")]
+    EditorUnsupported,
     #[error("Another file is still opening in the editor")]
     EditorBusy,
     #[error("No local pane to open the editor beside")]

@@ -26,6 +26,8 @@ pub(crate) enum Page {
     Themes,
     Fonts,
     Palette,
+    /// Go to Symbol and Go to File over the focused pane's checkout.
+    CodeSearch,
     ConfirmClose,
     Update,
     AppUpdate,

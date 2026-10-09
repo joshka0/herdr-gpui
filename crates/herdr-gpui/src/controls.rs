@@ -39,6 +39,10 @@ pub enum Command {
     Themes,
     WorkspacePicker,
     Palette,
+    /// Go to a definition in the focused pane's checkout.
+    GoToSymbol,
+    /// Go to a file in the focused pane's checkout.
+    GoToFile,
     Reconnect,
     Quit,
     Logs,
@@ -581,6 +585,18 @@ pub const COMMANDS: &[CommandInfo] = &[
         shortcuts: &["cmd-shift-p"],
     },
     CommandInfo {
+        command: Command::GoToSymbol,
+        name: "go_to_symbol",
+        label: "Go to Symbol",
+        shortcuts: &["cmd-shift-o"],
+    },
+    CommandInfo {
+        command: Command::GoToFile,
+        name: "go_to_file",
+        label: "Go to File",
+        shortcuts: &["cmd-o"],
+    },
+    CommandInfo {
         command: Command::Reconnect,
         name: "reconnect",
         label: "Reconnect",
@@ -768,6 +784,8 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::Themes
         | Command::WorkspacePicker
         | Command::Palette
+        | Command::GoToSymbol
+        | Command::GoToFile
         | Command::Reconnect
         | Command::Quit
         | Command::Logs

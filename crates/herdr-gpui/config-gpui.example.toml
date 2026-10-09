@@ -66,7 +66,8 @@ open_links_in = "system"
 # as `src/main.rs:42`, opens it: "editor" (the terminal editor, at that line,
 # in a pane split beside the one that printed it) or "system" (the default
 # application). Folders, images, and PDFs always open in the system's
-# application. Alt-click (Option-click) opens a file in the other one.
+# application, as does every file on Windows. Alt-click (Option-click) opens a
+# file in the other one.
 open_files_in = "editor"
 # How that editor starts. Unset, the pane's $VISUAL or $EDITOR runs, then vi,
 # as `$EDITOR +LINE FILE`. `{file}` and `{line}` place the two yourself:
@@ -168,6 +169,8 @@ project_roots = []
 # keybindings = "cmd-/"
 # workspace_picker = "cmd-p"
 # command_palette = "cmd-shift-p"
+# go_to_symbol = "cmd-shift-o"
+# go_to_file = "cmd-o"
 # open_notification_target = "cmd-alt-n"
 # quit = "cmd-q"
 # Unbound by default: themes, reconnect, logs, about, worktree_notes,
