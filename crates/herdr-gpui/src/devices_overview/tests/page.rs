@@ -120,6 +120,7 @@ fn a_narrow_tab_wraps_the_load_columns_instead_of_cutting_them(cx: &mut gpui::Te
     cx.simulate_resize(gpui::size(gpui::px(1400.), gpui::px(900.)));
     open(&view, cx);
     let wide_row = cx.debug_bounds("devices-row-local").unwrap();
+    let wide_totals = cx.debug_bounds("devices-totals").unwrap();
     let wide_load = cx.debug_bounds("devices-load-local").unwrap();
     assert!(
         wide_load.top() < wide_row.top() + (wide_row.size.height / 2.),
@@ -134,6 +135,11 @@ fn a_narrow_tab_wraps_the_load_columns_instead_of_cutting_them(cx: &mut gpui::Te
     let header = cx.debug_bounds("devices-load-header").unwrap();
     assert!(load.right() <= tab.right(), "{load:?} inside {tab:?}");
     assert!(row.size.height > wide_row.size.height, "the load wrapped");
+    let totals = cx.debug_bounds("devices-totals").unwrap();
+    assert_eq!(
+        totals.size.height, wide_totals.size.height,
+        "the four totals keep one row"
+    );
     assert!(
         (header.left() - load.left()).abs() < gpui::px(1.),
         "the header wraps in step: {header:?} {load:?}"

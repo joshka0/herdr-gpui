@@ -331,7 +331,9 @@ fn totals(look: &Look, devices: &[Device]) -> Div {
                 .map(|(index, (title, value, detail, status))| {
                     div()
                         .flex_1()
-                        .min_w(px(140.))
+                        // Narrow enough that all four share a row in a
+                        // narrow tab; the detail line truncates first.
+                        .min_w(px(100.))
                         .p_3()
                         .flex()
                         .flex_col()
