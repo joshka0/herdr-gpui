@@ -188,7 +188,8 @@ fn detection_fills_only_the_faces_the_config_left_alone() -> anyhow::Result<()> 
 fn fonts_are_not_enumerated_when_nothing_needs_checking() -> anyhow::Result<()> {
     // Enumerating installed families is slow, so default families with
     // explicit empty cascades, which name nothing to check or detect, must
-    // not pay for it. Linux still checks that its defaults are installed.
+    // not pay for it. Linux and Windows still check that their defaults are
+    // installed, since they have alternatives to substitute.
     let mut config = Config::parse(
         "[sidebar]\nfallback = []\n[tabs]\nfallback = []\n\
              [terminal]\nfallback = []\n[ui]\nfallback = []",
@@ -198,7 +199,8 @@ fn fonts_are_not_enumerated_when_nothing_needs_checking() -> anyhow::Result<()> 
         enumerated = true;
         Vec::<String>::new()
     });
-    assert_eq!(enumerated, cfg!(target_os = "linux"));
+    let defaults = crate::config::fonts::PLATFORM_FONTS;
+    assert_eq!(enumerated, defaults.is_replaceable(defaults.monospace));
     Ok(())
 }
 
