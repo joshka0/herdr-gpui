@@ -332,7 +332,9 @@ impl HerdrWindow {
             return false;
         }
         if let Some(file) = release.file {
-            self.open_file_link(file, cx);
+            let in_editor =
+                (self.config.open_files_in == crate::config::FileTarget::Editor) != modifiers.alt;
+            self.open_file_link(file, in_editor, cx);
             return true;
         }
         let fallback = release

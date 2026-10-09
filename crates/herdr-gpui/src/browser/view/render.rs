@@ -64,18 +64,13 @@ impl HerdrWindow {
             .map(|tab| {
                 let id = tab.id;
                 let (background, text) = self.tab_colors(shown == Some(id), slot.id);
-                // The VS Code tab bears its mark; a review tab shows a diff,
-                // not a page.
-                let icon = if tab.place.is_code() {
-                    "icons/vscode.svg"
-                } else if tab
-                    .location
-                    .as_ref()
-                    .is_some_and(|location| !location.is_page())
-                {
-                    "icons/diff-unified.svg"
-                } else {
-                    "icons/globe.svg"
+                // The VS Code tab bears its mark; a review tab shows a diff
+                // and a code tab a file, not a page.
+                let icon = match tab.location {
+                    _ if tab.place.is_code() => "icons/vscode.svg",
+                    Some(Location::Review { .. }) => "icons/diff-unified.svg",
+                    Some(Location::Code { .. }) => "icons/code.svg",
+                    _ => "icons/globe.svg",
                 };
                 let tab = div()
                     .id(SharedString::from(format!("browser-tab-{id}")))

@@ -34,8 +34,9 @@ pub(crate) enum RowTarget {
     /// A web address that passed `WebUrl` validation.
     Web(String),
     /// A local path as the pane printed it, with `~/` and relative paths left
-    /// for the click to resolve, or the absolute path of a `file://` link.
-    Path(String),
+    /// for the click to resolve, or the absolute path of a `file://` link,
+    /// and the line a `:line` suffix named.
+    Path { path: String, line: Option<u32> },
 }
 
 /// A link read from one row, and the frame columns it covers.
@@ -63,7 +64,7 @@ pub(crate) fn link_at(
 ) -> Option<String> {
     match located(surface, x, y, cell_width, cell_height)?.1.target {
         RowTarget::Web(url) => Some(url),
-        RowTarget::Path(_) => None,
+        RowTarget::Path { .. } => None,
     }
 }
 
@@ -150,7 +151,10 @@ fn frame_link(frame: &FrameData, column: u16, row: u16, start: u16, end: u16) ->
         let destination = frame.hyperlinks.get(index as usize)?;
         let target = match web_url(destination) {
             Some(url) => RowTarget::Web(url),
-            None => RowTarget::Path(file_url_path(destination)?),
+            None => RowTarget::Path {
+                path: file_url_path(destination)?,
+                line: None,
+            },
         };
         let on_link = |i: &usize| cells[*i].skip || cells[*i].hyperlink == Some(index);
         let first = (0..=source)
@@ -193,13 +197,19 @@ fn frame_link(frame: &FrameData, column: u16, row: u16, start: u16, end: u16) ->
             let url = web_url(&text[range.clone()])?;
             (range, RowTarget::Web(url))
         }
-        None => match path::plain_path(&text, hit)? {
-            (_, _, true) => return None,
+        None => {
+            let found = path::plain_path(&text, hit)?;
             // A path starting the row may be the tail of whatever filled the
             // row above, such as a wrapped URL.
-            (range, _, false) if range.start == 0 && row_full(frame, row, end) => return None,
-            (range, path, false) => (range, RowTarget::Path(path.to_owned())),
-        },
+            if found.open || (found.range.start == 0 && row_full(frame, row, end)) {
+                return None;
+            }
+            let target = RowTarget::Path {
+                path: found.path.to_owned(),
+                line: found.line,
+            };
+            (found.range, target)
+        }
     };
     let first = (0..cells.len()).find(|&i| !cells[i].skip && starts[i] >= range.start)?;
     let last = (0..cells.len())

@@ -268,6 +268,15 @@ impl HerdrWindow {
                 );
                 return;
             }
+            Command::GoToSymbol | Command::GoToFile => {
+                let mode = if command == Command::GoToFile {
+                    crate::code_search::Mode::Files
+                } else {
+                    crate::code_search::Mode::Symbols
+                };
+                self.open_code_search(mode, window, cx);
+                return;
+            }
             Command::NewWorktree => {
                 self.open_new_worktree(window, cx);
                 return;

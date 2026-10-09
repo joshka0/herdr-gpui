@@ -385,6 +385,8 @@ impl HerdrWindow {
                 | Command::PreviousPane
                 | Command::TabNumber(_)
                 | Command::WorkspacePicker
+                | Command::GoToSymbol
+                | Command::GoToFile
                 | Command::WorktreeNotes
                 | Command::LastPane
                 | Command::PreviousWorkspace

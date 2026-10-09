@@ -23,7 +23,10 @@ compile_error!(
 );
 #[cfg(feature = "cloud")]
 mod cloud;
+mod code_index;
+mod code_search;
 mod code_server;
+mod code_view;
 #[cfg(feature = "coder")]
 mod coder;
 mod config;
@@ -40,6 +43,7 @@ mod daytona;
 mod diagnostics;
 mod dialog_input;
 mod dispatch;
+mod editor;
 mod endpoint;
 mod error;
 mod fan_out;

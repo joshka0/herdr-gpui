@@ -77,7 +77,7 @@ fn offset_at(layout: &TextLayout, position: Point<Pixels>) -> usize {
 /// A line's code, coloured by its syntax where known, its changed words on
 /// a stronger tint, and the part of it `selected` on the selection's. They
 /// may overlap, so the text is cut at every edge of any.
-fn code(
+pub(crate) fn code(
     theme: &Theme,
     text: &str,
     spans: &[Span],

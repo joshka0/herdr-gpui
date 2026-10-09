@@ -299,6 +299,7 @@ impl HerdrWindow {
         self.ensure_code_page(window, cx);
         self.poll_deliveries(cx);
         self.poll_reviews(cx);
+        self.poll_code_views(cx);
         self.sync_addresses(false, window, cx);
     }
 

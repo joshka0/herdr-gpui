@@ -586,7 +586,12 @@ impl Render for HerdrWindow {
                         .as_ref()
                         .is_some_and(|location| !location.is_page()) =>
                 {
-                    self.render_review_tab(slot, &tab, gap, cx)
+                    match tab.location {
+                        Some(crate::browser::Location::Code { .. }) => {
+                            self.render_code_tab(slot, &tab, gap, cx)
+                        }
+                        _ => self.render_review_tab(slot, &tab, gap, cx),
+                    }
                 }
                 (Shown::Page(_), Some(tab)) => {
                     self.render_browser(slot, &tab, gap, owns_keyboard, cx)
