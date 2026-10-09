@@ -9,7 +9,6 @@ pub(crate) use layouts::{apply_loaded_layout, layout_load_revision};
 #[cfg(all(feature = "integration-test", target_os = "macos"))]
 mod native;
 mod persistence;
-mod plugins;
 mod remote_history;
 #[cfg(test)]
 use persistence::SizeIo;
@@ -214,7 +213,7 @@ struct SettingsWindow {
     section: Section,
     themes: themes::ThemeBrowser,
     controls: controls::Controls,
-    plugins: plugins::Plugins,
+    plugins: controls::plugins::Plugins,
     code: controls::code::CodeSettings,
     error: Option<String>,
     status: Option<String>,
@@ -317,7 +316,7 @@ impl SettingsWindow {
             section: Section::Appearance,
             themes: themes::ThemeBrowser::new(cx),
             controls: controls::Controls::new(cx),
-            plugins: plugins::Plugins::new(cx),
+            plugins: controls::plugins::Plugins::new(cx),
             error: appearance.error,
             status: None,
             focus: cx.focus_handle(),

@@ -8,7 +8,10 @@
 //! and previews the rows. Everything here is pure and bounded.
 use crate::{
     HerdrWindow,
-    config::{AgentLayout, AgentToken, SidebarLayout, SidebarScope, SpaceLayout, SpaceToken},
+    config::{
+        AgentLayout, AgentToken, SidebarLayout, SidebarScope, SpaceLayout, SpaceToken, TokenStyle,
+        sidebar::ConfiguredToken,
+    },
 };
 use herdr_client::protocol::ClientShellSnapshot;
 use std::collections::{BTreeMap, btree_map::Entry};
@@ -175,7 +178,8 @@ pub(crate) fn sidebar_values(reports: &[HostReport], layout: &SidebarLayout) -> 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum PreviewPart {
     StateIcon,
-    Text(String, PreviewRole),
+    /// Text with the style its configured token and matching rule give it.
+    Text(String, PreviewRole, TokenStyle),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -200,23 +204,35 @@ impl PreviewSource<'_> {
             .iter()
             .find(|value| value.scope == scope && value.name == name)
             .and_then(|value| value.sample.clone())
-            .map(|sample| PreviewPart::Text(sample, PreviewRole::Plugin))
+            .map(|sample| PreviewPart::Text(sample, PreviewRole::Plugin, TokenStyle::default()))
     }
 }
 
 fn text(value: &str, role: PreviewRole) -> Option<PreviewPart> {
-    Some(PreviewPart::Text(value.to_owned(), role))
+    Some(PreviewPart::Text(
+        value.to_owned(),
+        role,
+        TokenStyle::default(),
+    ))
 }
 
-/// Rows without a value disappear, as in Herdr's sidebar.
+/// Each token takes its configured style, or the first matching rule's; a
+/// matching `hide` rule drops it, as the sidebar's `style_for` does. Rows
+/// without a value disappear, as in Herdr's sidebar.
 fn rows<T>(
-    rows: &[Vec<crate::config::sidebar::ConfiguredToken<T>>],
+    rows: &[Vec<ConfiguredToken<T>>],
     mut part: impl FnMut(&T) -> Option<PreviewPart>,
 ) -> Vec<Vec<PreviewPart>> {
     rows.iter()
         .map(|row| {
             row.iter()
-                .filter_map(|token| part(&token.token))
+                .filter_map(|configured| match part(&configured.token)? {
+                    PreviewPart::Text(text, role, _) => {
+                        let style = configured.style_for(&text)?;
+                        Some(PreviewPart::Text(text, role, style))
+                    }
+                    PreviewPart::StateIcon => Some(PreviewPart::StateIcon),
+                })
                 .collect::<Vec<_>>()
         })
         .filter(|row| !row.is_empty())

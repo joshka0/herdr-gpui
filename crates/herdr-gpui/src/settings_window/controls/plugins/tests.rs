@@ -1,15 +1,21 @@
 //! Settings > Plugins lists what hosts report, previews the rows, and edits
 //! the shared layout only through explicit, ready switches.
 use super::*;
+use crate::{
+    HerdrWindow,
+    herdr_settings::{self, Edit},
+};
+use crate::{
+    config::preferences::Preference, settings_window::controls::preferences::PreferenceIo,
+};
 use core::prelude::v1::test;
 use gpui::{TestAppContext, VisualTestContext, px, size};
 use herdr_client::{ConnectTarget, protocol::ClientShellSnapshot};
-use herdr_settings::Edit;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 fn connected(live: &mut crate::state::LiveState, summary: &str, ci: Option<&str>) {
     let mut snapshot: ClientShellSnapshot = serde_json::from_str(include_str!(
-        "../../../../herdr-protocol/tests/fixtures/endpoint-snapshot-v1.json"
+        "../../../../../herdr-protocol/tests/fixtures/endpoint-snapshot-v1.json"
     ))
     .unwrap();
     for agent in &mut snapshot.agents {
@@ -181,4 +187,69 @@ fn the_preview_sits_beside_the_list_and_wraps_below_when_narrow(cx: &mut TestApp
     let preview = cx.debug_bounds("plugin-preview").unwrap();
     assert!(preview.top() >= switch.bottom(), "{switch:?} {preview:?}");
     assert!(preview.right() <= px(640.), "{preview:?}");
+}
+
+#[gpui::test]
+fn a_native_sidebar_says_switches_only_reach_the_terminal_and_offers_herdr_rows(
+    cx: &mut TestAppContext,
+) {
+    let (view, cx) = open(cx);
+    let edits = Arc::new(Mutex::new(Vec::new()));
+    let captured = edits.clone();
+    view.update(cx, |view, cx| {
+        view.config.usage.inline = false;
+        view.controls.preference_io = Some(PreferenceIo {
+            write: Arc::new(move |edit| {
+                captured.lock().unwrap().push(edit);
+                Ok(())
+            }),
+            load: super::super::tests::skill_load,
+        });
+        cx.notify();
+    });
+    draw(cx);
+    assert!(cx.debug_bounds("plugin-rows-native").is_some());
+    assert!(cx.debug_bounds("plugin-rows-default").is_none());
+    click(cx, "plugin-use-herdr-rows");
+    assert_eq!(*edits.lock().unwrap(), [Preference::UsageInline(true)]);
+}
+
+#[gpui::test]
+fn default_rows_warn_that_the_first_switch_moves_to_configured_rows(cx: &mut TestAppContext) {
+    let (view, cx) = open(cx);
+    draw(cx);
+    // The fixture's rows already name custom tokens.
+    assert!(cx.debug_bounds("plugin-rows-default").is_none());
+    assert!(cx.debug_bounds("plugin-rows-native").is_none());
+    view.update(cx, |view, cx| {
+        view.config.sidebar_layout = crate::config::SidebarLayout::default();
+        cx.notify();
+    });
+    draw(cx);
+    assert!(cx.debug_bounds("plugin-rows-default").is_some());
+}
+
+#[gpui::test]
+fn a_wide_navigation_never_pushes_the_columns_past_the_window(cx: &mut TestAppContext) {
+    let (view, cx) = open(cx);
+    cx.simulate_resize(size(px(680.), px(900.)));
+    view.update(cx, |view, cx| {
+        view.navigation_width.restore(Some(1000.));
+        cx.notify();
+    });
+    draw(cx);
+    let navigation = cx.debug_bounds("settings-sections").unwrap();
+    assert!(navigation.right() > px(380.), "{navigation:?}");
+    for id in [
+        "plugin-values",
+        "plugin-preview",
+        "plugin-value-agents-$summary",
+    ] {
+        let bounds = cx.debug_bounds(id).unwrap();
+        assert!(
+            bounds.left() >= navigation.right() && bounds.right() <= px(680.),
+            "{id}: {bounds:?} beside {navigation:?}"
+        );
+        assert!(bounds.size.width > px(0.), "{id}: {bounds:?}");
+    }
 }

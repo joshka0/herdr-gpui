@@ -159,7 +159,7 @@ fn previews_follow_the_layout_and_drop_rows_without_values() -> anyhow::Result<(
                 row.into_iter()
                     .map(|part| match part {
                         PreviewPart::StateIcon => "*".to_owned(),
-                        PreviewPart::Text(text, _) => text,
+                        PreviewPart::Text(text, _, _) => text,
                     })
                     .collect()
             })
@@ -178,7 +178,11 @@ fn previews_follow_the_layout_and_drop_rows_without_values() -> anyhow::Result<(
     let rows = preview_agent(&layout.agents, &source);
     assert_eq!(
         rows[1],
-        [PreviewPart::Text("fix auth".into(), PreviewRole::Plugin)]
+        [PreviewPart::Text(
+            "fix auth".into(),
+            PreviewRole::Plugin,
+            TokenStyle::default()
+        )]
     );
     assert_eq!(
         text(rows),
@@ -190,6 +194,40 @@ fn previews_follow_the_layout_and_drop_rows_without_values() -> anyhow::Result<(
             vec!["*", "herdr-gpui"],
             vec!["feat/plugin-values", "\u{2191}2"]
         ]
+    );
+    Ok(())
+}
+
+#[test]
+fn previews_carry_token_styles_and_drop_values_a_rule_hides() -> anyhow::Result<()> {
+    let values = sidebar_values(
+        &[
+            report("Local", &[(SidebarScope::Agents, "summary", "secret plan")]),
+            report("devbox", &[(SidebarScope::Agents, "model", "opus")]),
+        ],
+        &SidebarLayout::default(),
+    );
+    let source = PreviewSource {
+        values: &values,
+        label_sample: None,
+        machine: None,
+    };
+    let layout = layout(
+        "[ui.sidebar.agents]\nrows = [\n  [{ token = \"$summary\", rules = [{ starts_with = \"secret\", hide = true }] }],\n  [{ token = \"$model\", fg = \"#ff0000\", bold = true, rules = [{ equals = \"opus\", dim = true }] }],\n]\n",
+    )?;
+    // The hidden summary's row disappears; the model keeps its token style
+    // with the matching rule's dim on top.
+    assert_eq!(
+        preview_agent(&layout.agents, &source),
+        [vec![PreviewPart::Text(
+            "opus".into(),
+            PreviewRole::Plugin,
+            TokenStyle {
+                fg: Some(0xff0000),
+                bold: Some(true),
+                dim: Some(true),
+            },
+        )]]
     );
     Ok(())
 }

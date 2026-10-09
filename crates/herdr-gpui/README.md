@@ -1569,8 +1569,13 @@ the daemon exposes to clients:
   writes out Herdr's default rows first, styled occurrences count as shown, and
   per-agent `rows_by_agent` overrides are never edited. Tokens already in `rows`
   stay listed while nothing reports them, so they can be hidden. A preview
-  draws an example workspace and agent with the configured rows. The switches
-  are read-only on Windows, where shared settings are. Herdr offers clients no
+  draws an example workspace and agent with the configured rows, including
+  token styles and the rules that restyle or hide a value. While the rows are
+  still Herdr's defaults, this app draws its own native rows; the section says
+  the first switch moves the sidebar to the configured rows, in your row
+  style. With `[usage] inline = false` the section says the switches only
+  change the terminal client and offers a switch that turns `inline` back on.
+  The switches are read-only on Windows, where shared settings are. Herdr offers clients no
   way to list, enable, or disable plugins or read their logs, and the snapshot
   does not say which plugin reported a value.
 - **Clipboard.** A plugin terminal that copies with OSC 52 reaches this machine's

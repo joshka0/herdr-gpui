@@ -24,6 +24,7 @@ mod status_bar;
 mod system_themes;
 mod theme_files;
 mod themes;
+mod usage_inline;
 
 struct TempDirectory(PathBuf);
 

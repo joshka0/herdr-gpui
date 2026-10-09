@@ -2,7 +2,8 @@
 //! that edits the shared `[ui.sidebar]` rows, and a preview of those rows.
 use super::*;
 use crate::{
-    config::SidebarScope,
+    config::{SidebarScope, Theme, mix},
+    fonts::StyledFont,
     plugin_values::{
         HostReport, PreviewPart, PreviewRole, PreviewSource, SidebarValue, preview_agent,
         preview_space, sidebar_values,
@@ -23,16 +24,16 @@ their logs; use `herdr plugin` on the host. Nothing is installed from here.";
 
 const STATUS: &str = "state_text";
 
-pub(super) struct Plugins {
+pub(in crate::settings_window) struct Plugins {
     search: Entity<SearchInput>,
     /// Records sidebar edits instead of writing the shared config.
     #[cfg(test)]
-    edits: Option<Vec<herdr_settings::Edit>>,
+    edits: Option<Vec<Edit>>,
     _search_changed: Subscription,
 }
 
 impl Plugins {
-    pub(super) fn new(cx: &mut Context<SettingsWindow>) -> Self {
+    pub(in crate::settings_window) fn new(cx: &mut Context<SettingsWindow>) -> Self {
         let search = cx.new(SearchInput::new);
         search.update(cx, |input, cx| {
             input.set_placeholder("Search plugin values...", cx)
@@ -75,7 +76,7 @@ fn detail(value: &SidebarValue) -> String {
 }
 
 impl SettingsWindow {
-    pub(super) fn render_plugin_controls(&self, cx: &mut Context<Self>) -> Div {
+    pub(in crate::settings_window) fn render_plugin_controls(&self, cx: &mut Context<Self>) -> Div {
         let query = self.plugins.search.read(cx).text().trim().to_lowercase();
         let body = div()
             .flex()
@@ -115,7 +116,18 @@ impl SettingsWindow {
                 "Shared settings are unavailable. Reload from General to retry."
             }));
         }
-        let mut list = div().flex().flex_col().gap(px(2.)).flex_1().min_w(px(240.));
+        card = card.child(self.rows_mode(cx));
+        // Both columns shrink, so a wide navigation never pushes them past
+        // the card; they wrap once neither keeps its preferred width.
+        let mut list = div()
+            .debug_selector(|| "plugin-values".into())
+            .flex()
+            .flex_col()
+            .gap(px(2.))
+            .flex_grow(1.)
+            .flex_shrink(1.)
+            .flex_basis(px(240.))
+            .min_w_0();
         if query.is_empty() || "status labels".contains(query) {
             let labelled: usize = reports.iter().map(|report| report.labelled_agents).sum();
             let detail = match label_sample {
@@ -223,7 +235,7 @@ impl SettingsWindow {
         }
         let token = token.to_owned();
         row.on_click(cx.listener(move |this, _, _, cx| {
-            let edit = herdr_settings::Edit::SidebarToken {
+            let edit = Edit::SidebarToken {
                 scope,
                 token: token.clone(),
                 shown: !shown,
@@ -239,6 +251,38 @@ impl SettingsWindow {
             }
             this.save_shared(edit, cx);
         }))
+    }
+
+    /// Whether this app draws Herdr's configured rows at all, and what the
+    /// first switch changes while the rows are still Herdr's defaults.
+    fn rows_mode(&self, cx: &mut Context<Self>) -> Div {
+        let inline = self.config.usage.inline;
+        if !inline {
+            return div()
+                .debug_selector(|| "plugin-rows-native".into())
+                .flex()
+                .flex_col()
+                .gap(px(4.))
+                .child(self.control_note(
+                    "This app draws its own sidebar rows ([usage] inline = false), so these switches only change the terminal app.",
+                ))
+                .child(self.preference_switch(
+                    "plugin-use-herdr-rows",
+                    "Use Herdr's sidebar rows in this app",
+                    false,
+                    crate::config::preferences::Preference::UsageInline(true),
+                    cx,
+                ));
+        }
+        let layout = &self.config.sidebar_layout;
+        if layout.agents == crate::config::AgentLayout::default()
+            && layout.spaces == crate::config::SpaceLayout::default()
+        {
+            return div().debug_selector(|| "plugin-rows-default".into()).child(self.control_note(
+                "The sidebar uses this app's own rows while Herdr's are the defaults. Showing a value switches it to Herdr's configured rows, in your row style; the preview shows how they look.",
+            ));
+        }
+        div()
     }
 
     /// An example workspace and agent drawn with the configured rows, so a
@@ -263,8 +307,10 @@ impl SettingsWindow {
             .flex()
             .flex_col()
             .gap(px(8.))
-            .w(px(240.))
-            .flex_none()
+            .flex_shrink(1.)
+            .flex_basis(px(240.))
+            .max_w(px(240.))
+            .min_w_0()
             .p(px(10.))
             .rounded(px(corners::PANEL))
             .bg(rgb(mix(theme.surface, theme.background, 25)))
@@ -287,15 +333,20 @@ impl SettingsWindow {
                     .size(px(8.))
                     .rounded_full()
                     .bg(rgb(theme.ink(theme.palette[3]))),
-                PreviewPart::Text(text, role) => div()
-                    .min_w_0()
-                    .truncate()
-                    .text_color(rgb(match role {
-                        PreviewRole::Name => theme.foreground,
-                        PreviewRole::Detail => theme.subtext(),
-                        PreviewRole::Plugin => theme.muted,
-                    }))
-                    .child(text),
+                PreviewPart::Text(text, role, style) => {
+                    let base = match role {
+                        PreviewRole::Name => (theme.foreground, FontWeight::NORMAL),
+                        PreviewRole::Detail => (theme.subtext(), FontWeight::NORMAL),
+                        PreviewRole::Plugin => (theme.muted, FontWeight::NORMAL),
+                    };
+                    let (color, weight) = crate::sidebar::styled_token(base, style, theme);
+                    div()
+                        .min_w_0()
+                        .truncate()
+                        .text_color(rgb(color))
+                        .font_weight(weight)
+                        .child(text)
+                }
             });
         }
         line
