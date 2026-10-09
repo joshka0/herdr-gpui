@@ -275,7 +275,6 @@ impl HerdrWindow {
                 | Page::Tab
                 | Page::RenameTab
                 | Page::Group
-                | Page::NewTab
                 | Page::Pane
                 | Page::RenamePane
                 | Page::PaneProcesses
@@ -379,7 +378,6 @@ impl HerdrWindow {
                     Page::Tab
                         | Page::RenameTab
                         | Page::Group
-                        | Page::NewTab
                         | Page::Pane
                         | Page::RenamePane
                         | Page::PaneProcesses
@@ -399,7 +397,7 @@ impl HerdrWindow {
                             } else if page == Page::PaneProcesses {
                                 // Name, command, pid, CPU and memory columns.
                                 560.
-                            } else if matches!(page, Page::Group | Page::NewTab) {
+                            } else if page == Page::Group {
                                 240.
                             } else {
                                 360.
@@ -602,8 +600,6 @@ impl HerdrWindow {
             panel = panel.child(self.render_tab_menu(cx));
         } else if page == Page::Group {
             panel = panel.child(self.render_group_menu(cx));
-        } else if page == Page::NewTab {
-            panel = panel.child(self.render_new_tab_menu(cx));
         } else if matches!(
             page,
             Page::Pane | Page::RenamePane | Page::PaneProcesses | Page::KillProcesses
