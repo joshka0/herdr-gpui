@@ -1,5 +1,6 @@
 use super::*;
 
+mod command;
 mod forward;
 mod incompatible;
 

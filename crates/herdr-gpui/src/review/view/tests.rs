@@ -214,6 +214,7 @@ fn notes_go_to_the_focused_agent_or_the_workspace_s_first() {
 
 mod colours;
 mod files;
+mod find_again;
 mod keys;
 mod layout;
 mod loading;
@@ -222,6 +223,7 @@ mod scale;
 mod scope;
 mod scrollbar;
 mod search;
+mod selection;
 mod split_resize;
 mod tab;
 mod wrap;

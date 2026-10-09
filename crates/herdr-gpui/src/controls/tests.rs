@@ -10,7 +10,7 @@ fn snapshot() -> ClientShellSnapshot {
 #[test]
 fn catalog_has_all_native_commands_and_gpui_shortcuts() {
     use Command::*;
-    let expected: [(Command, &[&str]); 89] = [
+    let expected: [(Command, &[&str]); 94] = [
         (OpenNotificationTarget, &["cmd-alt-n"]),
         (Logs, &[]),
         (NewWindow, &["cmd-alt-shift-n"]),
@@ -59,6 +59,8 @@ fn catalog_has_all_native_commands_and_gpui_shortcuts() {
         (Zoom, &["cmd-shift-enter"]),
         (ClearPane, &["cmd-k"]),
         (Find, &["cmd-f"]),
+        (FindNext, &["cmd-g"]),
+        (FindPrevious, &["cmd-shift-g"]),
         (CopyMode, &["cmd-shift-c"]),
         (EditScrollback, &[]),
         (ClosePane, &["cmd-w"]),
@@ -84,6 +86,7 @@ fn catalog_has_all_native_commands_and_gpui_shortcuts() {
         (AgentNumber(8), &[]),
         (AgentNumber(9), &[]),
         (ToggleSidebar, &["cmd-b"]),
+        (ToggleStatusBar, &[]),
         (IncreaseFontSize, &["cmd-=", "cmd-+"]),
         (DecreaseFontSize, &["cmd--"]),
         (ResetFontSize, &["cmd-0"]),
@@ -100,6 +103,8 @@ fn catalog_has_all_native_commands_and_gpui_shortcuts() {
         (NewBrowserTab, &["cmd-shift-b"]),
         (InstallBrowserSkill, &[]),
         (SplitEditor, &["cmd-\\"]),
+        (ToggleFullScreen, &["ctrl-cmd-f"]),
+        (CycleWindows, &["cmd-`"]),
     ];
     assert_eq!(COMMANDS.len(), expected.len());
     let shortcuts: std::collections::HashSet<_> =
@@ -152,8 +157,11 @@ fn gui_commands_never_send_daemon_requests() {
         Command::NewWindow,
         Command::NewWorktree,
         Command::Find,
+        Command::FindNext,
+        Command::FindPrevious,
         Command::CopyMode,
         Command::ToggleSidebar,
+        Command::ToggleStatusBar,
         Command::IncreaseFontSize,
         Command::DecreaseFontSize,
         Command::ResetFontSize,
@@ -169,6 +177,8 @@ fn gui_commands_never_send_daemon_requests() {
         Command::NewBrowserTab,
         Command::InstallBrowserSkill,
         Command::SplitEditor,
+        Command::ToggleFullScreen,
+        Command::CycleWindows,
         Command::RenameTab,
         Command::LastPane,
         Command::ResizeMode,
