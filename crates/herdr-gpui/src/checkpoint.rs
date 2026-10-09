@@ -55,7 +55,11 @@ pub(crate) fn host_for(target: &ConnectTarget, live: &crate::LiveState) -> Optio
         ConnectTarget::Local | ConnectTarget::Session { .. } => {
             live.local_daemon_peer.then_some(Host::Local)
         }
+        // A cloud machine is reached only through its provider's command, which host
+        // scripts do not run over.
         ConnectTarget::Socket(_) => None,
+        #[cfg(feature = "cloud")]
+        ConnectTarget::Cloud { .. } => None,
     }
 }
 
