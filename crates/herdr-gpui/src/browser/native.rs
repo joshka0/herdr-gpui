@@ -284,6 +284,8 @@ impl Pages {
         // Window has an inherent `window_handle` of its own.
         let handle = HasWindowHandle::window_handle(window)?;
         let view = builder.build_as_child(&handle)?;
+        #[cfg(target_os = "macos")]
+        super::page_keys::install();
         let page = cx.new(|cx| {
             let mut page = WebView::new(view, window, cx);
             // A new page appears only when the window presents it.

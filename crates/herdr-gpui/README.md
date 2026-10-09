@@ -446,7 +446,8 @@ Reload waits while a theme preview/save is active. The manual GUI config reload
 action remains available; daemon config reload is separate.
 
 Settings opens a separate, reusable native window with **Appearance, Fonts,
-Indicators, Sound, Notifications, Integrations, and General** in a sidebar.
+Indicators, Sound, Notifications, Integrations, Code, and General** in a
+sidebar.
 The terminal stays usable while Settings is open. Cmd-W (or Ctrl-W) closes only
 Settings; reopening activates the existing window instead of creating a duplicate.
 Local preferences remain editable if the originating session window closes.
@@ -1921,6 +1922,81 @@ elsewhere:
 mkdir -p ~/.claude/skills/herdr-gpui-browser
 herdr-gpui browser skill > ~/.claude/skills/herdr-gpui-browser/SKILL.md
 ```
+
+## VS Code
+
+The VS Code panel shows VS Code to the right of a space's editor groups,
+beside every tab of that space, for reading code and reviewing diffs while
+agents work in the terminals. It is a second frontend beside Herdr's: the
+page comes from VS Code's own web server, `code serve-web`, and the app adds
+nothing to what that server serves.
+
+Herdr GPUI starts no server. Start one yourself:
+
+```sh
+code serve-web --host 127.0.0.1 --port 8000 --accept-server-license-terms
+```
+
+It prints the address to open, with a `?tkn=` connection token. Paste that
+address in **Settings > Code**, which saves it in `config-gpui.local.toml`:
+
+```toml
+[code]
+url = "http://127.0.0.1:8000/?tkn=..."
+```
+
+Keep the port fixed: VS Code keeps its settings in the page's storage, which
+belongs to one address.
+
+- **Test connection** on that page asks the server whether it answers. A
+  server that does shows its build's commit; one that does not says why: the
+  connection was refused, the token was refused, or the address is not a
+  VS Code server. Messages name only the host and port, never the token.
+- The VS Code button at the right end of the title bar shows or hides the
+  panel. It appears once a server is set, in builds that can show pages.
+  **Toggle VS Code** in the Terminal menu or the command palette does the
+  same, as does a key you bind to `toggle_code` under `[keybindings]`. It has
+  no default key.
+- Each space shows or hides the panel on its own and has its own page. The page
+  opens on the address above, then goes wherever it navigates, and comes back
+  there after a restart. A hidden page keeps running, so it keeps its state;
+  closing the space in Herdr closes its page. A space's page first opens the
+  folder the space started in, as its first tab's first terminal reports it,
+  when the space is on this computer; a space on an SSH host opens an empty
+  window, since its folder is on another machine than the server. **Open
+  Folder** in VS Code picks another; the page then remembers it.
+- The app asks the server whether it answers before it opens a page, since a
+  page that cannot load stays blank. While the server does not answer, the
+  panel says so and why, and asks again every 5 seconds. Setting a new address
+  closes the pages still on the old server, so they reopen on the new one. A
+  new token for the same server reopens each page where it was, with the new
+  token, and so does a restart.
+- Drag the panel's left edge to resize it; double-click the edge to return to
+  the default width. The width is one for the window, saved with the
+  sidebar's, and the panel takes at most 60% of the window.
+- The window then has two realms. Herdr's dialogs, menus, and toasts stay in
+  its own, left of the panel: dialogs dim and centre there, and VS Code stays
+  live beside them, deciding for itself what to dim. When the Herdr realm is
+  narrower than 480 px, dialogs take the whole window again and the page steps
+  aside while they show.
+- **Move VS Code to Group** in the Terminal menu or the command palette moves
+  a space's VS Code into a new editor group, split off to the right of the
+  group in use, as a tab of the strips: it splits, resizes, and is covered
+  by dialogs as any page is. **Move VS Code to Panel** puts it back. The page
+  moves with it and keeps its state, and it stays the space's one VS Code
+  page: it still waits for its server, no agent opens pages in it, and
+  closing it in a strip closes it, so the next **Toggle VS Code** opens a new
+  one in the panel. While it is in a group, the title bar button and
+  **Toggle VS Code** show it there. Bind them to `move_code_to_group` and
+  `move_code_to_panel`; they have no default keys.
+- The page is a [browser tab](#browser-tabs), listed in the strips only while
+  it is in a group, so the same rules apply: `http` and `https` only, native
+  web views drawn above the window, and no pages on Linux.
+- The keyboard goes to whatever has focus. While a page has it, this one or a
+  browser tab's, the page's own shortcuts win, as a terminal program's do
+  while its pane has focus. On macOS, Cut, Copy, and Paste act on the page,
+  and the keys macOS keeps for the app (quit, hide, minimize, and cycling
+  windows) still reach the app. Click a terminal to take the keyboard back.
 
 ## System Notifications
 

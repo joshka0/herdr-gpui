@@ -25,6 +25,7 @@ compile_error!(
 mod cloud;
 mod code_index;
 mod code_search;
+mod code_server;
 mod code_view;
 #[cfg(feature = "coder")]
 mod coder;
@@ -55,6 +56,7 @@ mod github;
 mod group_menu;
 mod group_terminals;
 mod herdr_settings;
+mod icon_font_notice;
 mod icons;
 mod input;
 mod integrations;
