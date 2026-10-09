@@ -434,6 +434,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         selection_follow: Default::default(),
         find: None,
         copy_mode: None,
+        find_memory: Default::default(),
         flash: None,
         configured_terminal_size: crate::config::Config::default().terminal.size,
         gui_config_diagnostic: Default::default(),
