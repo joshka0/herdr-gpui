@@ -1404,10 +1404,16 @@ next to the agent that is changing the code.
   such as `src/main.rs:42` to open it at that line in your terminal editor, in
   a new pane split to the right of the pane that printed it. In a
   [review](#reviewing-an-agents-changes), `e` opens the file at the top of the
-  diff the same way. Quitting the editor closes its pane.
+  diff the same way. Quitting the editor closes its pane. When the editor is
+  Neovim, later files for the same tab open in that Neovim instead of a new
+  split, as [herdr-nvim](https://github.com/ChmaraX/herdr-nvim)'s sidebar
+  does.
 - **Go to Symbol** (`cmd-shift-o`) lists the functions, types, modules, and
   constants of the focused pane's checkout; **Go to File** (`cmd-o`) lists its
   files, and takes `file:line` to open at a line. Tab switches between the two.
+  Before you type, both start with what the agent is changing: the checkout's
+  uncommitted files, newest first, with their `+added −removed` line counts,
+  or the definitions in them.
   Enter opens the result in your editor beside the focused pane;
   Cmd-Enter (Ctrl-Enter elsewhere) opens it in a code tab instead.
 - **Code tabs** show a file read-only with syntax colouring and an outline of
@@ -1423,6 +1429,14 @@ another, with `{file}` and `{line}` placeholders where it needs them, such as
 `editor_command = "hx {file}:{line}"`. The command is typed into the pane's
 shell, so the file's path must not contain a quote, backslash, or control
 character; such a file opens in the system's application instead.
+
+A Neovim editor is started with `--listen` on a socket in this app's private
+state folder (`herdr/gpui/nvim` under `$XDG_STATE_HOME` or `~/.local/state`,
+created with mode 700), and
+reused with `nvim --server … --remote`, so `nvim` must be on the app's `PATH`.
+If it no longer answers, the file opens in a new split. An `editor_command`
+naming `nvim` listens too; one with `{file}` or `{line}` runs exactly as
+written and is never reused.
 On Windows, where a pane's shell has no `sh` to start the editor with, printed
 paths open in the system's application and Go to Symbol and Go to File open
 code tabs.

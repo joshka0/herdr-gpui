@@ -212,3 +212,80 @@ fn symlinks_and_special_files_are_never_read() {
     assert!(read_source(&link).is_none());
     assert!(read_source(Path::new("/dev/null")).is_none());
 }
+
+#[test]
+fn numstat_reads_counts_binaries_and_renames() {
+    let output = b"3\t1\tsrc/a.rs\0-\t-\tlogo.png\0" as &[u8];
+    let rename = b"2\t0\t\0old.rs\0src/new.rs\0" as &[u8];
+    let counts = changes::numstat(&[output, rename].concat());
+    assert_eq!(counts["src/a.rs"], Some((3, 1)));
+    assert_eq!(counts["logo.png"], None);
+    assert_eq!(counts["src/new.rs"], Some((2, 0)));
+    assert!(!counts.contains_key("old.rs"));
+    // A truncated rename is dropped, not misread.
+    assert!(changes::numstat(b"1\t1\t\0old.rs").is_empty());
+}
+
+#[test]
+fn uncommitted_changes_are_listed_newest_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    git(root, &["init", "-q"]);
+    for name in ["a.rs", "b.rs", "gone.rs", "same.rs"] {
+        std::fs::write(root.join(name), "fn x() {}\n").unwrap();
+    }
+    git(root, &["add", "."]);
+    git(root, &["commit", "-qm", "init"]);
+    std::fs::write(root.join("a.rs"), "fn x() {}\nfn y() {}\n").unwrap();
+    std::fs::write(root.join("b.rs"), "").unwrap();
+    std::fs::write(root.join("new.rs"), "fn z() {}\n").unwrap();
+    std::fs::remove_file(root.join("gone.rs")).unwrap();
+    let at = |name: &str, seconds: u64| {
+        let time = std::time::SystemTime::UNIX_EPOCH + Duration::from_secs(seconds);
+        std::fs::File::options()
+            .write(true)
+            .open(root.join(name))
+            .unwrap()
+            .set_modified(time)
+            .unwrap();
+    };
+    at("a.rs", 3_000);
+    at("b.rs", 1_000);
+    at("new.rs", 2_000);
+    let index = Index::build(root, &AtomicBool::new(false)).unwrap();
+    let changes: Vec<_> = index
+        .changes()
+        .iter()
+        .map(|change| {
+            (
+                index.files()[change.file].as_str(),
+                change.counts,
+                change.new,
+            )
+        })
+        .collect();
+    assert_eq!(
+        changes,
+        [
+            ("a.rs", Some((1, 0)), false),
+            ("new.rs", None, true),
+            ("b.rs", Some((0, 1)), false),
+        ]
+    );
+    let same = index
+        .files()
+        .iter()
+        .position(|name| name == "same.rs")
+        .unwrap();
+    assert!(index.change(same).is_none());
+}
+
+#[test]
+fn a_checkout_without_commits_lists_its_files_as_new() {
+    let dir = tempfile::tempdir().unwrap();
+    git(dir.path(), &["init", "-q"]);
+    std::fs::write(dir.path().join("a.rs"), "fn a() {}\n").unwrap();
+    let index = Index::build(dir.path(), &AtomicBool::new(false)).unwrap();
+    assert_eq!(index.changes().len(), 1);
+    assert!(index.changes()[0].new);
+}

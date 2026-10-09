@@ -6,11 +6,14 @@
 //! the definitions kept. Only regular files are read, never through a
 //! symlink, so a FIFO or a device in the checkout cannot stall the build.
 
+mod changes;
 mod symbols;
 
+pub(crate) use changes::Change;
 pub(crate) use symbols::{Kind, Language, scan};
 
 use std::{
+    collections::HashMap,
     io::Read,
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, Ordering},
@@ -44,6 +47,9 @@ pub(crate) struct Index {
     root: PathBuf,
     files: Vec<String>,
     symbols: Vec<Symbol>,
+    /// Uncommitted changes, newest first, and each one's place by file.
+    changes: Vec<Change>,
+    changed: HashMap<usize, usize>,
     /// Whether a limit left files or definitions out.
     truncated: bool,
 }
@@ -53,21 +59,33 @@ impl Index {
     pub(crate) fn build(root: &Path, cancelled: &AtomicBool) -> crate::Result<Self> {
         let checkout = root.to_str().ok_or(crate::Error::CodeIndexRoot)?;
         let stop = || cancelled.load(Ordering::Acquire);
-        let listing = crate::git::git_bytes(
-            checkout,
-            &[
-                "ls-files",
-                "-z",
-                "--cached",
-                "--others",
-                "--exclude-standard",
-            ],
-            "list files",
-            Instant::now() + GIT_DEADLINE,
-            &stop,
-            MAX_LISTING_BYTES,
+        let git = |args: &[&str], operation| {
+            crate::git::git_bytes(
+                checkout,
+                args,
+                operation,
+                Instant::now() + GIT_DEADLINE,
+                &stop,
+                MAX_LISTING_BYTES,
+            )
+        };
+        let tracked = git(&["ls-files", "-z", "--cached"], "list files")?;
+        let untracked = git(
+            &["ls-files", "-z", "--others", "--exclude-standard"],
+            "list untracked files",
         )?;
-        let mut index = Self::from_listing(root, &listing);
+        let mut index = Self::from_listing(root, &[tracked.as_slice(), &untracked].concat());
+        // A checkout with no commit yet has nothing to compare with.
+        let counts = git(&["diff", "--numstat", "-z", "HEAD"], "count changes")
+            .map(|output| changes::numstat(&output))
+            .unwrap_or_default();
+        let mut untracked: Vec<String> = untracked
+            .split(|byte| *byte == 0)
+            .filter_map(|name| std::str::from_utf8(name).ok())
+            .map(str::to_owned)
+            .collect();
+        untracked.sort_unstable();
+        index.set_changes(changes::collect(root, &index.files, &counts, &untracked));
         for file in 0..index.files.len() {
             if stop() {
                 return Err(crate::Error::CodeIndexCancelled);
@@ -112,8 +130,29 @@ impl Index {
             root: root.to_owned(),
             files,
             symbols: Vec::new(),
+            changes: Vec::new(),
+            changed: HashMap::new(),
             truncated,
         }
+    }
+
+    fn set_changes(&mut self, changes: Vec<Change>) {
+        self.changed = changes
+            .iter()
+            .enumerate()
+            .map(|(place, change)| (change.file, place))
+            .collect();
+        self.changes = changes;
+    }
+
+    /// Uncommitted changes, newest first.
+    pub(crate) fn changes(&self) -> &[Change] {
+        &self.changes
+    }
+
+    /// File `file`'s uncommitted change, if it has one.
+    pub(crate) fn change(&self, file: usize) -> Option<&Change> {
+        self.changed.get(&file).map(|&place| &self.changes[place])
     }
 
     pub(crate) fn root(&self) -> &Path {
@@ -139,8 +178,17 @@ impl Index {
             root: root.to_owned(),
             files: files.iter().map(|file| (*file).to_owned()).collect(),
             symbols,
+            changes: Vec::new(),
+            changed: HashMap::new(),
             truncated: false,
         }
+    }
+
+    /// `of`, with `changes` newest first.
+    #[cfg(test)]
+    pub(crate) fn with_changes(mut self, changes: Vec<Change>) -> Self {
+        self.set_changes(changes);
+        self
     }
 
     /// The absolute path of file `file`.

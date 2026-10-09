@@ -79,15 +79,43 @@ pub(super) fn label(index: &Index, mode: Mode, item: usize) -> &str {
     }
 }
 
-/// The best rows of `index` for `query`, best first. An empty query lists
-/// the first rows in index order. Ties keep the shorter label first.
+/// The rows an empty query lists: the uncommitted changes newest first, or
+/// the definitions in them, then the rest in index order.
+fn unranked(index: &Index, mode: Mode) -> Vec<usize> {
+    let changed = index.changes().iter().map(|change| change.file);
+    match mode {
+        Mode::Files => changed
+            .chain((0..index.files().len()).filter(|&file| index.change(file).is_none()))
+            .take(MAX_HITS)
+            .collect(),
+        Mode::Symbols => {
+            // Definitions are in file order, so each file's are one run.
+            let symbols = index.symbols();
+            let of = |file: usize| {
+                symbols.partition_point(|symbol| symbol.file < file)
+                    ..symbols.partition_point(|symbol| symbol.file <= file)
+            };
+            changed
+                .flat_map(of)
+                .chain(
+                    (0..symbols.len()).filter(|&item| index.change(symbols[item].file).is_none()),
+                )
+                .take(MAX_HITS)
+                .collect()
+        }
+    }
+}
+
+/// The best rows of `index` for `query`, best first. Ties keep the shorter
+/// label first. An empty query lists [`unranked`] rows.
 pub(super) fn rank(index: &Index, mode: Mode, query: &Query) -> Vec<Hit> {
     let count = match mode {
         Mode::Symbols => index.symbols().len(),
         Mode::Files => index.files().len(),
     };
     if query.text.is_empty() {
-        return (0..count.min(MAX_HITS))
+        return unranked(index, mode)
+            .into_iter()
             .map(|item| Hit {
                 item,
                 highlights: Vec::new(),

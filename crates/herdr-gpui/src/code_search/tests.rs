@@ -2,7 +2,7 @@
 // Not a glob: the parent's `gpui::*` would shadow the `#[test]` that
 // `gpui::test` expands to.
 use super::{CodeSearch, HerdrWindow, Indexes, Mode, Status, rank};
-use crate::code_index::{Index, Kind, Symbol};
+use crate::code_index::{Change, Index, Kind, Symbol};
 use gpui::{Entity, TestAppContext, VisualTestContext};
 use std::{
     path::{Path, PathBuf},
@@ -74,6 +74,28 @@ fn files_match_paths_and_take_a_line() {
     assert_eq!(labels(&index, Mode::Files, "main.rs:42"), ["src/main.rs"]);
     // A symbol query keeps its colon.
     assert_eq!(rank::Query::parse("a:1", Mode::Symbols).line, None);
+}
+
+#[test]
+fn without_a_query_the_changed_files_come_first() {
+    let change = |file: usize| Change {
+        file,
+        counts: Some((1, 1)),
+        new: false,
+        modified: None,
+    };
+    // `src/window/render.rs` changed last, then `src/code_search.rs`.
+    let index = fixture().with_changes(vec![change(2), change(0)]);
+    assert_eq!(
+        labels(&index, Mode::Files, ""),
+        ["src/window/render.rs", "src/code_search.rs", "src/main.rs"]
+    );
+    assert_eq!(
+        labels(&index, Mode::Symbols, ""),
+        ["render", "render_code_search", "CodeSearch", "main"]
+    );
+    // A query ranks by match alone.
+    assert_eq!(labels(&index, Mode::Files, "main"), ["src/main.rs"]);
 }
 
 #[test]
@@ -168,6 +190,9 @@ fn a_symbol_opens_in_the_editor_or_a_code_tab(cx: &mut TestAppContext) {
         assert_eq!(code.beside.as_deref(), Some("w0:p1"));
         assert_eq!(code.hits.len(), 2);
     });
+    // The checkout's one file is new, and its rows say so.
+    cx.update(|window, cx| crate::sidebar::layout_tests::full_draw(window, cx).clear(cx));
+    assert!(cx.debug_bounds("code-search-row-1").is_some());
     cx.simulate_input("beta");
     cx.run_until_parked();
     let target = search(&view, cx, |code| {

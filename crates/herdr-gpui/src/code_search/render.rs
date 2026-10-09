@@ -1,8 +1,51 @@
 //! The picker paints ranked rows; ranking and input live elsewhere.
 
 use super::{CodeSearch, Mode, Status, rank};
-use crate::HerdrWindow;
+use crate::{HerdrWindow, code_index::Change, config::Theme};
 use gpui::{prelude::*, *};
+use std::time::SystemTime;
+
+/// How long ago a change was last written, as `5m` or `3h`.
+fn age(modified: Option<SystemTime>) -> Option<String> {
+    let seconds = SystemTime::now().duration_since(modified?).ok()?.as_secs();
+    Some(match seconds {
+        0..60 => "just now".into(),
+        60..3600 => format!("{}m ago", seconds / 60),
+        3600..86_400 => format!("{}h ago", seconds / 3600),
+        _ => format!("{}d ago", seconds / 86_400),
+    })
+}
+
+/// What a changed file's row says under its path.
+fn changed_detail(change: &Change) -> String {
+    let what = if change.new { "New" } else { "Changed" };
+    match age(change.modified) {
+        Some(age) => format!("{what} {age}"),
+        None => what.into(),
+    }
+}
+
+/// A changed file's line counts, or `new` for a file Git does not track.
+fn change_badge(theme: &Theme, change: &Change) -> Div {
+    let badge = div().flex().gap(px(6.));
+    match change.counts {
+        _ if change.new => badge
+            .text_color(rgb(crate::menu::online(theme)))
+            .child("new"),
+        Some((added, removed)) => badge
+            .child(
+                div()
+                    .text_color(rgb(crate::menu::online(theme)))
+                    .child(format!("+{added}")),
+            )
+            .child(
+                div()
+                    .text_color(crate::menu::danger(theme))
+                    .child(format!("\u{2212}{removed}")),
+            ),
+        None => badge.text_color(rgb(theme.muted)).child("binary"),
+    }
+}
 
 impl HerdrWindow {
     fn code_search_header(&self, code: &CodeSearch, cx: &mut Context<Self>) -> Div {
@@ -105,13 +148,23 @@ impl HerdrWindow {
         let hit = code.hits.get(row)?;
         let index = code.index.as_ref()?;
         let label: SharedString = rank::label(index, code.mode, hit.item).to_owned().into();
+        let theme = &self.theme;
         let (detail, badge) = match code.mode {
             Mode::Symbols => {
                 let symbol = index.symbols().get(hit.item)?;
                 let file = index.files().get(symbol.file)?;
-                (format!("{file}:{}", symbol.line), symbol.kind.label())
+                let changed = index
+                    .change(symbol.file)
+                    .map_or("", |_| "  \u{00b7} changed");
+                let badge = div()
+                    .text_color(rgb(theme.muted))
+                    .child(symbol.kind.label());
+                (format!("{file}:{}{changed}", symbol.line), badge)
             }
-            Mode::Files => (String::new(), ""),
+            Mode::Files => match index.change(hit.item) {
+                Some(change) => (changed_detail(change), change_badge(theme, change)),
+                None => (String::new(), div()),
+            },
         };
         let matched = HighlightStyle {
             color: Some(rgb(self.theme.primary()).into()),
@@ -149,12 +202,7 @@ impl HerdrWindow {
                             )
                         }),
                 )
-                .child(
-                    div()
-                        .flex_none()
-                        .text_color(rgb(self.theme.muted))
-                        .child(badge),
-                )
+                .child(badge.flex_none())
                 .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                     let viewer = event.modifiers().secondary();
                     this.activate_code_search(row, viewer, window, cx);
