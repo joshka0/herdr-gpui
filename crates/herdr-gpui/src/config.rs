@@ -114,6 +114,10 @@ pub struct Config {
     /// ignored, as Herdr ignores its own, so a config written by a newer
     /// build or with a typo still loads; `diagnostic` reports them.
     pub unknown_keys: Vec<String>,
+    /// Font resolution searched for an icon font for the terminal and found
+    /// none installed, so Private Use Area glyphs draw as missing-glyph boxes.
+    /// Never set when the config names the terminal's `fallback` itself.
+    pub(crate) icon_font_missing: bool,
 }
 
 /// A device list larger than any real catalog is a config mistake.
@@ -305,6 +309,7 @@ impl Default for Config {
             pane_keys: PaneKeys::new(),
             devices: BTreeMap::new(),
             unknown_keys: Vec::new(),
+            icon_font_missing: false,
             palette: crate::palette::PaletteConfig::default(),
             sidebar: font(monospace, 12.0),
             // Tabs are terminal chrome, so they read in the monospace face the

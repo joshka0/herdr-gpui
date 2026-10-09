@@ -318,6 +318,7 @@ impl Config {
         I: IntoIterator<Item = String>,
     {
         self.replace_undrawable_fonts(super::bitmap_fonts::is_undrawable);
+        let terminal_detects = self.terminal.fallbacks.is_none();
         let mut faces = [
             &mut self.sidebar,
             &mut self.tabs,
@@ -342,6 +343,9 @@ impl Config {
             return;
         }
         let detected = symbol_fallbacks(installed);
+        // Only the terminal draws prompts; an explicit `fallback`, even `[]`,
+        // is a choice the user already made.
+        self.icon_font_missing = detected.is_empty() && terminal_detects;
         for face in faces {
             if face.fallbacks.is_none() {
                 face.fallbacks = Some(detected.clone());

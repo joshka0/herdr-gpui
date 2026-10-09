@@ -8,6 +8,7 @@ mod default_fonts;
 mod discovery;
 mod fonts;
 mod github;
+mod icon_font;
 mod keybindings;
 mod line_height;
 mod loading;
