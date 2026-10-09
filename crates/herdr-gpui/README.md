@@ -446,8 +446,8 @@ Reload waits while a theme preview/save is active. The manual GUI config reload
 action remains available; daemon config reload is separate.
 
 Settings opens a separate, reusable native window with **Appearance, Fonts,
-Indicators, Sound, Notifications, Integrations, Code, and General** in a
-sidebar.
+Indicators, Sound, Notifications, Integrations, Plugins, Code, and General** in
+a sidebar.
 The terminal stays usable while Settings is open. Cmd-W (or Ctrl-W) closes only
 Settings; reopening activates the existing window instead of creating a duplicate.
 Local preferences remain editable if the originating session window closes.
@@ -1559,6 +1559,20 @@ the daemon exposes to clients:
 - **Metadata.** Tab-bar status segments, custom sidebar tokens and row rules, and
   agent views from `agent.view.set` are shown as the daemon reports them; see
   [`[usage]`](#configuration) for the switches that hide them.
+- **Settings > Plugins.** Lists every custom `$name` value that plugins and hooks
+  report on a connected host (`pane.report_metadata` for agents,
+  `workspace.report_metadata` for workspaces), with an example and the hosts
+  reporting it, plus agent status labels. Herdr draws a value only where its
+  `[ui.sidebar]` rows name it, so each has a switch that adds the token as its
+  own row to `rows` in the shared Herdr config, or removes it there; the
+  terminal client shows the same rows. Showing a token when `rows` is unset
+  writes out Herdr's default rows first, styled occurrences count as shown, and
+  per-agent `rows_by_agent` overrides are never edited. Tokens already in `rows`
+  stay listed while nothing reports them, so they can be hidden. A preview
+  draws an example workspace and agent with the configured rows. The switches
+  are read-only on Windows, where shared settings are. Herdr offers clients no
+  way to list, enable, or disable plugins or read their logs, and the snapshot
+  does not say which plugin reported a value.
 - **Clipboard.** A plugin terminal that copies with OSC 52 reaches this machine's
   clipboard, local or remote, through the same bounded path as any pane. A plugin
   that runs a clipboard command such as `pbcopy` on a remote host writes that

@@ -9,6 +9,7 @@ pub(crate) use layouts::{apply_loaded_layout, layout_load_revision};
 #[cfg(all(feature = "integration-test", target_os = "macos"))]
 mod native;
 mod persistence;
+mod plugins;
 mod remote_history;
 #[cfg(test)]
 use persistence::SizeIo;
@@ -54,6 +55,7 @@ pub(super) enum Section {
     Notifications,
     StatusBar,
     Integrations,
+    Plugins,
     Code,
     #[cfg(feature = "cloud")]
     CloudDevices,
@@ -69,6 +71,7 @@ impl Section {
         Self::Notifications,
         Self::StatusBar,
         Self::Integrations,
+        Self::Plugins,
         Self::Code,
         #[cfg(feature = "cloud")]
         Self::CloudDevices,
@@ -84,6 +87,7 @@ impl Section {
             Self::Notifications => "Notifications",
             Self::StatusBar => "Status bar",
             Self::Integrations => "Integrations",
+            Self::Plugins => "Plugins",
             Self::Code => "Code",
             #[cfg(feature = "cloud")]
             Self::CloudDevices => "Cloud Devices",
@@ -100,6 +104,7 @@ impl Section {
             Self::Notifications => "icons/bell.svg",
             Self::StatusBar => "icons/status-bar.svg",
             Self::Integrations => "icons/agent-generic.svg",
+            Self::Plugins => "icons/plug.svg",
             Self::Code => "icons/vscode.svg",
             #[cfg(feature = "cloud")]
             Self::CloudDevices => "icons/globe.svg",
@@ -116,6 +121,7 @@ impl Section {
             Self::Notifications => "Stay informed without losing your place.",
             Self::StatusBar => "Keep the bottom bar to what you use.",
             Self::Integrations => "Connect the agents you work with.",
+            Self::Plugins => "Show what your plugins report in the sidebar.",
             Self::Code => {
                 "Review code and diffs beside your terminals by connecting to a Visual Studio Code server."
             }
@@ -208,6 +214,7 @@ struct SettingsWindow {
     section: Section,
     themes: themes::ThemeBrowser,
     controls: controls::Controls,
+    plugins: plugins::Plugins,
     code: controls::code::CodeSettings,
     error: Option<String>,
     status: Option<String>,
@@ -310,6 +317,7 @@ impl SettingsWindow {
             section: Section::Appearance,
             themes: themes::ThemeBrowser::new(cx),
             controls: controls::Controls::new(cx),
+            plugins: plugins::Plugins::new(cx),
             error: appearance.error,
             status: None,
             focus: cx.focus_handle(),
@@ -387,7 +395,7 @@ impl SettingsWindow {
         self.cloud_source_changed(&source, cx);
         #[cfg(not(feature = "cloud"))]
         let _ = source;
-        if self.section == Section::Integrations {
+        if matches!(self.section, Section::Integrations | Section::Plugins) {
             cx.notify();
         }
         if self.section == Section::General {
@@ -715,6 +723,7 @@ impl Render for SettingsWindow {
         let content = match self.section {
             Section::Appearance => self.render_appearance(window, cx),
             Section::Integrations => self.render_integration_controls(cx),
+            Section::Plugins => self.render_plugin_controls(cx),
             Section::Code => self.render_code_controls(window, cx),
             #[cfg(feature = "cloud")]
             Section::CloudDevices => self.render_cloud_devices(cx),

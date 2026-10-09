@@ -190,6 +190,8 @@ impl SettingsWindow {
         self.controls.search.update(cx, |input, cx| {
             input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
         });
+        self.plugins
+            .refresh_appearance(&self.config, &self.theme, cx);
         if let Some(editor) = &self.controls.size_editor {
             editor.input.update(cx, |input, cx| {
                 input.set_appearance(self.config.ui.clone(), self.theme.clone(), cx);
@@ -395,7 +397,7 @@ impl SettingsWindow {
     /// Whether Herdr's shared settings can be edited at all. Busy is not part
     /// of it: saves and loads refuse overlapping work themselves, and a control
     /// that changes look for their few milliseconds flickers.
-    fn controls_shared_ready(&self) -> bool {
+    pub(super) fn controls_shared_ready(&self) -> bool {
         cfg!(unix) && self.shared.is_some() && self.error.is_none()
     }
 
@@ -407,7 +409,7 @@ impl SettingsWindow {
             Section::Notifications => self.render_notification_controls(cx),
             Section::StatusBar => self.render_status_bar_controls(cx),
             Section::General => self.render_general_controls(cx),
-            Section::Appearance | Section::Integrations | Section::Code => div(),
+            Section::Appearance | Section::Integrations | Section::Plugins | Section::Code => div(),
             #[cfg(feature = "cloud")]
             Section::CloudDevices => div(),
         };
