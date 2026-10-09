@@ -92,6 +92,7 @@ pub struct Config {
     pub usage: crate::usage::UsageConfig,
     pub option_as_alt: OptionAsAlt,
     pub open_links_in: LinkTarget,
+    pub code: CodeConfig,
     /// Where a link-modifier click on a printed file path opens it.
     pub open_files_in: FileTarget,
     /// How the editor starts; the pane's `$VISUAL` or `$EDITOR` when unset.
@@ -182,6 +183,16 @@ pub enum LinkTarget {
     System,
     /// A browser tab in the workspace, where the build can show pages.
     BrowserTab,
+}
+
+/// The VS Code panel beside a space's editor groups, served by
+/// `code serve-web`. Each space that shows it gets
+/// its own page, which starts at `url` and then goes wherever it navigates.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct CodeConfig {
+    /// `None` leaves the panel empty, with a hint to set it.
+    pub(crate) url: Option<crate::browser::WebUrl>,
 }
 
 /// Where a clicked file path opens. Alt-click (Option on macOS) opens it in
@@ -375,6 +386,7 @@ impl Default for Config {
             usage: crate::usage::UsageConfig::default(),
             option_as_alt: OptionAsAlt::default(),
             open_links_in: LinkTarget::default(),
+            code: CodeConfig::default(),
             open_files_in: FileTarget::default(),
             editor_command: None,
             keep_selection_after_copy: true,
@@ -419,6 +431,7 @@ struct Settings {
     usage: crate::usage::UsageConfig,
     option_as_alt: OptionAsAlt,
     open_links_in: LinkTarget,
+    code: CodeConfig,
     open_files_in: FileTarget,
     editor_command: Option<crate::editor::EditorCommand>,
     keep_selection_after_copy: Option<bool>,
@@ -768,6 +781,7 @@ impl Config {
         config.usage = settings.usage;
         config.option_as_alt = settings.option_as_alt;
         config.open_links_in = settings.open_links_in;
+        config.code = settings.code;
         config.open_files_in = settings.open_files_in;
         config.editor_command = settings.editor_command;
         config.keep_selection_after_copy = settings.keep_selection_after_copy.unwrap_or(true);

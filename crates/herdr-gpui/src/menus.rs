@@ -281,6 +281,24 @@ pub(crate) fn menus(layout: Layout) -> Vec<Menu> {
                         command: Command::ToggleStatusBar,
                     },
                 ),
+                MenuItem::action(
+                    "Toggle VS Code",
+                    RunCommand {
+                        command: Command::ToggleCode,
+                    },
+                ),
+                MenuItem::action(
+                    "Move VS Code to Group",
+                    RunCommand {
+                        command: Command::MoveCodeToGroup,
+                    },
+                ),
+                MenuItem::action(
+                    "Move VS Code to Panel",
+                    RunCommand {
+                        command: Command::MoveCodeToPanel,
+                    },
+                ),
                 MenuItem::separator(),
                 MenuItem::action(
                     "Reconnect",

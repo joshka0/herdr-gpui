@@ -54,6 +54,9 @@ pub enum Command {
     NewBrowserTab,
     InstallBrowserSkill,
     SplitEditor,
+    ToggleCode,
+    MoveCodeToGroup,
+    MoveCodeToPanel,
     ToggleFullScreen,
     CycleWindows,
     MoveTabPrevious,
@@ -656,6 +659,24 @@ pub const COMMANDS: &[CommandInfo] = &[
         shortcuts: &["cmd-\\"],
     },
     CommandInfo {
+        command: Command::ToggleCode,
+        name: "toggle_code",
+        label: "Toggle VS Code",
+        shortcuts: &[],
+    },
+    CommandInfo {
+        command: Command::MoveCodeToGroup,
+        name: "move_code_to_group",
+        label: "Move VS Code to Group",
+        shortcuts: &[],
+    },
+    CommandInfo {
+        command: Command::MoveCodeToPanel,
+        name: "move_code_to_panel",
+        label: "Move VS Code to Panel",
+        shortcuts: &[],
+    },
+    CommandInfo {
         command: Command::ToggleFullScreen,
         name: "toggle_full_screen",
         label: "Toggle Full Screen",
@@ -832,6 +853,9 @@ pub fn request(command: Command, snapshot: &ClientShellSnapshot) -> Option<(Meth
         | Command::NewBrowserTab
         | Command::InstallBrowserSkill
         | Command::SplitEditor
+        | Command::ToggleCode
+        | Command::MoveCodeToGroup
+        | Command::MoveCodeToPanel
         | Command::ToggleFullScreen
         | Command::CycleWindows
         // These need state beyond the snapshot, such as the sidebar's order

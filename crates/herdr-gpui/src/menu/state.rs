@@ -33,6 +33,29 @@ impl Cover {
             Self::Panel(panel) => page.is_some_and(|page| page.intersects(&panel)),
         }
     }
+
+    /// This cover if it was measured for `open`, the page open now; one
+    /// measured for another page is stale until this one is laid out.
+    pub(crate) fn settled(self, measured_for: Option<Page>, open: Option<Page>) -> Self {
+        if measured_for == open {
+            self
+        } else {
+            Self::Unknown
+        }
+    }
+}
+
+impl Cover {
+    /// What a dimmed dialog covers: the Herdr realm `realm` wide, or the
+    /// whole window when there is no other realm.
+    pub(crate) fn dimmed(realm: Option<Pixels>) -> Self {
+        realm.map_or(Self::All, |width| {
+            Self::Panel(gpui::Bounds::new(
+                gpui::point(gpui::px(0.), gpui::px(0.)),
+                gpui::size(width, gpui::px(f32::MAX / 4.)),
+            ))
+        })
+    }
 }
 
 pub(crate) struct MenuState {
