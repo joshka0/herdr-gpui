@@ -424,6 +424,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         daemon_text: Default::default(),
         removal: None,
         worktree_script: None,
+        editor_open: None,
         teleport: None,
         teleport_marks: crate::teleport::Marks::detached(),
         teleport_follow: None,

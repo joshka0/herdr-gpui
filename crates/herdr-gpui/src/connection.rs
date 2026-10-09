@@ -338,6 +338,26 @@ impl ConnectionBridge {
         Ok(id)
     }
 
+    /// Queues the `pane.split` an editor pane waits on, in its own slot.
+    pub(crate) fn request_editor(
+        &self,
+        boot_id: &str,
+        method: Method,
+        params: serde_json::Value,
+    ) -> crate::Result<String> {
+        let mut state = self
+            .inbox
+            .try_lock()
+            .map_err(|_| crate::Error::ConnectionBusy)?;
+        let id = self
+            .handle
+            .as_ref()
+            .ok_or(crate::Error::NotConnected)?
+            .request(boot_id, method, params)?;
+        state.editor_response = Some((id.clone(), None));
+        Ok(id)
+    }
+
     pub fn request_integration(
         &self,
         boot_id: &str,

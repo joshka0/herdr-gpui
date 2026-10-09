@@ -500,6 +500,20 @@ pub enum Error {
     WorktreeScriptsResponse,
     #[error("This workspace is not a Git checkout Herdr knows yet")]
     WorktreeScriptsNotGit,
+    #[error(
+        "editor_command must be at most 1024 bytes without quotes, backslashes, or control characters"
+    )]
+    EditorCommand,
+    #[error("This path cannot be typed into a shell safely, so it opens in the default app")]
+    EditorPath,
+    #[error("Another file is still opening in the editor")]
+    EditorBusy,
+    #[error("No local pane to open the editor beside")]
+    EditorNoPane,
+    #[error("Unexpected daemon response while opening the editor pane")]
+    EditorResponse,
+    #[error("{0}")]
+    EditorRequest(#[source] std::sync::Arc<Error>),
     #[error("neither XDG_STATE_HOME nor HOME is set")]
     MissingStateRoot,
     #[error("{} exceeds {limit} bytes", path.display())]

@@ -1,10 +1,10 @@
 //! Keys in the diff, while it holds the keyboard: `j`/`k` and the arrows
 //! scroll a line, Space and Page Up/Down a page, `]`/`[` move between hunks
 //! and `.`/`,` between files, `/` finds, `n`/`N` step through the matches,
-//! `x` folds the file at the top and `v` marks it viewed. Fields in the
-//! review keep their own keys.
+//! `x` folds the file at the top, `v` marks it viewed, and `e` opens it in
+//! the editor at that line. Fields in the review keep their own keys.
 use super::Review;
-use crate::{HerdrWindow, browser::TabId, review::diff::RowId};
+use crate::{HerdrWindow, browser::TabId, editor::EditorTarget, review::diff::RowId};
 use gpui::{prelude::*, *};
 
 /// A move through the diff.
@@ -95,6 +95,35 @@ impl Review {
 }
 
 impl HerdrWindow {
+    /// Opens the file at the top of the diff in the editor, beside the
+    /// agent's pane when the review knows it, once a background check finds
+    /// the file still in the checkout.
+    fn open_review_in_editor(&mut self, id: TabId, cx: &mut Context<Self>) {
+        let Some(review) = self.reviews.get(&id) else {
+            return;
+        };
+        let (Some((path, line)), Some(checkout)) =
+            (review.editor_spot(), review.checkout.checkout.as_deref())
+        else {
+            return;
+        };
+        let path = std::path::Path::new(checkout).join(path);
+        let beside = review.agent.as_ref().map(|agent| agent.pane_id.clone());
+        let found = cx
+            .background_executor()
+            .spawn(async move { path.is_file().then_some(path) });
+        cx.spawn(async move |this, cx| {
+            let Some(path) = found.await else {
+                return;
+            };
+            let target = EditorTarget { path, line };
+            let _ = this.update(cx, |this, cx| {
+                this.open_in_editor(&target, beside.as_deref(), cx);
+            });
+        })
+        .detach();
+    }
+
     /// Handles a key in the diff; whether it was the review's.
     pub(super) fn review_key(
         &mut self,
@@ -149,6 +178,7 @@ impl HerdrWindow {
                     }
                 }
             }
+            ("e", false) => self.open_review_in_editor(id, cx),
             ("home", false) => {
                 if let Some(review) = self.reviews.get_mut(&id) {
                     review.scroll.scroll_to(ListOffset {
