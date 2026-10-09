@@ -2157,7 +2157,10 @@ records when reporting the failure.
   non-group/world-writable socket and parent. Executable upgrades/removal do not
   invalidate this local endpoint trust. Sockets elsewhere remain blocked; a
   same-user proxy deliberately replacing the trusted socket is not detectable.
-  Reconnect rechecks the endpoint.
+  Reconnect rechecks the endpoint. A refused endpoint hides local Git actions and
+  reviews and logs `Daemon endpoint not trusted as local` with the failed check.
+  `DirectoryPermissions` usually means a umask of 002 created the session
+  directory group-writable; `chmod g-w` on it and reconnect.
   On a saved SSH device, the checkout lives on that host, so local Git cannot
   verify it. The worker instead reads the repository's `remote.origin.url` over
   the same noninteractive SSH options as the bridge (`BatchMode=yes`, strict host

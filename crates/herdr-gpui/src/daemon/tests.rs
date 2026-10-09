@@ -46,16 +46,15 @@ fn local_endpoint_survives_executable_removal_and_replacement() {
     // No executable argument or process-path probe participates in trust.
     let installed = dir.join("herdr");
     std::fs::write(&installed, "old installation").unwrap();
-    assert!(peer_matches_local_endpoint(&stream, &path, &path));
+    assert_eq!(peer_matches_local_endpoint(&stream, &path, &path), Ok(()));
     std::fs::remove_file(&installed).unwrap();
-    assert!(peer_matches_local_endpoint(&stream, &path, &path));
+    assert_eq!(peer_matches_local_endpoint(&stream, &path, &path), Ok(()));
     std::fs::write(&installed, "replacement installation").unwrap();
-    assert!(peer_matches_local_endpoint(&stream, &path, &path));
-    assert!(!peer_matches_local_endpoint(
-        &stream,
-        &path,
-        &dir.join("forwarded.sock")
-    ));
+    assert_eq!(peer_matches_local_endpoint(&stream, &path, &path), Ok(()));
+    assert_eq!(
+        peer_matches_local_endpoint(&stream, &path, &dir.join("forwarded.sock")),
+        Err(UntrustedEndpoint::NotSocket)
+    );
     assert!(!is_local_peer(
         &stream,
         &ConnectTarget::Ssh {
@@ -67,32 +66,38 @@ fn local_endpoint_survives_executable_removal_and_replacement() {
     let forwarded = dir.join("forwarded.sock");
     let proxy = UnixListener::bind(&forwarded).unwrap();
     let proxy_stream = UnixStream::connect(&forwarded).unwrap();
-    assert!(!peer_matches_local_endpoint(
-        &proxy_stream,
-        &forwarded,
-        &path
-    ));
+    assert_eq!(
+        peer_matches_local_endpoint(&proxy_stream, &forwarded, &path),
+        Err(UntrustedEndpoint::OtherSocket)
+    );
     let redirected = dir.join("redirected.sock");
     std::os::unix::fs::symlink(&forwarded, &redirected).unwrap();
-    assert!(!peer_matches_local_endpoint(
-        &proxy_stream,
-        &redirected,
-        &redirected
-    ));
+    assert_eq!(
+        peer_matches_local_endpoint(&proxy_stream, &redirected, &redirected),
+        Err(UntrustedEndpoint::NotSocket)
+    );
     let alias = root.join("alias");
     std::os::unix::fs::symlink(&dir, &alias).unwrap();
     let alias_socket = alias.join("herdr-client.sock");
     let alias_stream = UnixStream::connect(&alias_socket).unwrap();
-    assert!(peer_matches_local_endpoint(
-        &alias_stream,
-        &alias_socket,
-        &path
-    ));
+    assert_eq!(
+        peer_matches_local_endpoint(&alias_stream, &alias_socket, &path),
+        Ok(())
+    );
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o622)).unwrap();
-    assert!(!peer_matches_local_endpoint(&stream, &path, &path));
+    assert_eq!(
+        peer_matches_local_endpoint(&stream, &path, &path),
+        Err(UntrustedEndpoint::SocketPermissions)
+    );
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
-    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o777)).unwrap();
-    assert!(!peer_matches_local_endpoint(&stream, &path, &path));
+    // A umask of 002 leaves a daemon-created session directory like this.
+    for mode in [0o775, 0o777] {
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(mode)).unwrap();
+        assert_eq!(
+            peer_matches_local_endpoint(&stream, &path, &path),
+            Err(UntrustedEndpoint::DirectoryPermissions)
+        );
+    }
     drop(proxy);
     drop(listener);
     std::fs::remove_dir_all(root).unwrap();
