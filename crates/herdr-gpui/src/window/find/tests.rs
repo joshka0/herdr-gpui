@@ -9,6 +9,8 @@ use herdr_client::{
 };
 use serde_json::{Value, json};
 
+mod tab_switch;
+
 /// The next find or scroll request on the wire. Resizes and focus reports
 /// may come first, and other requests are answered so they do not hold
 /// the connection's one request slot; terminal input never may come.

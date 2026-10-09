@@ -275,7 +275,6 @@ impl HerdrWindow {
                 | Page::Tab
                 | Page::RenameTab
                 | Page::Group
-                | Page::NewTab
                 | Page::Pane
                 | Page::RenamePane
                 | Page::PaneProcesses
@@ -379,7 +378,6 @@ impl HerdrWindow {
                     Page::Tab
                         | Page::RenameTab
                         | Page::Group
-                        | Page::NewTab
                         | Page::Pane
                         | Page::RenamePane
                         | Page::PaneProcesses
@@ -389,22 +387,28 @@ impl HerdrWindow {
                         | Page::RemoveWsl
                 ),
                 |panel| {
+                    let room = (viewport.width - px(24.)).max(px(0.));
+                    // A list of actions takes its longest label's width, which
+                    // the UI font and size decide, so no fixed width fits all.
+                    let forwards = page == Page::Host && self.host_menu_lists_forwards();
+                    if matches!(page, Page::Tab | Page::Pane | Page::Host) && !forwards {
+                        return panel
+                            .min_w(px(180.).min(room))
+                            .max_w(room)
+                            .max_h((viewport.height - px(24.)).max(px(0.)));
+                    }
                     panel
-                        .w((viewport.width - px(24.)).max(px(0.)).min(px(
-                            if page == Page::Host && self.host_menu_lists_forwards() {
-                                // Room for a forward's port, state, and actions.
-                                260.
-                            } else if matches!(page, Page::Tab | Page::Pane | Page::Host) {
-                                180.
-                            } else if page == Page::PaneProcesses {
-                                // Name, command, pid, CPU and memory columns.
-                                560.
-                            } else if matches!(page, Page::Group | Page::NewTab) {
-                                240.
-                            } else {
-                                360.
-                            },
-                        )))
+                        .w(room.min(px(if forwards {
+                            // Room for a forward's port, state, and actions.
+                            260.
+                        } else if page == Page::PaneProcesses {
+                            // Name, command, pid, CPU and memory columns.
+                            560.
+                        } else if page == Page::Group {
+                            240.
+                        } else {
+                            360.
+                        })))
                         .max_h((viewport.height - px(24.)).max(px(0.)))
                 },
             )
@@ -440,7 +444,7 @@ impl HerdrWindow {
                         | Page::Usage(_)
                         | Page::RenameDevice
                         | Page::ForwardPort
-                ),
+                ) && !self.cloud_dialog_open(),
                 |panel| {
                     // Dialogs draw their own full-bleed header and footer rules,
                     // so the panel's own inset would cut those rules short.
@@ -497,7 +501,7 @@ impl HerdrWindow {
                         | Page::AddWsl
                         | Page::RenameDevice
                         | Page::ForwardPort
-                ),
+                ) || self.cloud_dialog_open(),
                 |panel| panel.flex().flex_col().overflow_hidden().shadow_lg(),
             )
             .when(page == Page::About, |panel| {
@@ -562,6 +566,8 @@ impl HerdrWindow {
             panel = panel.child(self.render_usage_panel(provider, cx));
         } else if page == Page::AddDevice {
             panel = panel.child(self.render_add_device(cx));
+        } else if let Some(dialog) = self.render_cloud_dialog(cx) {
+            panel = panel.child(dialog);
         } else if page == Page::AddWsl {
             panel = panel.child(self.render_add_wsl(cx));
         } else if page == Page::RemoveWsl {
@@ -601,9 +607,7 @@ impl HerdrWindow {
         } else if matches!(page, Page::Tab | Page::RenameTab) {
             panel = panel.child(self.render_tab_menu(cx));
         } else if page == Page::Group {
-            panel = panel.child(self.render_group_menu(cx));
-        } else if page == Page::NewTab {
-            panel = panel.child(self.render_new_tab_menu(cx));
+            panel = self.render_group_menu(panel, cx);
         } else if matches!(
             page,
             Page::Pane | Page::RenamePane | Page::PaneProcesses | Page::KillProcesses

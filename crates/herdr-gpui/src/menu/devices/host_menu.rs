@@ -430,8 +430,12 @@ impl HerdrWindow {
             // Name the device first, so the destructive row below cannot be
             // mistaken for acting on another host.
             body = body.child(
+                // No width of its own, so a long name or target ends with
+                // "…" instead of widening the menu past its actions.
                 div()
                     .debug_selector(|| "host-menu-header".into())
+                    .w_0()
+                    .min_w_full()
                     .px(px(8.))
                     .pt(px(4.))
                     .pb(px(8.))
@@ -479,7 +483,13 @@ impl HerdrWindow {
                             row.bg(rgb(theme.active))
                         })
                         .hover(|row| row.bg(rgb(theme.active)))
-                        .child(label)
+                        .child(
+                            div()
+                                .debug_selector(move || format!("host-menu-label-{index}"))
+                                .min_w_0()
+                                .truncate()
+                                .child(label),
+                        )
                         .on_hover(cx.listener(move |this, hovered, _, cx| {
                             if *hovered && let Some(host) = &mut this.menu.host {
                                 host.selected = Some(index);
@@ -497,8 +507,12 @@ impl HerdrWindow {
                     .flatten()
                 {
                     body = body.child(
+                        // No width of its own, so the labels set the menu's
+                        // width and the message wraps inside it.
                         div()
                             .debug_selector(|| "host-menu-keybindings-error".into())
+                            .w_0()
+                            .min_w_full()
                             .px(px(8.))
                             .pb(px(4.))
                             .text_size(px(self.config.ui.size * 0.85))

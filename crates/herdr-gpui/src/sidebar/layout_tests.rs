@@ -20,6 +20,8 @@ use std::sync::Arc;
 
 #[cfg(test)]
 mod agent_rows;
+#[cfg(all(test, feature = "coder"))]
+mod coder_dialog;
 #[cfg(test)]
 mod configured_rows;
 #[cfg(test)]
@@ -427,11 +429,14 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         teleport: None,
         teleport_marks: crate::teleport::Marks::detached(),
         teleport_follow: None,
+        dispatch_job: None,
+        dispatch_setups: Default::default(),
         fan_out: None,
         selection: None,
         selection_follow: Default::default(),
         find: None,
         copy_mode: None,
+        find_memory: Default::default(),
         flash: None,
         configured_terminal_size: crate::config::Config::default().terminal.size,
         gui_config_diagnostic: Default::default(),
@@ -461,10 +466,13 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         system_load: Default::default(),
         checkpoints: Default::default(),
         port_forwards: Default::default(),
+        #[cfg(feature = "cloud")]
+        cloud_jobs: Default::default(),
         listening_ports: Default::default(),
         tunnels: Default::default(),
         sidebar_visible: true,
         sidebar_start_pending: true,
+        status_bar_visible: true,
         device_filter: None,
         endpoints: vec![crate::endpoint::Endpoint::new(
             crate::endpoint::LOCAL.into(),

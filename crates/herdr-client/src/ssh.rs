@@ -508,10 +508,39 @@ pub(crate) fn connect(
 ) -> Result<(Stream, ChildGuard)> {
     validate_target(target)?;
     session_socket(Path::new(""), session)?;
+    bridge(command(target, &bridge_command(session)), stop)
+}
+
+/// The stdio bridge through an application-built remote command, such as
+/// `coder ssh -- <workspace>`: the discovery script is appended as its final
+/// argument, and the command's standard streams become the connection. The
+/// caller owns the program, its arguments, and any credential it needs.
+#[cfg(unix)]
+pub fn connect_command(mut command: Command, session: &str, stop: &AtomicBool) -> Result<Bridge> {
+    session_socket(Path::new(""), session)?;
+    command.arg(bridge_command(session));
+    let (stream, child) = bridge(command, stop)?;
+    Ok(Bridge { stream, child })
+}
+
+#[cfg(windows)]
+pub fn connect_command(_command: Command, session: &str, _stop: &AtomicBool) -> Result<Bridge> {
+    session_socket(Path::new(""), session)?;
+    Err(Error::SshUnsupported)
+}
+
+/// A spawned remote bridge that has answered discovery. Dropping it kills and
+/// reaps the child.
+pub struct Bridge {
+    pub(crate) stream: Stream,
+    pub(crate) child: ChildGuard,
+}
+
+#[cfg(unix)]
+fn bridge(mut command: Command, stop: &AtomicBool) -> Result<(Stream, ChildGuard)> {
     let (mut stream, child_stream) = Stream::pair()?;
     stream.set_read_timeout(Some(POLL))?;
     stream.set_write_timeout(Some(Duration::from_secs(1)))?;
-    let mut command = command(target, &bridge_command(session));
     command
         .stdin(Stdio::from(OwnedFd::from(child_stream.try_clone()?)))
         .stdout(Stdio::from(OwnedFd::from(child_stream)))

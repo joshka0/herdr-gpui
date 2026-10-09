@@ -42,7 +42,10 @@ impl HerdrWindow {
             match result {
                 Ok(update) => {
                     self.catalog.accept(&update);
-                    self.reconcile_catalog(update.hosts, update.wsl, cx);
+                    #[cfg(feature = "cloud")]
+                    self.reconcile_devices(update.hosts, update.wsl, update.cloud, cx);
+                    #[cfg(not(feature = "cloud"))]
+                    self.reconcile_devices(update.hosts, update.wsl, cx);
                 }
                 Err(error) => {
                     self.local_error = Some(format!("Host catalog: {error}"));

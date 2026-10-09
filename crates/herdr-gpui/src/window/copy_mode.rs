@@ -227,6 +227,14 @@ impl HerdrWindow {
             cx.notify();
             return;
         }
+        // Its pane left the screen with its tab; the keyboard must not stay
+        // with a mode nobody can see.
+        if self.live.surface_ready()
+            && pane_of(self.live.surface.as_deref(), state.mode.pane_id()).is_none()
+        {
+            self.leave_copy_mode(cx);
+            return;
+        }
         let answer = state.mode.in_flight().and_then(|request| {
             let answer = state.inbox.try_lock().ok()?.take(request)?;
             Some((request.to_owned(), answer))
