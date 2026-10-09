@@ -428,6 +428,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         teleport_marks: crate::teleport::Marks::detached(),
         teleport_follow: None,
         dispatch_job: None,
+        dispatch_setup: None,
         fan_out: None,
         selection: None,
         selection_follow: Default::default(),

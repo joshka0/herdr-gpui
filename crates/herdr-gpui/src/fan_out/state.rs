@@ -8,7 +8,7 @@
 
 use super::{
     error::Error,
-    job::{self, Checkout, Progress, Report, Request},
+    job::{self, Checkout, HostStats, Progress, Report, Request},
     plan::{self, DiffStat, Lane, Picks},
 };
 use crate::{
@@ -62,7 +62,7 @@ enum Event {
     Installed(Result<Vec<AgentKind>, Error>),
     Report(Report),
     Launched,
-    Stats(Result<Vec<Option<DiffStat>>, Error>),
+    Stats(Vec<HostStats>),
     Removed(Vec<(usize, Result<(), Error>)>),
 }
 
@@ -101,6 +101,9 @@ pub(super) struct LaneView {
     pub(super) state: LaneState,
     pub(super) checkout: Option<Checkout>,
     pub(super) stats: Option<DiffStat>,
+    /// Why the last comparison could not read this lane's host, as display
+    /// text; its previous changes stay shown.
+    pub(super) unread: Option<String>,
 }
 
 pub(super) enum Stage {
@@ -362,6 +365,7 @@ impl FanOut {
                 state: LaneState::Waiting,
                 checkout: None,
                 stats: None,
+                unread: None,
             })
             .collect();
         let request = Request {
@@ -498,16 +502,29 @@ impl FanOut {
                     self.stage = Stage::Compare;
                     self.next_refresh = None;
                 }
-                Event::Stats(result) => {
+                Event::Stats(hosts) => {
                     self.probing = false;
-                    match result {
-                        Ok(stats) => {
-                            for (lane, stats) in self.lanes.iter_mut().zip(stats) {
-                                lane.stats = stats;
+                    for HostStats { lanes, result } in hosts {
+                        match result {
+                            Ok(stats) => {
+                                for (index, stats) in lanes.into_iter().zip(stats) {
+                                    if let Some(lane) = self.lanes.get_mut(index) {
+                                        lane.stats = stats;
+                                        lane.unread = None;
+                                    }
+                                }
+                            }
+                            Err(Error::Cancelled) => {}
+                            Err(error) => {
+                                tracing::warn!(%error, "fan-out change read");
+                                let text = error.to_string();
+                                for index in lanes {
+                                    if let Some(lane) = self.lanes.get_mut(index) {
+                                        lane.unread = Some(text.clone());
+                                    }
+                                }
                             }
                         }
-                        Err(Error::Cancelled) => {}
-                        Err(error) => tracing::warn!(%error, "fan-out change read"),
                     }
                 }
                 Event::Removed(results) => {

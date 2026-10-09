@@ -354,12 +354,21 @@ impl HerdrWindow {
                             .map_or(checkout.endpoint_id.as_str(), |e| e.label.as_str());
                         status = format!("{status} · {host}");
                     }
-                    let changes = match (&lane.checkout, lane.stats) {
+                    let mut changes = match (&lane.checkout, lane.stats) {
                         (None, _) => None,
                         (Some(_), Some(stats)) => Some(stats.summary()),
                         (Some(_), None) if comparing => Some("Reading changes...".to_owned()),
                         (Some(_), None) => None,
                     };
+                    // A host that could not be read says so; any changes
+                    // read before stay beside it.
+                    let unread = lane.unread.as_ref().filter(|_| lane.checkout.is_some());
+                    if let Some(unread) = unread {
+                        changes = Some(match lane.stats {
+                            Some(stats) => format!("{} · not updated: {unread}", stats.summary()),
+                            None => format!("Changes not read: {unread}"),
+                        });
+                    }
                     let winner = matches!(
                         fan_out.stage,
                         Stage::Confirm(kept) | Stage::Removing(kept) if kept == index
@@ -414,6 +423,9 @@ impl HerdrWindow {
                                                 .truncate()
                                                 .debug_selector(move || {
                                                     format!("fan-out-changes-{index}")
+                                                })
+                                                .when(unread.is_some(), |text| {
+                                                    text.text_color(danger)
                                                 })
                                                 .child(changes),
                                         )

@@ -1288,15 +1288,17 @@ Teleport: the repository is found by remote (or opened, or cloned, as Teleport
 does), the base commit is resolved here and shipped as a Git bundle only when
 that host lacks it, and that host's own daemon creates the worktree from it.
 Closing the dialog does not stop it; the result arrives as a flash, and the
-window switches to the new workspace. A new workspace opens the repository's
-main checkout on that host.
+window switches to the new workspace. Once it is shown, a new worktree runs the
+repository's setup script there, asking for trust as a local creation does. A
+new workspace opens the repository's main checkout on that host.
 
 The fan-out dialog offers Spread agents across hosts. Each lane then goes to
 the host with the most room left, a lane counting as a core, and its host chip
 opens every host, best first, to move that lane. Each other host is set up once
 before its lanes, and a lane whose agent is not installed there fails with a
 reason. Lanes on another host show it next to their status, and Open, Keep and
-the comparison work across hosts.
+the comparison work across hosts; a host that cannot be read marks only its
+own lanes, keeping the changes read before.
 
 Where new checkouts went is kept in `dispatch-history.json` in the state
 directory, by repository name and host. Like Teleport, dispatch needs a Linux

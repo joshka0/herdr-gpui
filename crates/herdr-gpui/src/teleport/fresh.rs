@@ -60,7 +60,7 @@ pub(crate) struct Prepared {
 impl Prepared {
     /// Drop the shipped commit's temporary reference. The new branches keep
     /// the commit reachable.
-    pub(crate) fn finish(self, cancelled: &AtomicBool) {
+    pub(crate) fn finish(&self, cancelled: &AtomicBool) {
         if let Some(reference) = &self.reference {
             git::drop_reference(&self.host, &self.repository.key, reference, cancelled);
         }
@@ -122,11 +122,24 @@ pub(crate) struct Naming {
     pub(crate) label: Option<String>,
 }
 
-/// Where a dispatched worktree was created.
+/// Where a dispatched worktree or workspace was created.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Created {
     pub(crate) endpoint_id: String,
     pub(crate) workspace_id: String,
+    /// A new worktree, for its setup script; a workspace has none.
+    pub(crate) checkout: Option<NewCheckout>,
+}
+
+/// A worktree created on the destination, as its setup script needs it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct NewCheckout {
+    /// The destination repository's Git common directory, which the user's
+    /// trust in its script file is kept under.
+    pub(crate) repo_key: String,
+    pub(crate) path: String,
+    /// The repository's main checkout there, when it could be read.
+    pub(crate) root: Option<String>,
 }
 
 /// Create one worktree on `destination` from `commit`, through `prepared`'s
@@ -171,9 +184,17 @@ pub(crate) fn dispatch_worktree(
     let prepared = prepare(origin, destination, &commit, &mut report, cancelled)?;
     let created = create_worktree(&prepared, &commit, naming, &mut report, cancelled);
     prepared.finish(&AtomicBool::new(false));
+    let created = created?;
+    let key = &prepared.repository.key;
+    let root = git::main_checkout(&destination.place.host, key, cancelled).ok();
     Ok(Created {
         endpoint_id: destination.place.endpoint_id.clone(),
-        workspace_id: created?.workspace.workspace_id,
+        workspace_id: created.workspace.workspace_id,
+        checkout: Some(NewCheckout {
+            repo_key: key.clone(),
+            path: created.worktree.path,
+            root,
+        }),
     })
 }
 
@@ -194,6 +215,7 @@ pub(crate) fn dispatch_workspace(
     Ok(Created {
         endpoint_id: destination.place.endpoint_id.clone(),
         workspace_id,
+        checkout: None,
     })
 }
 

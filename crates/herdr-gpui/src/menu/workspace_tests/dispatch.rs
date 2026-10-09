@@ -165,3 +165,51 @@ fn a_second_dispatch_waits_for_the_first(cx: &mut gpui::TestAppContext) {
         })
     });
 }
+
+fn setup_for(endpoint: &str, workspace: &str, now: std::time::Instant) -> crate::dispatch::Setup {
+    crate::dispatch::Setup::new(
+        endpoint.into(),
+        workspace.into(),
+        "agent-launcher".into(),
+        crate::teleport::NewCheckout {
+            repo_key: "/repo/.git".into(),
+            path: "/nonexistent/herdr-dispatch-test".into(),
+            root: None,
+        },
+        now,
+    )
+}
+
+/// A worktree made elsewhere runs its setup once the window shows its host
+/// and workspace, as one made here does, and gives up rather than wait.
+#[gpui::test]
+fn a_dispatched_worktree_sets_up_once_its_host_is_shown(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = cx.add_window_view(sidebar::layout_tests::fixture_window);
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            two_hosts(view);
+            let now = std::time::Instant::now();
+            // Box is not the host shown, so its setup waits.
+            view.dispatch_setup = Some(setup_for("ssh:box", "w3", now));
+            view.poll_dispatch_setup(now, cx);
+            assert!(view.dispatch_setup.is_some());
+            assert!(view.worktree_script.is_none());
+            // Nor does a workspace the shown host does not list start yet.
+            view.dispatch_setup = Some(setup_for(crate::endpoint::LOCAL, "w-new", now));
+            view.poll_dispatch_setup(now, cx);
+            assert!(view.dispatch_setup.is_some());
+            // Listed on the shown host, it starts like a local creation's.
+            view.dispatch_setup = Some(setup_for(crate::endpoint::LOCAL, "w3", now));
+            view.poll_dispatch_setup(now, cx);
+            assert!(view.dispatch_setup.is_none());
+            assert!(view.worktree_script.is_some());
+            view.worktree_script = None;
+            // A host that never shows up is given up on, with a word.
+            view.dispatch_setup = Some(setup_for("ssh:box", "w3", now));
+            view.poll_dispatch_setup(now + std::time::Duration::from_secs(31), cx);
+            assert!(view.dispatch_setup.is_none());
+            assert!(view.worktree_script.is_none());
+            assert!(view.flash.is_some());
+        })
+    });
+}

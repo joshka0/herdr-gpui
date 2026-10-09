@@ -10,6 +10,7 @@ mod hosts;
 mod job;
 mod picker;
 mod render;
+mod setup;
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -19,6 +20,7 @@ pub(crate) use {
     history::History,
     job::Job,
     picker::{Picker, Slot},
+    setup::Setup,
 };
 
 /// A host's load, from its latest system-load sample.

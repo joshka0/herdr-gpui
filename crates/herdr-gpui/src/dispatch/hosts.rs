@@ -2,7 +2,7 @@
 //! could go to from the endpoints, describing the chosen one to Teleport's
 //! scripts, and following a dispatched job to its new workspace.
 
-use super::{Candidate, History, Load, Picker, Repository};
+use super::{Candidate, History, Load, Picker, Repository, Setup};
 use crate::{
     HerdrWindow,
     menu::Page,
@@ -174,6 +174,7 @@ impl HerdrWindow {
                 cx.notify();
             }
         }
+        self.poll_dispatch_setup(now, cx);
         let Some(job) = &mut self.dispatch_job else {
             return;
         };
@@ -193,6 +194,17 @@ impl HerdrWindow {
                     self.dismiss_menu(window, cx);
                 }
                 self.show_flash(Flash::success(format!("Created on {host}")), cx);
+                // Like a local creation, a new worktree runs its setup script,
+                // once the window has followed it there.
+                self.dispatch_setup = created.checkout.map(|checkout| {
+                    Setup::new(
+                        created.endpoint_id.clone(),
+                        created.workspace_id.clone(),
+                        repo,
+                        checkout,
+                        now,
+                    )
+                });
                 self.teleport_follow = Some(crate::teleport::Follow::new(
                     created.endpoint_id,
                     created.workspace_id,

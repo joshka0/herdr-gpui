@@ -1,6 +1,7 @@
 use super::*;
 use crate::fan_out::error::Step;
 
+mod compare;
 mod spread;
 
 fn origin() -> Origin {
@@ -61,6 +62,7 @@ fn launched() -> FanOut {
             state: LaneState::Waiting,
             checkout: None,
             stats: None,
+            unread: None,
         })
         .collect();
     fan_out.stage = Stage::Launching;
@@ -165,7 +167,13 @@ fn stats_land_on_their_lanes_and_reads_do_not_overlap() {
         ..DiffStat::default()
     };
     fan_out.probing = true;
-    send(&fan_out, Event::Stats(Ok(vec![Some(stat), None, None])));
+    send(
+        &fan_out,
+        Event::Stats(vec![HostStats {
+            lanes: vec![0, 1, 2],
+            result: Ok(vec![Some(stat), None, None]),
+        }]),
+    );
     fan_out.poll();
     assert!(!fan_out.probing);
     assert_eq!(fan_out.lanes[0].stats, Some(stat));

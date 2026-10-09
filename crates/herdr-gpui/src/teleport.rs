@@ -24,8 +24,8 @@ mod ui;
 pub(crate) use {
     error::{Error, Step},
     fresh::{
-        Created, Naming, Origin as FreshOrigin, Prepared, base_commit, dispatch_workspace,
-        dispatch_worktree, prepare,
+        Created, Naming, NewCheckout, Origin as FreshOrigin, Prepared, base_commit,
+        dispatch_workspace, dispatch_worktree, prepare,
     },
     host::Host,
     job::{HostRepositories, Place, Retired, Source, open_repositories},

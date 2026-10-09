@@ -313,40 +313,46 @@ pub(crate) fn installed(host: &Host, cancelled: &AtomicBool) -> Result<Vec<Agent
         .collect())
 }
 
-/// Each lane's changes since `base`, reading every host once; `None` for a
-/// lane without a checkout or whose checkout is gone.
+/// One host's part of a comparison: the lanes on it, and their changes
+/// since the base, `None` for a checkout that is gone, in the same order.
+#[derive(Debug)]
+pub(crate) struct HostStats {
+    pub(crate) lanes: Vec<usize>,
+    pub(crate) result: Result<Vec<Option<DiffStat>>>,
+}
+
+/// Each lane's changes since `base`, reading every host once. A host that
+/// cannot be read fails only its own lanes.
 pub(crate) fn stats(
     checkouts: &[Option<(Host, String)>],
     base: &str,
     cancelled: &AtomicBool,
-) -> Result<Vec<Option<DiffStat>>> {
-    let mut stats = vec![None; checkouts.len()];
-    let mut hosts: Vec<&Host> = Vec::new();
-    for (host, _) in checkouts.iter().flatten() {
-        if !hosts.contains(&host) {
-            hosts.push(host);
+) -> Vec<HostStats> {
+    let mut hosts: Vec<(&Host, Vec<usize>)> = Vec::new();
+    for (index, (host, _)) in checkouts
+        .iter()
+        .enumerate()
+        .filter_map(|(index, checkout)| Some((index, checkout.as_ref()?)))
+    {
+        match hosts.iter_mut().find(|(known, _)| *known == host) {
+            Some((_, lanes)) => lanes.push(index),
+            None => hosts.push((host, vec![index])),
         }
     }
-    for host in hosts {
-        // Other hosts' lanes stay empty, which the script reports as gone.
-        let paths: Vec<String> = checkouts
-            .iter()
-            .map(|checkout| match checkout {
-                Some((on, path)) if on == host => path.clone(),
-                _ => String::new(),
-            })
-            .collect();
-        let output = host
-            .capture(&stats_script(&paths, base), cancelled)
-            .map_err(script(Step::Compare))?;
-        let read = parse_stats(&String::from_utf8_lossy(&output), paths.len());
-        for ((stat, read), path) in stats.iter_mut().zip(read).zip(&paths) {
-            if !path.is_empty() {
-                *stat = read;
-            }
-        }
-    }
-    Ok(stats)
+    hosts
+        .into_iter()
+        .map(|(host, lanes)| {
+            let paths: Vec<String> = lanes
+                .iter()
+                .filter_map(|&index| Some(checkouts[index].as_ref()?.1.clone()))
+                .collect();
+            let result = host
+                .capture(&stats_script(&paths, base), cancelled)
+                .map_err(script(Step::Compare))
+                .map(|output| parse_stats(&String::from_utf8_lossy(&output), paths.len()));
+            HostStats { lanes, result }
+        })
+        .collect()
 }
 
 /// Remove a lane's worktree and workspace, discarding uncommitted changes.
