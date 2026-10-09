@@ -1,6 +1,9 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
-use std::process::{Command, Stdio};
+use std::{
+    net::IpAddr,
+    process::{Command, Stdio},
+};
 
 #[test]
 fn ssh_failures_are_classified_from_exit_code_and_stderr() {
@@ -67,7 +70,11 @@ fn ssh_failures_are_classified_from_exit_code_and_stderr() {
 
 #[test]
 fn only_local_network_addresses_count_as_local() {
-    let local = |stderr: &str| refused_address(stderr).is_some_and(is_local);
+    let local = |stderr: &str| {
+        refused_host(stderr)
+            .and_then(|host| host.parse().ok())
+            .is_some_and(is_local)
+    };
     assert!(local(
         "ssh: connect to host 192.168.1.4 port 22: No route to host"
     ));
@@ -86,9 +93,43 @@ fn only_local_network_addresses_count_as_local() {
     assert!(!local(
         "ssh: connect to host 100.101.102.103 port 22: No route to host"
     ));
-    assert!(!local(
-        "ssh: Could not resolve hostname box: nodename nor servname"
-    ));
+    assert!(refused_host("ssh: Could not resolve hostname box: nodename nor servname").is_none());
+}
+
+/// `ssh` names the host as it was given, so a hostname is resolved before
+/// deciding whether macOS gated it; an address is never looked up.
+#[test]
+fn a_hostname_is_resolved_before_its_route_is_classified() {
+    let denied = "ssh: connect to host box.local port 22: No route to host\n";
+    let classify = |stderr: &str, addresses: Vec<IpAddr>| {
+        SshFailure::classify_with(Some(255), stderr.as_bytes(), |host| {
+            assert_eq!(host, "box.local");
+            addresses
+        })
+    };
+    let lan = vec!["10.0.0.19".parse().unwrap()];
+    assert_eq!(
+        classify(denied, lan),
+        if cfg!(target_os = "macos") {
+            SshFailure::LocalNetworkDenied
+        } else {
+            SshFailure::NoRoute
+        }
+    );
+    assert_eq!(
+        classify(denied, vec!["100.64.1.2".parse().unwrap()]),
+        SshFailure::NoRoute
+    );
+    // An unresolved name, as after the lookup times out, is a plain no route.
+    assert_eq!(classify(denied, Vec::new()), SshFailure::NoRoute);
+    assert_eq!(
+        SshFailure::classify_with(
+            Some(255),
+            b"ssh: connect to host 8.8.8.8 port 22: No route to host\n",
+            |_| unreachable!("an address needs no lookup"),
+        ),
+        SshFailure::NoRoute
+    );
 }
 
 #[test]

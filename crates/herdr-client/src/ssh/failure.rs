@@ -10,6 +10,7 @@ use std::{
 };
 #[cfg(unix)]
 use std::{
+    net::{IpAddr, ToSocketAddrs},
     process::Child,
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, Instant},
@@ -59,6 +60,16 @@ impl SshFailure {
     /// it found no candidate binary at all. Any other status is the remote's.
     #[cfg(unix)]
     pub(super) fn classify(code: Option<i32>, stderr: &[u8]) -> Self {
+        Self::classify_with(code, stderr, resolve)
+    }
+
+    /// [`Self::classify`] with the name lookup a hostname in the error needs.
+    #[cfg(unix)]
+    fn classify_with(
+        code: Option<i32>,
+        stderr: &[u8],
+        resolve: impl FnOnce(&str) -> Vec<IpAddr>,
+    ) -> Self {
         match code {
             Some(127) => Self::HerdrMissing,
             Some(255) => {
@@ -72,7 +83,12 @@ impl SshFailure {
                 } else if has(&["Permission denied", "Too many authentication failures"]) {
                     Self::Auth
                 } else if has(&["No route to host"]) {
-                    if cfg!(target_os = "macos") && refused_address(&text).is_some_and(is_local) {
+                    if cfg!(target_os = "macos")
+                        && refused_host(&text).is_some_and(|host| match host.parse::<IpAddr>() {
+                            Ok(address) => is_local(address),
+                            Err(_) => resolve(host).into_iter().any(is_local),
+                        })
+                    {
                         Self::LocalNetworkDenied
                     } else {
                         Self::NoRoute
@@ -95,24 +111,51 @@ impl SshFailure {
     }
 }
 
-/// The address in `ssh: connect to host <address> port <port>: ...`, which
-/// `ssh` prints after resolving the target.
+/// The host in `ssh: connect to host <host> port <port>: ...`. `ssh` prints
+/// the name it was given, so this is an address only when the target was one.
 #[cfg(unix)]
-fn refused_address(stderr: &str) -> Option<std::net::IpAddr> {
+fn refused_host(stderr: &str) -> Option<&str> {
     stderr.lines().rev().find_map(|line| {
         let (_, rest) = line.split_once("connect to host ")?;
-        let (address, _) = rest.split_once(" port ")?;
-        address.parse().ok()
+        let (host, _) = rest.split_once(" port ")?;
+        Some(host)
     })
 }
 
 /// Addresses macOS treats as the local network, which Local Network privacy
 /// gates: private and link-local ranges, not loopback or the Internet.
 #[cfg(unix)]
-fn is_local(address: std::net::IpAddr) -> bool {
+fn is_local(address: IpAddr) -> bool {
     match address {
-        std::net::IpAddr::V4(v4) => v4.is_private() || v4.is_link_local(),
-        std::net::IpAddr::V6(v6) => v6.is_unique_local() || v6.is_unicast_link_local(),
+        IpAddr::V4(v4) => v4.is_private() || v4.is_link_local(),
+        IpAddr::V6(v6) => v6.is_unique_local() || v6.is_unicast_link_local(),
+    }
+}
+
+/// How long classification waits for a hostname's addresses. `ssh` has just
+/// resolved the same name, so the system usually answers from its cache.
+#[cfg(unix)]
+const RESOLVE_TIMEOUT: Duration = Duration::from_secs(1);
+
+/// The addresses `host` resolves to, or none once `RESOLVE_TIMEOUT` passes.
+/// The lookup runs on its own thread because the resolver cannot be
+/// cancelled; a slow one is abandoned rather than waited on.
+#[cfg(unix)]
+fn resolve(host: &str) -> Vec<IpAddr> {
+    let (tx, rx) = mpsc::sync_channel(1);
+    let host = host.to_owned();
+    let spawned = thread::Builder::new()
+        .name("herdr-ssh-resolve".into())
+        .spawn(move || {
+            let addresses = (host.as_str(), 0)
+                .to_socket_addrs()
+                .map(|addresses| addresses.map(|address| address.ip()).collect())
+                .unwrap_or_default();
+            let _ = tx.send(addresses);
+        });
+    match spawned {
+        Ok(_) => rx.recv_timeout(RESOLVE_TIMEOUT).unwrap_or_default(),
+        Err(_) => Vec::new(),
     }
 }
 
