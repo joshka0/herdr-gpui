@@ -25,6 +25,10 @@ pub(super) enum Freeze {
 #[cfg(any(target_os = "macos", windows))]
 const FREEZE_WAIT: std::time::Duration = std::time::Duration::from_millis(300);
 
+/// How far above the status bar its tooltips may reach.
+#[cfg(any(target_os = "macos", windows))]
+const TOOLTIP_BAND: Pixels = px(320.);
+
 impl HerdrWindow {
     /// Shows or hides the native pages to match what the window draws. The
     /// pages sit above everything GPUI paints, so a page an open menu covers
@@ -39,18 +43,19 @@ impl HerdrWindow {
             live.extend(self.code_page(cx));
             let open = self.menu.page;
             let measured_for = std::mem::replace(&mut self.browser.cover_page, open);
-            if open.is_none() {
-                self.browser.frozen.clear();
-                self.browser.pages.present(&live, cx);
-                return false;
-            }
             // A dimmed dialog's cover is known before it is laid out, so the
             // pages under it step aside in its first frame. A popover's is
-            // measured as it is laid out.
-            let cover = if self.menu_dims() {
-                Cover::dimmed(self.herdr_realm())
-            } else {
-                self.menu.cover.get().settled(measured_for, open)
+            // measured as it is laid out. Without a menu, a status bar
+            // tooltip may show above the bar.
+            let cover = match (open, self.browser.tooltip_band) {
+                (Some(_), _) if self.menu_dims() => Cover::dimmed(self.herdr_realm()),
+                (Some(_), _) => self.menu.cover.get().settled(measured_for, open),
+                (None, Some(band)) => Cover::Panel(band),
+                (None, None) => {
+                    self.browser.frozen.clear();
+                    self.browser.pages.present(&live, cx);
+                    return false;
+                }
             };
             let bounds = self.browser.page_bounds.borrow().clone();
             let now = std::time::Instant::now();
@@ -96,6 +101,46 @@ impl HerdrWindow {
             let _ = cx;
             false
         }
+    }
+
+    /// Notes whether the pointer is over the status bar, whose tooltips show
+    /// in the band above it.
+    pub(crate) fn hover_status_bar(&mut self, hovered: bool, cx: &mut Context<Self>) {
+        #[cfg(any(target_os = "macos", windows))]
+        {
+            let band = self
+                .browser
+                .status_bar
+                .get()
+                .filter(|_| hovered)
+                .map(|bar| {
+                    Bounds::new(
+                        point(px(0.), bar.top() - TOOLTIP_BAND),
+                        size(px(f32::MAX / 4.), TOOLTIP_BAND),
+                    )
+                });
+            if band != self.browser.tooltip_band {
+                self.browser.tooltip_band = band;
+                cx.notify();
+            }
+        }
+        #[cfg(not(any(target_os = "macos", windows)))]
+        let _ = (hovered, cx);
+    }
+
+    /// Records where the status bar draws, filling it.
+    pub(crate) fn status_bar_probe(&self) -> impl IntoElement {
+        #[cfg(any(target_os = "macos", windows))]
+        let bar = self.browser.status_bar.clone();
+        canvas(
+            move |_bounds, _, _| {
+                #[cfg(any(target_os = "macos", windows))]
+                bar.set(Some(_bounds));
+            },
+            |_, _, _, _| {},
+        )
+        .absolute()
+        .inset_0()
     }
 
     /// Decodes a covered page's picture off the UI thread, and has the page

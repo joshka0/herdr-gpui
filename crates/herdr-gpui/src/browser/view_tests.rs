@@ -65,5 +65,10 @@ mod code_group;
 #[cfg(any(target_os = "macos", windows))]
 mod code_folder;
 
+/// Pages step aside under the status bar's tooltips; only builds that show
+/// pages have any.
+#[cfg(any(target_os = "macos", windows))]
+mod status_tooltip;
+
 /// What closing a workspace does to its browser tabs.
 mod workspace_close;

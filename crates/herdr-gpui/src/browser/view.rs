@@ -71,6 +71,14 @@ pub(crate) struct Browser {
     /// measured cover belongs to.
     #[cfg(any(target_os = "macos", windows))]
     pub(super) cover_page: Option<crate::menu::Page>,
+    /// While the pointer is over the status bar, the band above it where
+    /// the bar's tooltips show. Pages draw above tooltips, so those in the
+    /// band step aside, as for a menu.
+    #[cfg(any(target_os = "macos", windows))]
+    pub(super) tooltip_band: Option<Bounds<Pixels>>,
+    /// Where the status bar last drew, which the band sits above.
+    #[cfg(any(target_os = "macos", windows))]
+    pub(super) status_bar: std::rc::Rc<std::cell::Cell<Option<Bounds<Pixels>>>>,
 }
 
 impl Browser {
@@ -101,6 +109,10 @@ impl Browser {
             annotations: Annotations::new(cx),
             #[cfg(any(target_os = "macos", windows))]
             cover_page: None,
+            #[cfg(any(target_os = "macos", windows))]
+            tooltip_band: None,
+            #[cfg(any(target_os = "macos", windows))]
+            status_bar: Default::default(),
         }
     }
 }
