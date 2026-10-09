@@ -124,6 +124,24 @@ impl HerdrWindow {
         )
     }
 
+    fn terminal_hyperlink_at(&self, position: Point<Pixels>) -> bool {
+        if self.menu.page.is_some()
+            || !self.live.surface_ready()
+            || !self.bounds.contains(&position)
+        {
+            return false;
+        }
+        self.live.surface.as_deref().is_some_and(|surface| {
+            crate::terminal::pane_hyperlink_at(
+                surface,
+                f32::from(position.x - self.bounds.origin.x),
+                f32::from(position.y - self.bounds.origin.y),
+                self.cell_width,
+                self.config.terminal.line_height(),
+            )
+        })
+    }
+
     /// The resolved link under the pointer, while it still reads the live
     /// content it was resolved from.
     pub(crate) fn hovered_daemon_link(&self) -> Option<&ResolvedLink> {
@@ -304,7 +322,14 @@ impl HerdrWindow {
         let file = (url.is_none() && modifiers.secondary())
             .then(|| self.file_link_at(position))
             .flatten();
-        if url.is_none() && daemon.is_none() && file.is_none() {
+        // A hyperlink this client cannot open, such as an SSH host's own
+        // `file://` link, may still be claimed by a handler on its host.
+        let claimable = url.is_none()
+            && file.is_none()
+            && modifiers.secondary()
+            && self.live.supports_link_activate
+            && self.terminal_hyperlink_at(position);
+        if url.is_none() && daemon.is_none() && file.is_none() && !claimable {
             return None;
         }
         // A plugin handler may claim any link the daemon can read, a file

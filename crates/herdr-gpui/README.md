@@ -1542,7 +1542,9 @@ the daemon exposes to clients:
   nothing claims opens here as described in [Terminal Links](#terminal-links).
   Herdr matches handlers against the URL it reads at the click (a terminal
   hyperlink's target, or a web address in the text), so a plain printed path is
-  never claimed.
+  never claimed. A link-modifier click on any terminal hyperlink is offered to
+  the daemon, including one this client never opens itself, such as an SSH
+  host's own `file://` link, so a handler on that host can still claim it.
 - **Popups and panes.** Plugin popups, splits, and tabs are ordinary daemon
   terminals: keys, paste, input methods, and the mouse go to a popup while it is
   open, and focus is whatever the daemon reports, including after a plugin's

@@ -193,6 +193,52 @@ fn a_resolved_file_hyperlink_keeps_its_local_fallback(cx: &mut gpui::TestAppCont
     view.read_with(cx, |view, _| assert!(view.links.activating.is_none()));
 }
 
+/// A pane on an SSH host prints that host's `file://` links, which never open
+/// here, yet a quick click, before any hover resolved it, still reaches the
+/// daemon so a handler on that host can claim it. Declined, nothing opens.
+#[gpui::test]
+fn a_remote_file_hyperlink_still_reaches_plugin_handlers(cx: &mut gpui::TestAppContext) {
+    let mut peer = MockPeer::advertising(&["pane.link.resolve", "pane.link.activate"]);
+    let (view, cx) = window(&peer, true, cx);
+    let url = "file://devbox/home/dev/notes.md";
+    view.update(cx, |view, _| {
+        view.live.surface = Some(hyperlinked(url));
+        let selected = view.selected_endpoint;
+        view.endpoints[selected].connection.target = herdr_client::ConnectTarget::Ssh {
+            target: "devbox.invalid".into(),
+            session: "default".into(),
+        };
+        assert!(view.selected_is_remote());
+    });
+    let link = at(&view, cx, 3, 0);
+    view.read_with(cx, |view, _| {
+        assert!(view.file_link_at(link).is_none(), "not this machine's file");
+        assert!(view.hovered_daemon_link().is_none());
+    });
+
+    for handled in [true, false] {
+        cx.simulate_click(link, Modifiers::secondary_key());
+        let request = activation(&mut peer);
+        assert_eq!(request["params"]["col"], 3);
+        reply(
+            &mut peer,
+            &view,
+            cx,
+            &request,
+            json!({"result": {"type": "pane_link_activated", "url": url, "handled": handled}}),
+        );
+        assert!(cx.opened_url().is_none(), "handled={handled}");
+    }
+    // Without the modifier the click stays the pane's, as on any hyperlink
+    // this client cannot open.
+    view.read_with(cx, |view, _| {
+        assert!(
+            view.terminal_link_press(link, Modifiers::default())
+                .is_none()
+        );
+    });
+}
+
 /// Without `pane.link.activate` a link-modifier click opens the file here,
 /// as it always has.
 #[gpui::test]
