@@ -119,6 +119,9 @@ struct Slot {
     address: Option<Address>,
     /// Counts changes to `status` and `address`, so a reader can tell.
     revision: u64,
+    /// A stand-in worker reported Ready, so it counts as running.
+    #[cfg(test)]
+    stand_in_ready: bool,
 }
 
 #[derive(Default)]
@@ -157,6 +160,21 @@ impl Shared {
                 .unwrap_or_else(PoisonError::into_inner)
                 .0;
         }
+    }
+
+    /// Whether the child runs right now, so it, and nothing else, holds its
+    /// port. Quick: it looks without waiting.
+    fn alive(&self) -> bool {
+        let mut slot = self.lock();
+        #[cfg(test)]
+        if slot.child.is_none() && slot.stand_in_ready {
+            return !slot.stopped;
+        }
+        !slot.stopped
+            && slot
+                .child
+                .as_mut()
+                .is_some_and(|child| matches!(process::exited(child), Ok(false)))
     }
 
     /// Asks the child to stop, gives it `grace` to exit, then kills what is
@@ -221,7 +239,8 @@ impl Supervisor {
                 crate::login_env::apply(&mut command);
                 command
             },
-            super::probe,
+            // Never the token: the app wrote the file the server reads it from.
+            super::version,
             |port| crate::config::Config::save_code(crate::config::CodeEdit::Port(port)),
             Timing::default(),
         )
@@ -264,6 +283,12 @@ impl Supervisor {
         }
     }
 
+    /// Whether the child runs right now: what a window checks just before
+    /// it loads a page, which carries the token.
+    pub(crate) fn alive(&self) -> bool {
+        self.shared.alive()
+    }
+
     /// Asks the child to stop and the worker to end, without waiting: the
     /// worker kills what is left after its grace and reaps it.
     pub(crate) fn stop(&self) {
@@ -299,10 +324,17 @@ impl Supervisor {
         self.shared.publish(|slot| slot.address = Some(address));
     }
 
+    /// The stand-in's child exits, before the worker notices.
+    #[cfg(all(test, any(target_os = "macos", windows)))]
+    pub(crate) fn stand_in_exits(&self) {
+        self.shared.lock().stand_in_ready = false;
+    }
+
     /// Reports `status` and `address`, as the worker would.
     #[cfg(all(test, any(target_os = "macos", windows)))]
     pub(crate) fn report_as(&self, status: Status, address: Option<Address>) {
         self.shared.publish(|slot| {
+            slot.stand_in_ready = matches!(status, Status::Ready);
             slot.status = Some(status);
             slot.address = address;
         });
@@ -510,7 +542,12 @@ where
                 }
             }
             if answered.is_none() {
-                if listening.load(Ordering::Acquire) && (self.probe)(&address.url).is_ok() {
+                // Alive before the question and after the answer: a live
+                // serve-web holds its port, so the answer was its own.
+                if listening.load(Ordering::Acquire)
+                    && (self.probe)(&address.url).is_ok()
+                    && self.shared.alive()
+                {
                     answered = Some(Instant::now());
                     self.shared
                         .publish(|slot| slot.status = Some(Status::Ready));

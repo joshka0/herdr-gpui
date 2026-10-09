@@ -247,6 +247,31 @@ mod process {
         drop(supervisor);
     }
 
+    /// A child that exits while it is being asked is not reported ready:
+    /// whatever answered may be another program that took its port.
+    #[test]
+    fn an_answer_counts_only_if_the_child_outlived_it() {
+        let fake = Fake::new("sleep 0.2\nexit 0");
+        let ready = Arc::new(StdMutex::new(false));
+        let (supervisor, _) = fake.start(None, |_| {
+            // The child exits meanwhile; something answers anyway.
+            thread::sleep(Duration::from_millis(500));
+            Ok(Server::from_version(COMMIT).unwrap())
+        });
+        let seen = ready.clone();
+        until("a failure", || {
+            if matches!(supervisor.report().status, Status::Ready) {
+                *seen.lock().unwrap() = true;
+            }
+            failure(&supervisor).is_some()
+        });
+        assert!(
+            !*ready.lock().unwrap(),
+            "reported ready on another's answer"
+        );
+        drop(supervisor);
+    }
+
     /// A child whose port another program took first never binds it, and
     /// says nothing; the program that did must not be sent the token.
     #[test]

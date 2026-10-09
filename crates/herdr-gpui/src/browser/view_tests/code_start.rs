@@ -17,12 +17,21 @@ fn answers(_: &WebUrl) -> crate::Result<Server> {
     Ok(Server::from_version(COMMIT).unwrap())
 }
 
+/// The check of an address's token, which the started server must never
+/// get: it would carry the token to whatever answers the port.
+fn refuses_token(_: &WebUrl) -> crate::Result<Server> {
+    panic!("the started server was asked with its token");
+}
+
 /// The fixture window with VS Code found, as a running app would have it.
 fn found(cx: &mut gpui::TestAppContext) -> (Entity<HerdrWindow>, &mut VisualTestContext) {
     let (view, cx) = window(cx);
     cx.update(|_, cx| {
         Launcher::fixture(cx, Cli::Found("/Applications/code-tunnel".into()));
-        view.update(cx, |view, _| view.browser.code_server.probe = answers);
+        view.update(cx, |view, _| {
+            view.browser.code_server.probe = refuses_token;
+            view.browser.code_server.started_probe = answers;
+        });
     });
     draw(cx);
     (view, cx)
@@ -154,6 +163,8 @@ fn an_address_keeps_the_server_the_user_runs(cx: &mut gpui::TestAppContext) {
     accept(&view, cx);
     view.update(cx, |view, _| {
         view.config.code.url = Some(WebUrl::try_from("http://127.0.0.1:8000/?tkn=x").unwrap());
+        // The user's own server is asked as before, token included.
+        view.browser.code_server.probe = answers;
     });
     run(&view, cx, Command::ToggleCode);
     tick(&view, cx);
@@ -183,4 +194,23 @@ fn starting_without_vs_code_installed_says_so(cx: &mut gpui::TestAppContext) {
     tick(&view, cx);
     assert!(!running(cx));
     assert!(cx.debug_bounds("code-placeholder").is_some());
+}
+
+/// Once the server it started stops, the window makes no page, which would
+/// carry the token, even before the worker's report says so.
+#[gpui::test]
+fn no_page_is_made_for_a_started_server_that_stopped(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = found(cx);
+    accept(&view, cx);
+    run(&view, cx, Command::ToggleCode);
+    set_report(cx, Status::Ready, Some(51234));
+    // Its child exits while the report still says Ready.
+    cx.update(|_, cx| Launcher::stand_in_exits(cx));
+    tick(&view, cx);
+    tick(&view, cx);
+    let opened = cx.update(|_, cx| {
+        let tab_scope = scope(&view.read(cx).endpoints[0]);
+        cx.global::<Store>().code_tab(&tab_scope, "w0").cloned()
+    });
+    assert!(opened.is_none());
 }

@@ -258,6 +258,15 @@ impl Launcher {
         changed
     }
 
+    /// Whether the server the app started runs right now. A window asks
+    /// just before it loads a page, which carries the token: a server that
+    /// stopped leaves its port to whoever takes it next.
+    pub(crate) fn alive(cx: &App) -> bool {
+        cx.try_global::<Self>()
+            .and_then(|launcher| launcher.server.as_ref())
+            .is_some_and(Supervisor::alive)
+    }
+
     /// What is known of VS Code's command line, or `None` where the app
     /// never looks for it.
     pub(crate) fn cli(cx: &App) -> Option<&Cli> {
@@ -401,6 +410,14 @@ impl Launcher {
     #[cfg(all(test, any(target_os = "macos", windows)))]
     pub(crate) fn report(cx: &App) -> Option<Report> {
         cx.try_global::<Self>()?.report.clone()
+    }
+
+    /// The stand-in worker's child exits, before its report says so.
+    #[cfg(all(test, any(target_os = "macos", windows)))]
+    pub(crate) fn stand_in_exits(cx: &App) {
+        if let Some(server) = &cx.global::<Self>().server {
+            server.stand_in_exits();
+        }
     }
 
     /// Stands in for the worker's report, as the poll would take it.

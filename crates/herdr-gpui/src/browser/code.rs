@@ -41,6 +41,9 @@ pub(crate) struct CodeServer {
     generation: u64,
     /// How the server is asked; tests answer for it.
     pub(super) probe: fn(&WebUrl) -> crate::Result<Server>,
+    /// How the server the app started is asked: its version alone, never
+    /// its token, which the app wrote itself. Tests answer for it.
+    pub(super) started_probe: fn(&WebUrl) -> crate::Result<Server>,
 }
 
 impl Default for CodeServer {
@@ -50,6 +53,7 @@ impl Default for CodeServer {
             state: Reach::Unknown,
             generation: 0,
             probe: code_server::probe,
+            started_probe: code_server::version,
         }
     }
 }
@@ -185,10 +189,14 @@ impl HerdrWindow {
         if matches!(startup, code_server::Startup::Failed { .. }) {
             self.close_code_pages(cx);
         }
+        let started = !matches!(startup, code_server::Startup::Address);
+        // The page carries the token, so a server the app started must run
+        // right now, holding its port, as the page is made.
         if !wanted
             || !startup.serving()
             || self.code_page_settled(&scope, &workspace, cx)
-            || !self.code_server_ready(&url, cx)
+            || !self.code_server_ready(&url, started, cx)
+            || (started && !Launcher::alive(cx))
         {
             return;
         }
@@ -306,7 +314,8 @@ impl HerdrWindow {
     /// nothing is known, it last answered a while ago, or it last failed a
     /// while ago. A page created against a server that has since stopped
     /// would stay blank, so an old answer is not trusted.
-    fn code_server_ready(&mut self, url: &WebUrl, cx: &mut Context<Self>) -> bool {
+    /// `started` says the server is the one the app started.
+    fn code_server_ready(&mut self, url: &WebUrl, started: bool, cx: &mut Context<Self>) -> bool {
         match &self.browser.code_server.state {
             Reach::Ready { at, .. } if at.elapsed() < RETRY => return true,
             Reach::Asking => return false,
@@ -315,7 +324,12 @@ impl HerdrWindow {
         }
         let server = &mut self.browser.code_server;
         server.state = Reach::Asking;
-        let (generation, probe, url) = (server.generation, server.probe, url.clone());
+        let probe = if started {
+            server.started_probe
+        } else {
+            server.probe
+        };
+        let (generation, url) = (server.generation, url.clone());
         let answer = cx.background_executor().spawn(async move { probe(&url) });
         cx.spawn(async move |this, cx| {
             let answer = answer.await;
