@@ -28,7 +28,7 @@ fn existing_daemon_does_not_launch() {
     std::fs::remove_file(path).unwrap();
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 #[test]
 fn local_endpoint_survives_executable_removal_and_replacement() {
     // Only this test dials the endpoint; the rest just bind one.

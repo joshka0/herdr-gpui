@@ -2151,8 +2151,9 @@ records when reporting the failure.
    branch, so renamed local branches can identify fork PRs. Without an upstream,
    lookup uses the local branch name and requires the origin owner as before.
    Unsupported upstreams fail closed rather than matching an unrelated fork.
-  On macOS, all socket modes (including explicit/inherited sockets) require a
-  same-user kernel peer at the standard configured session socket, with owned,
+  On macOS and Linux, all socket modes (including explicit/inherited sockets)
+  require a same-user kernel peer (`getpeereid` on macOS, `SO_PEERCRED` on
+  Linux) at the standard configured session socket, with owned,
   non-group/world-writable socket and parent. Executable upgrades/removal do not
   invalidate this local endpoint trust. Sockets elsewhere remain blocked; a
   same-user proxy deliberately replacing the trusted socket is not detectable.

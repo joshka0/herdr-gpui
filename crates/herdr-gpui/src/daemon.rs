@@ -94,24 +94,38 @@ pub(crate) fn executable() -> PathBuf {
 /// A same-user proxy deliberately installed at that endpoint is within this trust
 /// boundary; this is not remote-origin attestation.
 fn is_local_peer(stream: &Stream, target: &ConnectTarget, socket: &Path) -> bool {
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     {
         target
             .local_session_socket_path()
             .is_ok_and(|expected| peer_matches_local_endpoint(stream, socket, &expected))
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
         let _ = (stream, target, socket);
         false
     }
 }
 
+/// The user ID of the process at the other end of the socket.
 #[cfg(target_os = "macos")]
+fn peer_uid(stream: &Stream) -> nix::Result<nix::unistd::Uid> {
+    nix::unistd::getpeereid(stream).map(|(uid, _)| uid)
+}
+
+/// The user ID of the process at the other end of the socket.
+#[cfg(target_os = "linux")]
+fn peer_uid(stream: &Stream) -> nix::Result<nix::unistd::Uid> {
+    use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
+    getsockopt(stream, PeerCredentials)
+        .map(|credentials| nix::unistd::Uid::from_raw(credentials.uid()))
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn peer_matches_local_endpoint(stream: &Stream, socket: &Path, expected: &Path) -> bool {
     use std::os::unix::fs::{FileTypeExt, MetadataExt};
     let uid = nix::unistd::geteuid();
-    if !nix::unistd::getpeereid(stream).is_ok_and(|(peer, _)| peer == uid) {
+    if !peer_uid(stream).is_ok_and(|peer| peer == uid) {
         return false;
     }
     // Do not allow the standard socket itself to redirect to another location.
