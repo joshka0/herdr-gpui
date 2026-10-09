@@ -80,7 +80,12 @@ struct PendingActivation {
 /// What this client opens itself for a click no plugin handler claimed.
 enum Fallback {
     Web(WebUrl),
-    File(FileLink),
+    /// A file, in the terminal editor or the system's default application,
+    /// as the click's modifiers chose.
+    File {
+        link: FileLink,
+        in_editor: bool,
+    },
 }
 
 /// A press that may become a click on a link.
@@ -365,7 +370,11 @@ impl HerdrWindow {
             return false;
         }
         let fallback = match release.file {
-            Some(file) => Some(Fallback::File(file)),
+            Some(link) => Some(Fallback::File {
+                link,
+                in_editor: (self.config.open_files_in == crate::config::FileTarget::Editor)
+                    != modifiers.alt,
+            }),
             None => release
                 .url
                 .as_deref()
@@ -423,7 +432,7 @@ impl HerdrWindow {
     ) {
         match link {
             Some(Fallback::Web(url)) => self.open_web_link(url, in_tab, window, cx),
-            Some(Fallback::File(file)) => self.open_file_link(file, cx),
+            Some(Fallback::File { link, in_editor }) => self.open_file_link(link, in_editor, cx),
             None => {}
         }
     }

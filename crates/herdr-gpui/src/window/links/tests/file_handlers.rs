@@ -19,6 +19,14 @@ fn hyperlinked(target: &str) -> Arc<PaneSurfaceFrame> {
     surface
 }
 
+/// Shows a hyperlink to `document`. Its file opens in the system's
+/// application, which the test observes, rather than the terminal editor:
+/// these tests are about which clicks reach the daemon.
+fn show(view: &mut HerdrWindow, document: &Document) {
+    view.live.surface = Some(hyperlinked(&document.url()));
+    view.config.open_files_in = crate::config::FileTarget::System;
+}
+
 /// A Markdown file in a directory of its own, removed when dropped.
 struct Document(std::path::PathBuf);
 
@@ -89,9 +97,7 @@ fn file_hyperlinks_go_to_plugin_handlers_before_opening_here(cx: &mut gpui::Test
     let document = Document::new();
     let mut peer = MockPeer::advertising(&["pane.link.resolve", "pane.link.activate"]);
     let (view, cx) = window(&peer, true, cx);
-    view.update(cx, |view, _| {
-        view.live.surface = Some(hyperlinked(&document.url()))
-    });
+    view.update(cx, |view, _| show(view, &document));
     let link = at(&view, cx, 3, 0);
     view.read_with(cx, |view, _| {
         assert!(view.terminal_link_at(link).is_none(), "not a web link");
@@ -160,9 +166,7 @@ fn a_resolved_file_hyperlink_keeps_its_local_fallback(cx: &mut gpui::TestAppCont
     let document = Document::new();
     let mut peer = MockPeer::advertising(&["pane.link.resolve", "pane.link.activate"]);
     let (view, cx) = window(&peer, true, cx);
-    view.update(cx, |view, _| {
-        view.live.surface = Some(hyperlinked(&document.url()))
-    });
+    view.update(cx, |view, _| show(view, &document));
     let link = at(&view, cx, 3, 0);
     cx.simulate_mouse_move(link, None, Modifiers::secondary_key());
     resolve_after_delay(cx);
@@ -246,9 +250,7 @@ fn file_hyperlinks_open_here_without_daemon_activation(cx: &mut gpui::TestAppCon
     let document = Document::new();
     let peer = MockPeer::new();
     let (view, cx) = window(&peer, false, cx);
-    view.update(cx, |view, _| {
-        view.live.surface = Some(hyperlinked(&document.url()))
-    });
+    view.update(cx, |view, _| show(view, &document));
     let link = at(&view, cx, 3, 0);
     cx.simulate_click(link, Modifiers::secondary_key());
     cx.run_until_parked();

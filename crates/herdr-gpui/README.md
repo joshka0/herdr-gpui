@@ -1496,15 +1496,21 @@ are not activated.
 
 Cmd-click (Ctrl-click elsewhere) a file path a pane prints, such as
 `src/main.rs:12:5`, `./build/out`, `~/notes.md`, or a `file://` hyperlink, to
-open it with the system's default application. Holding the modifier underlines
-the path under the pointer. Relative paths resolve against the pane's working
-directory, and a path opens only if it exists; the line and column are not
-passed on. Terminal output is untrusted, so a click never launches anything:
-only a plain folder or a non-executable document (text, source, Markdown, JSON,
-images, PDF, and similar) opens itself, judged by where symlinks lead. An
-application, script, or unknown file type opens the folder that holds it, and a
-network path opens nothing. A bare name needs a location (`main.rs:3`) to count as a path, and
+open it. Holding the modifier underlines the path under the pointer. Relative
+paths resolve against the pane's working directory, and a path opens only if it
+exists. A bare name needs a location (`main.rs:3`) to count as a path, and
 paths are not detected in panes on SSH hosts, whose files live on that host.
+
+A file opens in your terminal editor at the printed line, in a new pane split
+to the right of the pane that printed it (see [Code Navigation](#code-navigation)).
+Folders, images, videos, and PDFs open with the system's default application
+instead, as does every file with `open_files_in = "system"`. Alt-click
+(Option-click on macOS) opens a file in the other one. There, terminal output
+is untrusted, so a click never launches anything: only a plain folder or a
+non-executable document (text, source, Markdown, JSON, images, PDF, and
+similar) opens itself, judged by where symlinks lead. An application, script,
+or unknown file type opens the folder that holds it, and a network path opens
+nothing.
 
 Set `open_links_in = "browser-tab"` to open links in a [browser tab](#browser-tabs)
 instead. Alt-click (Option-click on macOS) opens a link in the other target.
@@ -1556,6 +1562,67 @@ the daemon exposes to clients:
   clipboard, local or remote, through the same bounded path as any pane. A plugin
   that runs a clipboard command such as `pbcopy` on a remote host writes that
   host's clipboard, not this one.
+
+## Code Navigation
+
+Herdr GPUI is not an editor, but it can get you to the right line quickly,
+next to the agent that is changing the code.
+
+- **Open in your editor.** Cmd-click (Ctrl-click elsewhere) a printed path
+  such as `src/main.rs:42` to open it at that line in your terminal editor, in
+  a new pane split to the right of the pane that printed it. In a
+  [review](#reviewing-an-agents-changes), `e` opens the file at the top of the
+  diff the same way. Quitting the editor closes its pane. When the editor is
+  Neovim, later files for the same tab open in that Neovim instead of a new
+  split, as [herdr-nvim](https://github.com/ChmaraX/herdr-nvim)'s sidebar
+  does.
+- **Go to Symbol** (`cmd-shift-o`) lists the functions, types, modules, and
+  constants of the focused pane's checkout; **Go to File** (`cmd-o`) lists its
+  files, and takes `file:line` to open at a line. Tab switches between the two.
+  Before you type, both start with what the agent is changing: the checkout's
+  uncommitted files, newest first, with their `+added −removed` line counts,
+  or the definitions in them.
+  Enter opens the result in your editor beside the focused pane;
+  Cmd-Enter (Ctrl-Enter elsewhere) opens it in a code tab instead.
+- **Code tabs** show a file read-only with syntax colouring and an outline of
+  its definitions, beside the workspace's terminals like any other tab. Click
+  an outline entry to jump to it, or a line to mark it. `j`/`k` and the arrows
+  scroll, Space and Page Up/Down page, `g`/`G` go to the top and bottom, `o`
+  shows or hides the outline, and `e` opens the marked line, or the top line in
+  view, in your editor.
+
+The editor is `$VISUAL`, then `$EDITOR`, then `vi`, as the new pane's shell
+sees them, started as `EDITOR +LINE FILE`. Set `editor_command` to choose
+another, with `{file}` and `{line}` placeholders where it needs them, such as
+`editor_command = "hx {file}:{line}"`. Placeholders may sit inside double
+quotes, as in `subl "{file}:{line}"`; either way the path stays one word. The command is typed into the pane's
+shell, so the file's path must not contain a quote, backslash, or control
+character; such a file opens in the system's application instead.
+
+A Neovim editor is started with `--listen` on a socket in this app's private
+state folder (`herdr/gpui/nvim` under `$XDG_STATE_HOME` or `~/.local/state`,
+created with mode 700), and
+reused with `nvim --server … --remote-expr`, which opens the file with `:drop`,
+so `nvim` must be on the app's `PATH`. If that Neovim has quit, the file opens
+in a new split; if it is busy, such as on a swap-file prompt, its pane comes
+forward to be answered. An `editor_command`
+naming `nvim` listens too; one with `{file}` or `{line}` runs exactly as
+written and is never reused.
+On Windows, where a pane's shell has no `sh` to start the editor with, printed
+paths open in the system's application and Go to Symbol and Go to File open
+code tabs.
+
+The symbol index is built in the background from the files Git lists (tracked
+files and untracked ones it does not ignore), and kept for the next search;
+an index older than 30 seconds is read again while the last one stays usable.
+Symbols come from each line's leading keywords, as `ctags` reads them, for
+Rust, Swift, Ruby, Python, Go, JavaScript and TypeScript, Kotlin, Java, C#,
+Elixir, Zig, and the types and macros of C-family files. This is a heuristic, not a language server:
+a definition a macro generates, or one split oddly across lines, is missed, and
+C and C++ functions are not listed. Only local checkouts are indexed. Limits
+keep a huge repository responsive: at most 100,000 files are listed, files over
+1 MiB or that are not UTF-8 text are skipped, and at most 300,000 symbols are
+kept. Code tabs read files up to 1 MiB and colour their first 20,000 lines.
 
 ## Editor Groups
 

@@ -142,6 +142,22 @@ impl Review {
         self.top_item().and_then(|item| self.row_at(item))
     }
 
+    /// Where the editor opens for the row at the top of the diff: its file,
+    /// relative to the checkout as Git names it, and the line in the
+    /// changed file nearest that row. A removed line or a hunk header goes
+    /// to the next line the file still has.
+    pub(super) fn editor_spot(&self) -> Option<(&str, Option<u32>)> {
+        let row = self.top_row()?;
+        let file = self.loaded()?.diff.files.get(row.file())?;
+        let line = match row {
+            RowId::Header(_) => None,
+            RowId::Line { line, .. } => file
+                .lines()
+                .and_then(|lines| lines.iter().skip(line).find_map(|line| line.new)),
+        };
+        Some((file.git_path(), line))
+    }
+
     /// The file whose rows are at the top of the diff.
     pub(super) fn top_file(&self) -> Option<usize> {
         self.top_item().map(Item::file)

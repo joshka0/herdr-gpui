@@ -436,6 +436,7 @@ impl HerdrWindow {
                         | Page::Themes
                         | Page::Fonts
                         | Page::Palette
+                        | Page::CodeSearch
                         | Page::Preferences
                         | Page::AppUpdate
                         | Page::GitHub
@@ -462,7 +463,12 @@ impl HerdrWindow {
             .when(
                 matches!(
                     page,
-                    Page::Keybinds | Page::Themes | Page::Fonts | Page::Palette | Page::Preferences
+                    Page::Keybinds
+                        | Page::Themes
+                        | Page::Fonts
+                        | Page::Palette
+                        | Page::CodeSearch
+                        | Page::Preferences
                 ),
                 |panel| {
                     panel
@@ -621,6 +627,8 @@ impl HerdrWindow {
             panel = panel.child(self.render_font_picker(cx));
         } else if page == Page::Palette {
             panel = panel.child(self.render_palette(cx));
+        } else if page == Page::CodeSearch {
+            panel = panel.child(self.render_code_search(cx));
         } else if page == Page::ConfirmClose {
             panel = panel.child(self.render_close_confirmation(cx));
         } else if page == Page::Preferences {

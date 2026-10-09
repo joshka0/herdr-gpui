@@ -83,6 +83,7 @@ pub(crate) struct MenuState {
     pub(crate) themes: Option<crate::theme_picker::ThemePicker>,
     pub(crate) fonts: Option<crate::font_picker::FontPicker>,
     pub(crate) palette: Option<crate::palette::Palette>,
+    pub(crate) code_search: Option<crate::code_search::CodeSearch>,
     pub(crate) close: Option<crate::close_modal::CloseConfirmation>,
     pub(crate) tab: Option<crate::tab_menu::TabMenu>,
     pub(crate) group: Option<crate::group_menu::GroupMenu>,
@@ -286,6 +287,7 @@ impl MenuState {
             themes: None,
             fonts: None,
             palette: None,
+            code_search: None,
             close: None,
             pr: Default::default(),
             pr_cache: Default::default(),
@@ -332,6 +334,7 @@ impl MenuState {
         }
         self.page = None;
         self.palette = None;
+        self.code_search = None;
         self.fonts = None;
         self.font_size_editor = None;
         self.selected = None;
