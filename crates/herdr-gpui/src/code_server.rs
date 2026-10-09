@@ -2,7 +2,20 @@
 //! load reports nothing back through the web view, so the VS Code panel and
 //! its settings page probe the server over plain HTTP first. Blocking: run it
 //! off the UI thread.
-use crate::{Error, Result, browser::WebUrl};
+//!
+//! The submodules start such a server for the panel: [`cli`] finds VS Code's
+//! command, [`token`] keeps the connection token, [`supervisor`] runs the
+//! child process, and [`launcher`] ties them to the windows and the config.
+mod cli;
+mod error;
+pub(crate) mod launcher;
+pub(crate) mod supervisor;
+mod token;
+
+pub use error::Error;
+pub(crate) use launcher::{Launcher, Startup};
+
+use crate::{Result, browser::WebUrl};
 use std::{fmt, io::Read, time::Duration};
 
 /// How long each request may take.
@@ -43,7 +56,7 @@ pub(crate) fn probe(url: &WebUrl) -> Result<Server> {
         .http_status_as_error(false)
         .build()
         .into();
-    let unreachable = |source: ureq::Error| Error::CodeUnreachable {
+    let unreachable = |source: ureq::Error| Error::Unreachable {
         address: url.address(),
         reason: NoAnswer::from(&source),
         source,
@@ -62,7 +75,7 @@ pub(crate) fn probe(url: &WebUrl) -> Result<Server> {
     let server = Some(status)
         .filter(|status| *status == 200 && read.is_ok())
         .and_then(|_| Server::from_version(&body))
-        .ok_or(Error::CodeNotServer { status })?;
+        .ok_or(Error::NotServer { status })?;
     // The token is accepted with a redirect that sets its cookie.
     match agent
         .get(url.as_str())
@@ -72,8 +85,8 @@ pub(crate) fn probe(url: &WebUrl) -> Result<Server> {
         .as_u16()
     {
         200..=399 => Ok(server),
-        401 | 403 => Err(Error::CodeTokenRefused),
-        status => Err(Error::CodeStatus(status)),
+        401 | 403 => Err(Error::TokenRefused.into()),
+        status => Err(Error::Status(status).into()),
     }
 }
 

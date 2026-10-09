@@ -151,7 +151,7 @@ fn answers(_: &WebUrl) -> crate::Result<Server> {
 }
 
 fn refuses(_: &WebUrl) -> crate::Result<Server> {
-    Err(crate::Error::CodeTokenRefused)
+    Err(crate::code_server::Error::TokenRefused.into())
 }
 
 /// Sets the server and how it answers, and shows the panel.

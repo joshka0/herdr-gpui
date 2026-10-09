@@ -357,7 +357,7 @@ impl HerdrWindow {
             (Some(page), None) => self.page_area(id, page).into_any_element(),
             // The VS Code tab says, as its panel does, why its page is not
             // there yet.
-            _ if tab.place.is_code() => self.render_code_status(failure.clone()),
+            _ if tab.place.is_code() => self.render_code_status(failure.clone(), cx),
             _ => div()
                 .flex_1()
                 .min_h_0()

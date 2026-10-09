@@ -8,7 +8,11 @@ use super::{
     store::Place,
     view::store,
 };
-use crate::{HerdrWindow, window::Flash};
+use crate::{
+    HerdrWindow,
+    code_server::{Launcher, Startup},
+    window::Flash,
+};
 use gpui::{prelude::*, *};
 
 impl HerdrWindow {
@@ -44,7 +48,8 @@ impl HerdrWindow {
         let existing = store(cx)
             .and_then(|store| store.code_tab(&scope, &workspace))
             .map(|tab| tab.id);
-        let id = match (existing, self.config.code.url.clone()) {
+        let startup = Launcher::startup(cx, &self.config.code);
+        let id = match (existing, startup.url(&self.config.code).cloned()) {
             (Some(id), _) => Some(id),
             (None, Some(url)) if super::EMBEDDED => {
                 let start = self.code_start(&url);
@@ -53,7 +58,19 @@ impl HerdrWindow {
                 })
             }
             (None, _) => {
-                self.show_flash(Flash::warning("Set the VS Code server in Settings"), cx);
+                let why = match startup {
+                    Startup::Finding => "Still looking for VS Code",
+                    Startup::Consent => "Accept VS Code's license in its panel or in Settings",
+                    // Its address is made as it starts, in a moment.
+                    Startup::Idle | Startup::Starting { .. } | Startup::Failed { .. } => {
+                        Launcher::want(cx, &self.config.code);
+                        "VS Code is starting. Try again in a moment."
+                    }
+                    Startup::Address | Startup::Missing | Startup::Ready { .. } => {
+                        "Set the VS Code server in Settings"
+                    }
+                };
+                self.show_flash(Flash::warning(why), cx);
                 return;
             }
         };

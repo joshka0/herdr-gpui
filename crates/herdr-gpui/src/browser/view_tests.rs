@@ -65,6 +65,11 @@ mod code_group;
 #[cfg(any(target_os = "macos", windows))]
 mod code_folder;
 
+/// The VS Code server the app starts: its license, its states, and when it
+/// starts. Only builds that show pages start one.
+#[cfg(any(target_os = "macos", windows))]
+mod code_start;
+
 /// Pages step aside under the status bar's tooltips; only builds that show
 /// pages have any.
 #[cfg(any(target_os = "macos", windows))]

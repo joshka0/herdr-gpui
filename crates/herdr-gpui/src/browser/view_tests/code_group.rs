@@ -12,7 +12,7 @@ fn run(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext, command: Command)
 }
 
 fn refuses(_: &WebUrl) -> crate::Result<Server> {
-    Err(crate::Error::CodeTokenRefused)
+    Err(crate::code_server::Error::TokenRefused.into())
 }
 
 /// The window with a VS Code server set, which refuses its token, and

@@ -114,7 +114,7 @@ impl HerdrWindow {
         );
     }
 
-    fn write_preference(
+    pub(crate) fn write_preference(
         &mut self,
         save: impl FnOnce() -> crate::Result<()> + Send + 'static,
         cx: &mut Context<Self>,

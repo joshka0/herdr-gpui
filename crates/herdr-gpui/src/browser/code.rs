@@ -9,13 +9,14 @@
 //! A page that cannot load says nothing back through the web view, so the
 //! window first asks the server whether it is there, and creates each page
 //! only after an answer of its own. Until then the panel says why it is
-//! empty.
+//! empty. The server is the one at `[code] url`, or the one the app starts
+//! (see [`crate::code_server::launcher`]).
 #[cfg(any(target_os = "macos", windows))]
 use super::{Location, TabId};
 use super::{Scope, Store, WebUrl, store::Place, view::store};
 use crate::{
     HerdrWindow,
-    code_server::{self, Server},
+    code_server::{self, Launcher, Server},
     window::Flash,
 };
 use gpui::{prelude::*, *};
@@ -133,16 +134,42 @@ impl HerdrWindow {
         self.open_code_page(false, window, cx);
     }
 
+    /// Whether the focused workspace needs its VS Code page: its panel
+    /// shows, or a group shows its tab.
+    fn code_page_wanted(&mut self, cx: &App) -> bool {
+        let Some((scope, workspace)) = self.browser_key() else {
+            return false;
+        };
+        match store(cx).and_then(|store| store.code_tab(&scope, &workspace)) {
+            Some(tab) if tab.place == Place::CodeGroup => {
+                let id = tab.id;
+                // The tab is in the groups, so the panel no longer shows,
+                // as when another window moved it there.
+                if let Some(layout) = self.browser.layouts.get_mut(&(scope, workspace)) {
+                    layout.code = false;
+                }
+                self.group_shows_page(id, cx)
+            }
+            _ => self.shown_code(),
+        }
+    }
+
     /// Opens the focused workspace's VS Code tab, and creates its page, if
-    /// the panel shows it or a group does, and its server answers. Creating
-    /// a page starts the platform's web content processes, so this runs from
-    /// input and ticks, never from render. `report` says why a tab could
-    /// not open.
+    /// the panel shows it or a group does, and its server answers. A server
+    /// the app starts is started here, the first time a page needs it.
+    /// Creating a page starts the platform's web content processes, so this
+    /// runs from input and ticks, never from render. `report` says why a tab
+    /// could not open.
     fn open_code_page(&mut self, report: bool, window: &mut Window, cx: &mut Context<Self>) {
         if !super::EMBEDDED {
             return;
         }
-        let Some(url) = self.config.code.url.clone() else {
+        let wanted = self.code_page_wanted(cx);
+        if wanted {
+            Launcher::want(cx, &self.config.code);
+        }
+        let startup = Launcher::startup(cx, &self.config.code);
+        let Some(url) = startup.url(&self.config.code).cloned() else {
             self.forget_code_address(cx);
             return;
         };
@@ -150,23 +177,15 @@ impl HerdrWindow {
             return;
         };
         self.follow_code_address(&url, cx);
-        let wanted = match store(cx).and_then(|store| store.code_tab(&scope, &workspace)) {
-            Some(tab) if tab.place == Place::CodeGroup => {
-                let id = tab.id;
-                // The tab is in the groups, so the panel no longer shows,
-                // as when another window moved it there.
-                if let Some(layout) = self
-                    .browser
-                    .layouts
-                    .get_mut(&(scope.clone(), workspace.clone()))
-                {
-                    layout.code = false;
-                }
-                self.group_shows_page(id, cx)
-            }
-            _ => self.shown_code(),
-        };
+        // A page left on a server that stopped would show VS Code's own
+        // reconnecting screen; the panel says why instead, and the page is
+        // made again, where it was, once the server is back.
+        #[cfg(any(target_os = "macos", windows))]
+        if matches!(startup, code_server::Startup::Failed { .. }) {
+            self.close_code_pages(cx);
+        }
         if !wanted
+            || !startup.serving()
             || self.code_page_settled(&scope, &workspace, cx)
             || !self.code_server_ready(&url, cx)
         {
