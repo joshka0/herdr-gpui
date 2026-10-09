@@ -401,7 +401,7 @@ impl HerdrWindow {
                 format!("Add {name} {}…", capitalized(noun)),
                 self.device_setup_unavailable()
                     .map(str::to_owned)
-                    .unwrap_or_else(|| format!("Create or attach a {name} {noun}")),
+                    .unwrap_or_else(|| crate::cloud::offer(provider).to_owned()),
                 false,
                 self.device_setup_unavailable().is_none(),
             ));

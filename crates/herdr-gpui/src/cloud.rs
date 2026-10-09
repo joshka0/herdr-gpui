@@ -89,6 +89,18 @@ pub(crate) fn name(provider: CloudProvider) -> &'static str {
     }
 }
 
+/// What the device picker's row for the provider offers.
+pub(crate) fn offer(provider: CloudProvider) -> &'static str {
+    match provider {
+        #[cfg(feature = "coder")]
+        CloudProvider::Coder => "Create or attach a Coder workspace",
+        // Its row opens Settings, where sandboxes are created; existing ones
+        // cannot be attached yet.
+        #[cfg(feature = "daytona")]
+        CloudProvider::Daytona => "Create a Daytona sandbox in Settings",
+    }
+}
+
 /// What the provider calls one machine.
 pub(crate) fn noun(provider: CloudProvider) -> &'static str {
     match provider {
