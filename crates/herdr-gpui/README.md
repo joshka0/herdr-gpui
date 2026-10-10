@@ -2324,14 +2324,23 @@ records when reporting the failure.
    Unsupported upstreams fail closed rather than matching an unrelated fork.
   On macOS and Linux, all socket modes (including explicit/inherited sockets)
   require a same-user kernel peer (`getpeereid` on macOS, `SO_PEERCRED` on
-  Linux) at the standard configured session socket, with owned,
-  non-group/world-writable socket and parent. Executable upgrades/removal do not
+  Linux) at the standard configured session socket. The socket must be owned by
+  your user and not group/world-writable; its parent must be owned by your user
+  and not world-writable. Group-writable directories such as `775`, commonly
+  created by a umask of `002`, are accepted. Executable upgrades/removal do not
   invalidate this local endpoint trust. Sockets elsewhere remain blocked; a
   same-user proxy deliberately replacing the trusted socket is not detectable.
   Reconnect rechecks the endpoint. A refused endpoint hides local Git actions and
   reviews and logs `Daemon endpoint not trusted as local` with the failed check.
-  `DirectoryPermissions` usually means a umask of 002 created the session
-  directory group-writable; `chmod g-w` on it and reconnect.
+  A local peer or permissions failure also produces an in-app toast once the
+  terminal connects, explaining why Git/PR details are unavailable and how to
+  restore them. It appears once per connection even when daemon notifications
+  are muted; permission failures include a quoted command on its own line for
+  the affected socket or directory and a reminder to reconnect the GUI. Intentionally
+  non-local sockets do not produce this toast.
+  `DirectoryPermissions` means the session directory's ownership could not be
+  verified or it is world-writable; check ownership, remove world-write access
+  with `chmod o-w` on it, and reconnect.
   On a saved SSH device, the checkout lives on that host, so local Git cannot
   verify it. The worker instead reads the repository's `remote.origin.url` over
   the same noninteractive SSH options as the bridge (`BatchMode=yes`, strict host
