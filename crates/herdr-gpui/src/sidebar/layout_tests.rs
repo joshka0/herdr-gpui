@@ -494,6 +494,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         sessions_anchor: Default::default(),
         activation_deadline: None,
         pending_navigation: None,
+        strip_navigation_fits: true,
         pending_toast: None,
         toasts_hidden: false,
         pending_releases: Vec::new(),

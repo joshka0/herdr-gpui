@@ -1011,7 +1011,10 @@ mouse's side buttons anywhere in the window. Each platform draws the pair its
 own way: macOS joins two chevrons in one segmented bezel as Finder and Xcode
 do, Windows uses Fluent's subtle arrow buttons as File Explorer does, and
 Linux uses GNOME's flat rounded header bar buttons. A header narrower than
-320px leaves them out so the account and window controls stay reachable.
+320px leaves them out so the account and window controls stay reachable, and
+a strip squeezed by the sidebar, a panel, or a split gives up its tabs' room
+first, then drops the pair whole before the trailing controls would be
+pushed out.
 
 macOS keeps `Some(TitlebarOptions)` and the native Herdr window title/traffic lights,
 with transparent chrome and lights positioned at (9, 9) logical pixels. A full-width

@@ -7,13 +7,19 @@
 //! strip keeps empty room that moves the window, however many tabs it holds;
 //! more tabs than fit still scroll.
 
-use super::{HEIGHT, LEADING, movable};
+use super::{HEIGHT, LEADING, movable, navigation::Style};
 use crate::{HerdrWindow, browser::GroupId, herdr_settings::TabBarPosition, sidebar::SidebarMode};
 use gpui::{prelude::*, *};
 
 /// Empty room a strip keeps after its tabs so the window can always be
 /// moved from it, even when its tabs overflow.
 pub(crate) const DRAG_ROOM: f32 = 40.;
+
+/// How readily the strip's leading controls give up width: far less than the
+/// tabs, which shrink first, so they only narrow once the tabs have none.
+/// Flex shrinking weighs this by the base width, so it stays negligible next
+/// to any tab row.
+const NAVIGATION_SHRINK: f32 = 0.001;
 
 /// Which window corners a group's strip reaches, so the bar's leading and
 /// trailing parts land in the strips at the window's edges.
@@ -95,16 +101,22 @@ impl HerdrWindow {
     /// leaves the traffic lights, the toggle when the sidebar header does not
     /// show it, then Back and Forward.
     pub(crate) fn strip_leading(&self, window: &Window, cx: &mut Context<Self>) -> Div {
+        // Unlike the header, the strip shares its row with tabs and the
+        // trailing controls, at a width set by the sidebar, panels and group
+        // shares. The leading part may shrink, after the tabs and before
+        // anything else, so the window controls are never pushed out.
         let leading = div()
             .debug_selector(|| "strip-titlebar-leading".into())
             .flex()
-            .flex_none()
+            .flex_shrink(NAVIGATION_SHRINK)
+            .min_w_0()
+            .overflow_hidden()
             .items_center();
         let mode = self.sidebar_mode();
         // An expanded sidebar's header keeps the toggle, and Back and Forward
         // open the content beside it, as Finder's toolbar does.
         if mode == SidebarMode::Expanded {
-            return leading.pl(px(6.)).child(self.navigation(cx));
+            return leading.pl(px(6.)).child(self.strip_navigation(cx));
         }
         let column = mode
             .width(self.sidebar_width, f32::from(window.viewport_size().width))
@@ -118,7 +130,47 @@ impl HerdrWindow {
                 window,
             ))
             .child(self.sidebar_toggle(cx))
-            .child(self.navigation(cx))
+            .child(self.strip_navigation(cx))
+    }
+
+    /// Back and Forward in a slot that keeps their width but is the one part
+    /// of the leading controls that can shrink. They draw only when the slot
+    /// last got its full width, so a squeezed strip drops them whole rather
+    /// than clipping a button. The slot's size never depends on whether they
+    /// draw, so the choice cannot flip from one frame to the next.
+    fn strip_navigation(&self, cx: &mut Context<Self>) -> Div {
+        let width = Style::NATIVE.width();
+        let view = cx.entity().downgrade();
+        div()
+            .relative()
+            .flex()
+            .items_center()
+            .self_stretch()
+            .w(px(width))
+            .min_w_0()
+            // The only part of the leading controls that shrinks, so all of
+            // their lost width comes out of it.
+            .flex_shrink(1.)
+            .overflow_hidden()
+            .child(
+                canvas(
+                    move |bounds, _, cx| {
+                        let fits = bounds.size.width >= px(width - 0.5);
+                        let _ = view.update(cx, |this, cx| {
+                            if this.strip_navigation_fits != fits {
+                                this.strip_navigation_fits = fits;
+                                cx.notify();
+                            }
+                        });
+                    },
+                    |_, _, _, _| {},
+                )
+                .absolute()
+                .size_full(),
+            )
+            .when(self.strip_navigation_fits, |slot| {
+                slot.child(self.navigation(cx))
+            })
     }
 
     /// What ends the rightmost strip: the same controls the header ends with.

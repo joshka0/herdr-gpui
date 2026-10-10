@@ -186,3 +186,30 @@ fn a_bottom_tab_bar_keeps_the_header(cx: &mut TestAppContext) {
         assert!(cx.debug_bounds(gone).is_none(), "{gone}");
     }
 }
+
+#[gpui::test]
+fn a_squeezed_strip_drops_back_and_forward_before_the_account(cx: &mut TestAppContext) {
+    let (view, cx) = window(cx);
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            view.sidebar_width = Some(340.);
+            cx.notify();
+        })
+    });
+    // Too narrow for the tabs, Back and Forward, and the trailing controls
+    // beside a wide sidebar.
+    for _ in 0..2 {
+        cx.simulate_resize(size(px(480.), px(600.)));
+        draw(cx);
+    }
+    let avatar = cx.debug_bounds("titlebar-avatar").unwrap();
+    assert!(avatar.right() <= px(480.), "{avatar:?}");
+    assert!(cx.debug_bounds("titlebar-back").is_none());
+    assert!(!view.read_with(cx, |view, _| view.strip_navigation_fits));
+    // Given the room back, they return, and stay put across frames.
+    for _ in 0..3 {
+        cx.simulate_resize(size(px(1200.), px(600.)));
+        draw(cx);
+        assert!(cx.debug_bounds("titlebar-back").is_some());
+    }
+}
