@@ -19,9 +19,9 @@ use std::{
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Helpers defined once per remote session. `herdr_field` prints the string
-/// or number at a JSON path from stdin, preferring a real parser and falling
-/// back to matching the last key when the host has neither. Remote sessions
-/// need an `ssh` child, which only Unix clients start.
+/// or number at a JSON path from stdin. A real parser is required: matching
+/// only the last key can select another provider's credentials. Remote
+/// sessions need an `ssh` child, which only Unix clients start.
 #[cfg(unix)]
 const PRELUDE: &str = r#"PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.bun/bin:$HOME/.npm-global/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 export PATH
@@ -41,8 +41,7 @@ sys.stdout.write(str(v))' "$@" 2>/dev/null
         done
         jq -j "$herdr_path // empty" 2>/dev/null
     else
-        for herdr_last in "$@"; do :; done
-        sed -n "s/.*\"$herdr_last\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([^\",}]*\)\"\{0,1\}.*/\1/p" | head -n 1 | tr -d '\n'
+        return 1
     fi
 }
 "#;
