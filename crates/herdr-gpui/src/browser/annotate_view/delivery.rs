@@ -66,7 +66,7 @@ impl HerdrWindow {
         let pane_id = tab.origin.clone();
         let here = super::super::view::scope(&self.endpoints[self.selected_endpoint]) == tab.scope;
         self.with_notes_prompt(tab, cx, move |this, text, cx| {
-            this.deliver_notes(pane_id, here, text, cx);
+            let _ = this.deliver_notes(pane_id, here, text, cx);
         });
         self.clear_notes(tab.id, cx);
     }

@@ -545,7 +545,7 @@ impl HerdrWindow {
             review.notes.clear();
             review.refresh_marks();
         }
-        self.deliver_notes(pane, here, text, cx);
+        let _ = self.deliver_notes(pane, here, text, cx);
         cx.notify();
     }
 

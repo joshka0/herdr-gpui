@@ -83,7 +83,7 @@ pub(crate) enum NotesTo {
     /// To the agent: a window showing its pane types them in once it is
     /// idle, or a waiting `browser feedback --wait` takes them.
     Agent,
-    /// Kept for `browser feedback`, since no window shows the pane.
+    /// Kept for `browser feedback`, since no window can type into an agent there.
     Kept,
 }
 

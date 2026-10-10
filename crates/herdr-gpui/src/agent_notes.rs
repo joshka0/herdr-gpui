@@ -4,8 +4,8 @@
 //! --wait`, otherwise pasted into its pane once it is idle, and kept for
 //! `browser feedback` when its pane is gone or must not be typed into.
 use crate::{
-    HerdrWindow, browser::Feedback, connection::ConnectionBridge, terminal::InputTarget,
-    window::Flash,
+    HerdrWindow, browser::Feedback, connection::ConnectionBridge, control::NotesTo,
+    terminal::InputTarget, window::Flash,
 };
 use gpui::{ClipboardItem, Context};
 use herdr_client::protocol::{
@@ -68,20 +68,21 @@ impl HerdrWindow {
     /// Sends `text` to the agent in `pane_id`. `here` says whether this
     /// window shows the daemon that pane belongs to; only then can it be
     /// typed into. `None` copies the notes, since no agent asked for them.
+    /// Returns the pane delivery outcome, or `None` when copied.
     pub(crate) fn deliver_notes(
         &mut self,
         pane_id: Option<String>,
         here: bool,
         text: String,
         cx: &mut Context<Self>,
-    ) {
+    ) -> Option<NotesTo> {
         let Some(pane_id) = pane_id else {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
             self.show_flash(
                 Flash::success("No agent to send to, so the notes were copied"),
                 cx,
             );
-            return;
+            return None;
         };
         let waiting = cx
             .try_global::<Feedback>()
@@ -93,10 +94,13 @@ impl HerdrWindow {
                 .iter()
                 .any(|candidate| candidate.pane_id == pane_id)
         });
-        let flash = if waiting {
+        let (to, flash) = if waiting {
             cx.default_global::<Feedback>()
                 .keep(crate::browser::Batch { pane_id, text });
-            Flash::success("Notes sent to the waiting agent")
+            (
+                NotesTo::Agent,
+                Flash::success("Notes sent to the waiting agent"),
+            )
         } else if let Some((snapshot, found)) =
             shown.and_then(|snapshot| Some((snapshot, agent(snapshot, &pane_id)?)))
         {
@@ -110,37 +114,43 @@ impl HerdrWindow {
                 text,
                 until: Instant::now() + HOLD,
             });
-            if busy {
+            let flash = if busy {
                 Flash::success("Notes will go to the agent once it is idle")
             } else {
                 Flash::success("Notes sent to the agent")
-            }
+            };
+            (NotesTo::Agent, flash)
         } else if shown.is_some() {
             // A shell, not an agent: Enter there would run the notes.
             cx.default_global::<Feedback>()
                 .keep(crate::browser::Batch { pane_id, text });
-            Flash::warning("No agent runs in that pane; notes kept for `browser feedback`")
+            (
+                NotesTo::Kept,
+                Flash::warning("No agent runs in that pane; notes kept for `browser feedback`"),
+            )
         } else {
             cx.default_global::<Feedback>()
                 .keep(crate::browser::Batch { pane_id, text });
-            Flash::warning("The agent's pane is not here; notes kept for `browser feedback`")
+            (
+                NotesTo::Kept,
+                Flash::warning("The agent's pane is not here; notes kept for `browser feedback`"),
+            )
         };
         self.show_flash(flash, cx);
+        Some(to)
     }
 
     /// Delivers notes a control request sent, if this window shows the
     /// caller's pane on its selected endpoint, the only one it types into.
-    /// `false` leaves them to another window.
+    /// `None` leaves them to another window.
     #[cfg(unix)]
     pub(crate) fn deliver_requested_notes(
         &mut self,
         target: &crate::control::Target<'_>,
         text: &str,
         cx: &mut Context<Self>,
-    ) -> bool {
-        let Some(pane) = target.pane else {
-            return false;
-        };
+    ) -> Option<NotesTo> {
+        let pane = target.pane?;
         let ours = target.daemon.is_none_or(|daemon| {
             self.endpoints[self.selected_endpoint]
                 .connection
@@ -157,10 +167,9 @@ impl HerdrWindow {
                 .any(|candidate| candidate.pane_id == pane)
         });
         if !(ours && shown) {
-            return false;
+            return None;
         }
-        self.deliver_notes(Some(pane.to_owned()), true, text.to_owned(), cx);
-        true
+        self.deliver_notes(Some(pane.to_owned()), true, text.to_owned(), cx)
     }
 
     /// Pastes held notes into agents that became idle. Runs every tick.

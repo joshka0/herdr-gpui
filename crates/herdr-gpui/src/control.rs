@@ -21,7 +21,6 @@ use gpui::App;
 pub use protocol::ErrorCode;
 #[cfg(any(unix, feature = "mockup"))]
 use protocol::NotesRequest;
-#[cfg(any(unix, feature = "mockup"))]
 pub(crate) use protocol::NotesTo;
 use protocol::{
     BrowserOpen, Caller, FeedbackRequest, MAX_WAIT_SECONDS, OpenedIn, Page, Request, Response,
@@ -246,8 +245,8 @@ fn notes(request: &NotesRequest, cx: &mut App) -> Response {
         let taken = handle.update(cx, |view, _, cx| {
             view.deliver_requested_notes(&target, &text, cx)
         });
-        if matches!(taken, Ok(true)) {
-            return Response::NotesSent { to: NotesTo::Agent };
+        if let Ok(Some(to)) = taken {
+            return Response::NotesSent { to };
         }
     }
     let feedback = cx.default_global::<Feedback>();

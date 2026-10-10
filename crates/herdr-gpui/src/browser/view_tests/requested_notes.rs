@@ -1,5 +1,7 @@
 use super::*;
-use crate::control::Target;
+use crate::control::{NotesTo, Target};
+
+mod outcomes;
 
 /// A snapshot where pane `w0:p1` runs an idle agent.
 fn with_idle_agent(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) {
@@ -29,7 +31,7 @@ fn deliver(
     cx: &mut VisualTestContext,
     daemon: Option<&str>,
     pane: &str,
-) -> bool {
+) -> Option<NotesTo> {
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
             let target = Target {
@@ -46,14 +48,12 @@ fn deliver(
 fn requested_notes_go_only_to_a_pane_the_window_shows(cx: &mut gpui::TestAppContext) {
     let (view, cx) = window(cx);
     with_idle_agent(&view, cx);
-    assert!(!deliver(&view, cx, None, "w0:p9"));
+    assert_eq!(deliver(&view, cx, None, "w0:p9"), None);
     // The same pane ID in another daemon's session is not this one.
-    assert!(!deliver(
-        &view,
-        cx,
-        Some("/elsewhere/herdr-client.sock"),
-        "w0:p1"
-    ));
+    assert_eq!(
+        deliver(&view, cx, Some("/elsewhere/herdr-client.sock"), "w0:p1"),
+        None
+    );
     view.read_with(cx, |view, _| assert_eq!(view.deliveries.len(), 0));
     let socket = view.read_with(cx, |view, _| {
         view.endpoints[0]
@@ -63,7 +63,10 @@ fn requested_notes_go_only_to_a_pane_the_window_shows(cx: &mut gpui::TestAppCont
             .ok()
             .map(|path| path.to_string_lossy().into_owned())
     });
-    assert!(deliver(&view, cx, socket.as_deref(), "w0:p1"));
+    assert_eq!(
+        deliver(&view, cx, socket.as_deref(), "w0:p1"),
+        Some(NotesTo::Agent)
+    );
     // Queued for the idle agent's prompt, the way page notes are.
     view.read_with(cx, |view, _| assert_eq!(view.deliveries.len(), 1));
 }

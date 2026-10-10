@@ -131,7 +131,10 @@ test-build: build-release
 check-file-size:
     bash scripts/check-file-size.sh
 
-ci: format-check check-file-size lint test
+test-mockup-wait:
+    python3 .claude/skills/gpui-mockup/scripts/test_wait.py
+
+ci: format-check check-file-size lint test test-mockup-wait
 
 # Cross type-check the Windows target without a Windows machine. CI lints the
 # MSVC target on a Windows runner; this uses the GNU target because a Mac or
