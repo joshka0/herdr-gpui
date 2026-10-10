@@ -32,7 +32,15 @@ fn the_sidebar_toggle_stays_at_the_left_edge_without_traffic_lights(cx: &mut Tes
                     let header = cx.debug_bounds("sidebar-titlebar").unwrap();
                     assert!(header.contains(&collapsed.origin));
                     assert!(header.contains(&collapsed.bottom_right()));
-                    assert!(cx.debug_bounds("strip-titlebar-leading").is_none());
+                    let leading = cx.debug_bounds("strip-titlebar-leading").unwrap();
+                    assert!(!leading.contains(&collapsed.center()));
+                    for selector in ["titlebar-back", "titlebar-forward"] {
+                        let button = cx.debug_bounds(selector).unwrap();
+                        assert!(leading.contains(&button.origin));
+                        assert!(button.right() <= leading.right());
+                        assert!(button.bottom() <= leading.bottom());
+                        assert!(button.left() >= header.right());
+                    }
                 }
                 cx.simulate_click(expanded.center(), Modifiers::default());
                 draw(cx);
