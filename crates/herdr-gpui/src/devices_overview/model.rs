@@ -57,6 +57,19 @@ impl Tally {
     }
 }
 
+/// A reachable device's agents, counted straight from its snapshot, or None
+/// while it cannot be reached. The tick and the sidebar's headers need only
+/// this, not a whole [`Device`].
+pub(crate) fn online_tally(endpoint: &Endpoint, live: &LiveState) -> Option<Tally> {
+    if !endpoint.enabled || !live.status.is_connected() {
+        return None;
+    }
+    let snapshot = live.snapshot.as_deref()?;
+    Some(Tally::of(
+        snapshot.agents.iter().map(|agent| agent.agent_status),
+    ))
+}
+
 /// Whether a device can be reached.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Link {

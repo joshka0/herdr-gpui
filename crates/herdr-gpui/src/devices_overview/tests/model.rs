@@ -69,3 +69,34 @@ fn the_chart_axis_always_spans_two_hours() {
     assert_eq!(long.len(), STEPS + 1);
     assert_eq!(long.last(), Some(&Some(STEPS + 4)), "the newest steps stay");
 }
+
+#[test]
+fn only_a_reachable_device_is_counted() {
+    use crate::{devices_overview::online_tally, state::ConnectionStatus};
+    let endpoint = |enabled| {
+        crate::endpoint::Endpoint::new(
+            "ssh:box".into(),
+            "box".into(),
+            herdr_client::ConnectTarget::Ssh {
+                target: "box".into(),
+                session: "default".into(),
+            },
+            enabled,
+        )
+    };
+    let mut live = crate::state::LiveState::default();
+    live.snapshot = Some(std::sync::Arc::new(crate::sidebar::layout_tests::snapshot(
+        1,
+    )));
+    assert_eq!(online_tally(&endpoint(true), &live), None, "not connected");
+    live.status = ConnectionStatus::Connected;
+    let tally = online_tally(&endpoint(true), &live).unwrap();
+    assert_eq!(tally.total(), live.snapshot.as_ref().unwrap().agents.len());
+    assert_eq!(online_tally(&endpoint(false), &live), None, "disabled");
+    live.snapshot = None;
+    assert_eq!(
+        online_tally(&endpoint(true), &live),
+        None,
+        "no snapshot yet"
+    );
+}

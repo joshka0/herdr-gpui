@@ -251,9 +251,8 @@ impl HerdrWindow {
         } else {
             &endpoint.live
         };
-        let device = crate::devices_overview::Device::new(index, endpoint, live);
-        (device.link == crate::devices_overview::Link::Online)
-            .then(|| format!("{}/{}", device.tally.working, device.tally.total()))
+        let tally = crate::devices_overview::online_tally(endpoint, live)?;
+        Some(format!("{}/{}", tally.working, tally.total()))
     }
 
     /// Each host header the spaces list last laid out, at its current scroll

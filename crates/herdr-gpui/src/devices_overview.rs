@@ -18,7 +18,7 @@ mod view;
 mod tests;
 
 pub(crate) use chart::sparkline;
-pub(crate) use model::{Device, Link, Tally};
+pub(crate) use model::{Device, Link, Tally, online_tally};
 
 use crate::{
     HerdrWindow,
@@ -134,17 +134,23 @@ impl HerdrWindow {
     pub(crate) fn poll_devices_overview(&mut self, cx: &mut Context<Self>) {
         let now = std::time::Instant::now();
         let wall = std::time::SystemTime::now();
-        let counts: Vec<(String, history::Counts)> = self
-            .overview_devices()
-            .into_iter()
-            .filter(|device| device.link == Link::Online)
-            .map(|device| (device.id, device.tally.counts()))
-            .collect();
-        self.devices_overview.history.observe(
-            now,
-            wall,
-            counts.iter().map(|(id, counts)| (id.as_str(), *counts)),
-        );
+        // Counted straight from each snapshot: this runs every tick, open
+        // overview or not, and needs none of a row's display data.
+        let selected = self.selected_endpoint;
+        let counts = self
+            .endpoints
+            .iter()
+            .enumerate()
+            .filter_map(|(index, endpoint)| {
+                let live = if index == selected {
+                    &self.live
+                } else {
+                    &endpoint.live
+                };
+                let tally = online_tally(endpoint, live)?;
+                Some((endpoint.id.as_str(), tally.counts()))
+            });
+        self.devices_overview.history.observe(now, wall, counts);
         self.sync_tree_search(cx);
         let Some(store) = cx.try_global::<Store>() else {
             self.devices_overview.pages.clear();

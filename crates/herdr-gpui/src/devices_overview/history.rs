@@ -89,10 +89,15 @@ impl History {
         let Some(step) = self.current.as_mut() else {
             return;
         };
+        // A device already seen this step is updated in place, so most ticks
+        // allocate nothing.
         for (id, counts) in devices {
-            step.entry(id.to_owned())
-                .and_modify(|seen| *seen = seen.peak(counts))
-                .or_insert(counts);
+            match step.get_mut(id) {
+                Some(seen) => *seen = seen.peak(counts),
+                None => {
+                    step.insert(id.to_owned(), counts);
+                }
+            }
         }
     }
 
