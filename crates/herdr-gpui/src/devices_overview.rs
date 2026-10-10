@@ -177,9 +177,7 @@ impl HerdrWindow {
         for page in self.devices_overview.pages.values() {
             let (font, theme) = (self.config.ui.clone(), self.theme.clone());
             page.search.update(cx, |input, cx| {
-                if !input.appearance_matches(&font, &theme) {
-                    input.set_appearance(font, theme, cx);
-                }
+                input.set_appearance(font, theme, cx);
             });
         }
     }
@@ -196,9 +194,7 @@ impl HerdrWindow {
             Some(search) => {
                 let theme = self.theme.clone();
                 search.input.update(cx, |input, cx| {
-                    if !input.appearance_matches(&font, &theme) {
-                        input.set_appearance(font, theme, cx);
-                    }
+                    input.set_appearance(font, theme, cx);
                 });
             }
             None => {

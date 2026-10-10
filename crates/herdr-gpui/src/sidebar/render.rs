@@ -48,6 +48,19 @@ impl HerdrWindow {
         let spaces_custom = self.config.usage.inline
             && self.config.sidebar_layout.spaces != crate::config::SpaceLayout::default();
         let theme = &self.theme;
+        self.sidebar_search.input.update(cx, |input, cx| {
+            input.set_appearance(self.config.ui.clone(), theme.clone(), cx);
+        });
+        // The Devices layout heads every device, even a lone one, and lists
+        // its agents under it in place of its workspaces. Its own field
+        // narrows that tree in place, so the sidebar's search, whose results
+        // replace the list, gives way to it; one setting hides either.
+        let devices = !self.config.layout.mode.lists_workspaces();
+        // A hidden field keeps whatever it held, but never filters the list.
+        let searchable = self.config.show_sidebar_search && !devices;
+        let tree_search = self.config.show_sidebar_search && devices;
+        let search = (searchable && self.sidebar_search.query().is_some())
+            .then(|| self.sidebar_search_results(self.sidebar_search_hits(), indicators, look, cx));
         let mut spaces = div()
             .id("spaces-scroll")
             .debug_selector(|| "spaces-scroll".into())
@@ -67,12 +80,9 @@ impl HerdrWindow {
         spaces = spaces.track_scroll(&self.sidebar_scroll[0]);
         agents = agents.track_scroll(&self.sidebar_scroll[1]);
         let multi = self.endpoints.len() > 1;
-        // The Devices layout heads every device, even a lone one, and lists
-        // its agents under it in place of its workspaces.
-        let devices = !self.config.layout.mode.lists_workspaces();
         let headed = multi || devices;
         let agents_panel = self.config.show_agents && !devices;
-        let query = if devices {
+        let query = if tree_search {
             self.device_tree_query(cx)
         } else {
             String::new()
@@ -627,7 +637,10 @@ impl HerdrWindow {
                         theme,
                         look,
                     ))
-                    .children(devices.then(|| self.device_tree_search(look)).flatten())
+                    .when(searchable, |section| {
+                        section.child(self.sidebar_search_field(look, cx))
+                    })
+                    .children(tree_search.then(|| self.device_tree_search(look)).flatten())
                     // The wrapper clips the pinned header as the next host's
                     // pushes it up, so it never paints over the title above.
                     .child(
@@ -638,8 +651,10 @@ impl HerdrWindow {
                             .flex()
                             .flex_col()
                             .overflow_hidden()
-                            .child(spaces)
-                            .children(pinned_host),
+                            .map(|list| match search {
+                                Some(results) => list.child(results),
+                                None => list.child(spaces).children(pinned_host),
+                            }),
                     )
                     .child(
                         div()

@@ -125,3 +125,35 @@ fn configured_agent_rows_apply_under_each_device(cx: &mut gpui::TestAppContext) 
         "the third configured line is drawn"
     );
 }
+
+/// The Devices layout has one search field: its own, which narrows the tree
+/// in place, stands in for the sidebar's, and the setting hides either.
+#[gpui::test]
+fn one_search_field_and_one_setting_for_both(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = devices_window(cx);
+    assert!(cx.debug_bounds("device-tree-search").is_some());
+    assert!(cx.debug_bounds("sidebar-search").is_none());
+
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            view.config.show_sidebar_search = false;
+            cx.notify();
+        })
+    });
+    cx.update(|window, cx| full_draw(window, cx).clear(cx));
+    assert!(cx.debug_bounds("device-tree-search").is_none());
+    assert!(cx.debug_bounds("sidebar-search").is_none());
+    // A hidden field's text no longer filters the tree.
+    assert!(cx.debug_bounds("host-local").is_some());
+
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            view.config.show_sidebar_search = true;
+            view.config.layout.mode = LayoutMode::default();
+            cx.notify();
+        })
+    });
+    cx.update(|window, cx| full_draw(window, cx).clear(cx));
+    assert!(cx.debug_bounds("sidebar-search").is_some());
+    assert!(cx.debug_bounds("device-tree-search").is_none());
+}
