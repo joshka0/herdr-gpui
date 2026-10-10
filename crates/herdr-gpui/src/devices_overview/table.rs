@@ -27,8 +27,8 @@ const METER_WIDTH: f32 = 64.;
 const AGENT_INDENT: f32 = 31.;
 
 /// A row's cells: the device, its agents, then the load columns as one
-/// group, so a narrow tab wraps that group onto a line of its own. The header
-/// is laid out the same way, so it wraps in step with every row.
+/// group, so a narrow tab wraps that group onto a line of its own, then wraps
+/// its columns if needed. The header wraps in step with every row.
 fn cells(
     device: impl IntoElement,
     agents: impl IntoElement,
@@ -45,16 +45,26 @@ fn cells(
         .child(div().flex_none().w(px(COLUMNS[0].1)).child(agents))
         .child(
             div()
-                .debug_selector(move || selector)
+                .debug_selector({
+                    let selector = selector.clone();
+                    move || selector
+                })
                 .flex()
                 .flex_none()
+                .max_w_full()
+                .flex_wrap()
                 .items_center()
                 .gap_3()
-                .children(
-                    load.into_iter()
-                        .zip(&COLUMNS[1..])
-                        .map(|(cell, (_, width))| div().flex_none().w(px(*width)).child(cell)),
-                ),
+                .children(load.into_iter().zip(&COLUMNS[1..]).enumerate().map(
+                    |(index, (cell, (_, width)))| {
+                        let selector = format!("{selector}-{index}");
+                        div()
+                            .debug_selector(move || selector)
+                            .flex_none()
+                            .w(px(*width))
+                            .child(cell)
+                    },
+                )),
         )
 }
 

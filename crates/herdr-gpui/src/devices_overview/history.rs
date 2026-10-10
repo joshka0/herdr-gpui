@@ -5,7 +5,7 @@
 
 use std::{
     collections::{HashMap, VecDeque},
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 
 /// One step of the activity chart.
@@ -38,8 +38,10 @@ pub(crate) type Step = HashMap<String, Counts>;
 pub(crate) struct History {
     /// Finished steps, oldest first, at most [`STEPS`].
     steps: VecDeque<Step>,
-    /// The step still being counted, and when it began.
-    current: Option<(Instant, Step)>,
+    /// The step still being counted and elapsed time within it.
+    current: Option<Step>,
+    into_step: Duration,
+    last_observed: Option<(Instant, SystemTime)>,
 }
 
 impl History {
@@ -49,18 +51,33 @@ impl History {
     pub fn observe<'a>(
         &mut self,
         now: Instant,
+        wall: SystemTime,
         devices: impl IntoIterator<Item = (&'a str, Counts)>,
     ) {
-        let (started, step) = self.current.get_or_insert_with(|| (now, Step::new()));
-        let elapsed = now.saturating_duration_since(*started);
+        let elapsed = self.last_observed.replace((now, wall)).map_or(
+            Duration::ZERO,
+            |(instant, previous_wall)| {
+                let awake = now.saturating_duration_since(instant);
+                let passed = wall.duration_since(previous_wall).unwrap_or_default();
+                // Like the wake detector, ignore small clock slews. A forward
+                // adjustment of five seconds or more looks like sleep; a
+                // backward adjustment must not freeze or rewind the history.
+                if passed.saturating_sub(awake) >= Duration::from_secs(5) {
+                    passed
+                } else {
+                    awake
+                }
+            },
+        );
+        let elapsed = self.into_step.saturating_add(elapsed);
+        let step = self.current.get_or_insert_with(Step::new);
+        self.into_step = elapsed;
         if elapsed >= STEP {
             let finished = std::mem::take(step);
             let passed = elapsed.as_nanos() / STEP.as_nanos();
             // The new step began on the step clock, not at this observation.
             let into = elapsed.as_nanos() % STEP.as_nanos();
-            *started = now
-                .checked_sub(Duration::from_nanos(u64::try_from(into).unwrap_or(0)))
-                .unwrap_or(now);
+            self.into_step = Duration::from_nanos(u64::try_from(into).unwrap_or(0));
             self.push(finished);
             // Up to a full history of empty steps, which pushes out
             // everything older than the sleep.
@@ -69,7 +86,7 @@ impl History {
                 self.push(Step::new());
             }
         }
-        let Some((_, step)) = self.current.as_mut() else {
+        let Some(step) = self.current.as_mut() else {
             return;
         };
         for (id, counts) in devices {
@@ -88,9 +105,7 @@ impl History {
 
     /// Every step oldest first, ending with the one still being counted.
     pub fn steps(&self) -> impl Iterator<Item = &Step> {
-        self.steps
-            .iter()
-            .chain(self.current.as_ref().map(|(_, step)| step))
+        self.steps.iter().chain(self.current.as_ref())
     }
 
     /// All devices' agents per step, oldest first.

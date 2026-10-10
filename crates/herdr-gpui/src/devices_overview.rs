@@ -133,6 +133,7 @@ impl HerdrWindow {
     /// workspace a page, and drops the pages of closed tabs.
     pub(crate) fn poll_devices_overview(&mut self, cx: &mut Context<Self>) {
         let now = std::time::Instant::now();
+        let wall = std::time::SystemTime::now();
         let counts: Vec<(String, history::Counts)> = self
             .overview_devices()
             .into_iter()
@@ -141,6 +142,7 @@ impl HerdrWindow {
             .collect();
         self.devices_overview.history.observe(
             now,
+            wall,
             counts.iter().map(|(id, counts)| (id.as_str(), *counts)),
         );
         self.sync_tree_search(cx);

@@ -231,6 +231,7 @@ impl HerdrWindow {
     ) -> Div {
         let theme = look.theme;
         let agents = Tally::sum(devices).total();
+        let unavailable = self.device_setup_unavailable();
         let noun =
             |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
         div()
@@ -273,14 +274,27 @@ impl HerdrWindow {
                     .px_3()
                     .py_1()
                     .rounded(px(corners::CONTROL))
-                    .cursor_pointer()
                     .bg(rgb(theme.primary()))
                     .text_color(rgb(theme.text_on(theme.primary())))
                     .child("Add Device")
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.open_add_device(window, cx);
-                        cx.notify();
-                    })),
+                    .when_some(unavailable, |button, reason| {
+                        let (foreground, surface) = (theme.foreground, theme.surface);
+                        button.opacity(0.5).tooltip(move |_, cx| {
+                            cx.new(|_| crate::usage::Hint {
+                                text: reason.into(),
+                                foreground,
+                                surface,
+                            })
+                            .into()
+                        })
+                    })
+                    .when(unavailable.is_none(), |button| {
+                        button
+                            .cursor_pointer()
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.open_device_setup(window, cx);
+                            }))
+                    }),
             )
     }
 }

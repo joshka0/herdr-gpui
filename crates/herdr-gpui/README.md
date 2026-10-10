@@ -1681,12 +1681,16 @@ a window.
   shows its pane.
 
 The search field narrows the lanes and the table to devices whose name,
-address, agents, or workspaces match every word typed.
+address, agents, or workspaces match every word typed. Load columns wrap in
+narrow tabs. **Add Device** opens SSH setup, or WSL setup on Windows; it is
+unavailable in explicit-socket and development-catalog windows.
 
 The window keeps the activity history from the snapshots it already receives,
 so it starts empty each time the window opens; nothing is saved or asked of
 the daemon. Each minute holds the most agents seen working and waiting at
-once, and minutes the machine slept stay empty. CPU, memory, disk, and uptime
+once, and minutes the machine slept stay empty. A wall-clock jump forward of
+at least five seconds beyond monotonic elapsed time is treated like sleep;
+backward adjustments do not rewind or pause the history. CPU, memory, disk, and uptime
 come from the same sampling as the status bar's load, and every enabled host
 is sampled while an overview tab is open, even with the status bar's load
 hidden. A cloud machine has no host to sample, so its load columns stay

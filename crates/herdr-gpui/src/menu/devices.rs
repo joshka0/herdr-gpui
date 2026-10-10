@@ -138,7 +138,7 @@ impl HerdrWindow {
             .is_none_or(|filter| filter == id)
     }
 
-    pub(super) fn device_setup_unavailable(&self) -> Option<&'static str> {
+    pub(crate) fn device_setup_unavailable(&self) -> Option<&'static str> {
         match &self.endpoints[0].connection.target {
             ConnectTarget::Socket(_) => {
                 Some("Device setup is unavailable with an explicit socket.")
@@ -598,6 +598,21 @@ impl HerdrWindow {
         view
     }
 
+    /// Shared by the picker and overview, including isolated-window guards.
+    pub(crate) fn open_device_setup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(reason) = self.device_setup_unavailable() {
+            tracing::info!(category = "device_setup", reason, "Add Device unavailable");
+            return;
+        }
+        tracing::info!(category = "device_setup", "Opening Add Device");
+        if cfg!(windows) {
+            self.open_add_wsl(window, cx);
+        } else {
+            self.open_add_device(window, cx);
+        }
+        cx.notify();
+    }
+
     fn choose_device(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(offset) = index.checked_sub(self.endpoints.len() + 2) {
             #[cfg(feature = "cloud")]
@@ -619,16 +634,7 @@ impl HerdrWindow {
             return;
         }
         if index == self.endpoints.len() + 1 {
-            if let Some(reason) = self.device_setup_unavailable() {
-                tracing::info!(category = "device_setup", reason, "Add Device unavailable");
-                return;
-            }
-            tracing::info!(category = "device_setup", "Opening Add Device");
-            if cfg!(windows) {
-                self.open_add_wsl(window, cx);
-            } else {
-                self.open_add_device(window, cx);
-            }
+            self.open_device_setup(window, cx);
         } else {
             let filter = if index == 0 {
                 None
