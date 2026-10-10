@@ -1,5 +1,7 @@
 use super::*;
 
+mod cancellation;
+
 fn queued_feedback(
     server: &socket::Server,
     request: &FeedbackRequest,

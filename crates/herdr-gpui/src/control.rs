@@ -312,7 +312,7 @@ fn feedback(
     };
     let kept = cx.default_global::<Feedback>().take(&target);
     if kept.is_some() || request.wait_seconds == 0 {
-        incoming.respond(Response::Feedback { text: kept });
+        respond_feedback(incoming, target, kept, cx);
         return;
     }
     if waiters.len() >= MAX_WAITERS {
@@ -337,6 +337,21 @@ fn feedback(
     });
 }
 
+#[cfg(unix)]
+fn respond_feedback(
+    incoming: socket::Incoming,
+    target: FeedbackKey,
+    text: Option<String>,
+    cx: &mut App,
+) {
+    if let Err(Response::Feedback { text: Some(text) }) =
+        incoming.try_respond(Response::Feedback { text })
+    {
+        cx.default_global::<Feedback>()
+            .keep(crate::browser::Batch { target, text });
+    }
+}
+
 /// Hands sent notes to waiting agents and releases the ones whose wait ran
 /// out, then tells the windows who is still waiting.
 #[cfg(unix)]
@@ -344,12 +359,15 @@ fn serve_waiters(waiters: &mut Vec<Waiter>, cx: &mut App) {
     let now = std::time::Instant::now();
     let mut still = Vec::with_capacity(waiters.len());
     for waiter in waiters.drain(..) {
+        if !waiter.incoming.is_live() {
+            continue;
+        }
         let has = cx
             .try_global::<Feedback>()
             .is_some_and(|feedback| feedback.has(&waiter.target));
         if has {
             let text = cx.default_global::<Feedback>().take(&waiter.target);
-            waiter.incoming.respond(Response::Feedback { text });
+            respond_feedback(waiter.incoming, waiter.target, text, cx);
         } else if now >= waiter.until {
             waiter.incoming.respond(Response::Feedback { text: None });
         } else {
@@ -392,7 +410,26 @@ pub(crate) fn install(cx: &mut App) {
         loop {
             timer.timer(std::time::Duration::from_millis(50)).await;
             cx.update(|cx| {
-                for incoming in server.drain() {
+                serve_waiters(&mut waiters, cx);
+                for event in server.drain() {
+                    let incoming = match event {
+                        socket::Event::Request(incoming) => incoming,
+                        socket::Event::Undelivered { request, text } => {
+                            if let Some(daemon) = request.daemon_socket {
+                                cx.default_global::<Feedback>().keep(crate::browser::Batch {
+                                    target: FeedbackKey {
+                                        scope: Scope::local(Path::new(&daemon)),
+                                        pane_id: request.pane_id,
+                                    },
+                                    text,
+                                });
+                            }
+                            continue;
+                        }
+                    };
+                    if !incoming.is_live() {
+                        continue;
+                    }
                     match incoming.request.clone() {
                         Request::Open(request) => {
                             incoming.respond(open_browser(&request, cx));
