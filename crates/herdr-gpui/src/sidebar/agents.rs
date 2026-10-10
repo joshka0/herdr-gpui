@@ -306,7 +306,7 @@ pub(super) fn status_mark(
 /// The word the daemon's `state_text` token shows for a status when its
 /// sidebar config asks for it. Lowercase, matching the daemon's status names
 /// and what the terminal client prints.
-pub(super) fn status_text(status: AgentStatus) -> &'static str {
+pub(crate) fn status_text(status: AgentStatus) -> &'static str {
     match status {
         AgentStatus::Working => "working",
         AgentStatus::Blocked => "blocked",

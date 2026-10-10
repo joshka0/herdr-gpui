@@ -100,12 +100,7 @@ fn review_is_offered_for_a_tracked_checkout(cx: &mut TestAppContext) {
     });
     assert_eq!(
         actions(&view, cx, group),
-        [
-            Action::NewBrowserTab,
-            Action::Review,
-            Action::Devices,
-            Action::Split
-        ]
+        [Action::NewBrowserTab, Action::Review, Action::Split]
     );
     run(&view, cx, group, Action::Review);
     view.read_with(cx, |view, _| {
@@ -156,7 +151,7 @@ fn listening_ports_follow_the_tab_kinds(cx: &mut TestAppContext) {
     cx.update(|_, cx| view.update(cx, |view, _| view.config.show_listening_ports = false));
     assert_eq!(
         actions(&view, cx, group),
-        [Action::NewBrowserTab, Action::Devices, Action::Split]
+        [Action::NewBrowserTab, Action::Split]
     );
 }
 

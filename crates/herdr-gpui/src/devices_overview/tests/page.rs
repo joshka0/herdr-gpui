@@ -145,3 +145,50 @@ fn a_narrow_tab_wraps_the_load_columns_instead_of_cutting_them(cx: &mut gpui::Te
         "the header wraps in step: {header:?} {load:?}"
     );
 }
+
+#[gpui::test]
+fn the_device_pickers_activity_card_opens_the_overview(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = window(cx);
+    cx.simulate_resize(gpui::size(gpui::px(1000.), gpui::px(800.)));
+    draw(cx);
+    let picker = cx.debug_bounds("device-picker").unwrap().center();
+    cx.simulate_click(picker, gpui::Modifiers::default());
+    draw(cx);
+    let card = cx.debug_bounds("device-activity").unwrap();
+    let heading = cx.debug_bounds("device-row-0").unwrap();
+    assert!(
+        card.bottom() <= heading.top(),
+        "the card sits above the list"
+    );
+    // Within the room the picker's list gives up for it (100 px with its
+    // 4 px margins) at the default font size.
+    assert!(card.size.height <= gpui::px(92.), "{card:?}");
+
+    cx.simulate_click(card.center(), gpui::Modifiers::default());
+    draw(cx);
+    assert_eq!(view.read_with(cx, |view, _| view.menu.page), None);
+    assert_eq!(overview_tabs(&view, cx), 1);
+    assert!(cx.debug_bounds("devices-tab").is_some());
+}
+
+#[gpui::test]
+fn clicking_a_device_row_opens_and_closes_its_agents(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = window(cx);
+    cx.simulate_resize(gpui::size(gpui::px(1400.), gpui::px(900.)));
+    open(&view, cx);
+    assert!(cx.debug_bounds("devices-agents-local").is_none());
+
+    let row = cx.debug_bounds("devices-row-local").unwrap();
+    cx.simulate_click(row.center(), gpui::Modifiers::default());
+    draw(cx);
+    let list = cx.debug_bounds("devices-agents-local").unwrap();
+    assert!(list.top() >= row.bottom(), "the agents open under the row");
+    let first = cx.debug_bounds("devices-agent-local-p0").unwrap();
+    let second = cx.debug_bounds("devices-agent-local-p1").unwrap();
+    assert!(first.bottom() <= second.top());
+    assert!(list.contains(&first.origin) && list.contains(&second.origin));
+
+    cx.simulate_click(row.center(), gpui::Modifiers::default());
+    draw(cx);
+    assert!(cx.debug_bounds("devices-agents-local").is_none());
+}

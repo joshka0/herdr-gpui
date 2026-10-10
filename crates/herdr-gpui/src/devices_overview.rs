@@ -17,6 +17,7 @@ mod view;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use chart::sparkline;
 pub(crate) use model::{Device, Link, Tally};
 
 use crate::{
@@ -35,6 +36,8 @@ pub(crate) struct Page {
     pub(crate) scroll: ScrollHandle,
     /// Whether "View all devices" opened a lane per device.
     pub(crate) lanes: bool,
+    /// The devices whose rows are open on their agents, by endpoint id.
+    pub(crate) expanded: std::collections::HashSet<String>,
     _changed: Subscription,
 }
 
@@ -119,6 +122,7 @@ impl HerdrWindow {
                 search,
                 scroll: ScrollHandle::new(),
                 lanes: false,
+                expanded: Default::default(),
                 _changed: changed,
             },
         );

@@ -12,8 +12,9 @@ use crate::{
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
 
-/// What every part of the page draws with.
-pub(super) struct Look<'a> {
+/// What every part of the page, and the device picker's activity card,
+/// draws with.
+pub(crate) struct Look<'a> {
     pub theme: &'a Theme,
     pub ui: &'a crate::config::FontConfig,
     pub mono: &'a crate::config::FontConfig,
@@ -104,6 +105,23 @@ impl Look<'_> {
 }
 
 impl HerdrWindow {
+    /// The theme, faces, and the sidebar's own status colours.
+    pub(crate) fn overview_look(&self, cx: &App) -> Look<'_> {
+        Look {
+            theme: &self.theme,
+            ui: &self.config.ui,
+            mono: &self.config.terminal,
+            indicators: Indicators::new(
+                self.settings.shared.as_ref(),
+                matches!(
+                    cx.window_appearance(),
+                    WindowAppearance::Light | WindowAppearance::VibrantLight
+                ),
+                &self.theme,
+            ),
+        }
+    }
+
     /// An overview tab, drawn in `slot` where a page would be.
     pub(crate) fn render_devices_tab(
         &self,
@@ -120,19 +138,7 @@ impl HerdrWindow {
                 .pl(px(gap))
                 .into_any_element();
         };
-        let look = Look {
-            theme: &self.theme,
-            ui: &self.config.ui,
-            mono: &self.config.terminal,
-            indicators: Indicators::new(
-                self.settings.shared.as_ref(),
-                matches!(
-                    cx.window_appearance(),
-                    WindowAppearance::Light | WindowAppearance::VibrantLight
-                ),
-                &self.theme,
-            ),
-        };
+        let look = self.overview_look(cx);
         let devices = self.overview_devices();
         let query = page.search.read(cx).text().to_owned();
         let shown: Vec<&Device> = devices
@@ -206,6 +212,8 @@ impl HerdrWindow {
                                         &shown,
                                         &self.system_load,
                                         slot,
+                                        id,
+                                        &page.expanded,
                                         cx,
                                     )),
                             ),

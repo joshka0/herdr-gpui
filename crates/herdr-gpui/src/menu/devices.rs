@@ -1,6 +1,7 @@
 //! The sidebar's device footer and the device picker that scopes the sidebar
 //! to one device or opens the Add Device dialog. Device scope is presentation
 //! state; connection ownership stays in `endpoint`.
+mod activity_card;
 mod add_device;
 #[cfg(feature = "coder")]
 pub(super) mod coder;
@@ -26,11 +27,21 @@ pub(super) const MENU_WIDTH: f32 = 280.;
 /// origin of the button that opened it. The device picker and the session list
 /// clamp at the same place, so neither grows over the terminal.
 pub(super) fn list_height(anchor_y: Pixels) -> Pixels {
-    let chrome = crate::titlebar::HEIGHT
-        + crate::worktree_banner::reserved(env!("HERDR_BUILD_WORKTREE") == "1");
-    (anchor_y - px(chrome + MENU_GAP + super::MENU_MARGIN + 12.))
+    room_above(anchor_y).max(px(48.)).min(px(420.))
+}
+
+/// The device picker's list: the same cap, less the room the activity card
+/// above it takes when the window is too short for both.
+fn device_list_height(anchor_y: Pixels) -> Pixels {
+    (room_above(anchor_y) - px(activity_card::ROOM))
         .max(px(48.))
         .min(px(420.))
+}
+
+fn room_above(anchor_y: Pixels) -> Pixels {
+    let chrome = crate::titlebar::HEIGHT
+        + crate::worktree_banner::reserved(env!("HERDR_BUILD_WORKTREE") == "1");
+    anchor_y - px(chrome + MENU_GAP + super::MENU_MARGIN + 12.)
 }
 
 struct SettingsHint {
@@ -408,7 +419,7 @@ impl HerdrWindow {
         }
         let mut view = div()
             .id("devices-list")
-            .max_h(list_height(self.menu.anchor.y))
+            .max_h(device_list_height(self.menu.anchor.y))
             .overflow_y_scroll()
             .track_scroll(&self.menu.devices_scroll)
             .flex()
@@ -529,7 +540,12 @@ impl HerdrWindow {
         {
             view = self.cloud_job_rows(view);
         }
-        view
+        // The card stays put above the list, which scrolls on its own.
+        div()
+            .flex()
+            .flex_col()
+            .child(self.render_activity_card(cx))
+            .child(view)
     }
 
     /// Machines still being added: progress only, not selectable rows, so

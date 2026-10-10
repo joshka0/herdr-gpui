@@ -66,6 +66,17 @@ pub(crate) enum Link {
     Disabled,
 }
 
+/// One agent as an expanded device row lists it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct AgentLine {
+    pub pane_id: String,
+    pub name: String,
+    /// The agent's identity, for its icon.
+    pub identity: Option<String>,
+    pub workspace: String,
+    pub status: AgentStatus,
+}
+
 /// The most agent dots a device's row draws; the count says the rest.
 pub(crate) const DOTS: usize = 8;
 
@@ -80,6 +91,8 @@ pub(crate) struct Device {
     pub tally: Tally,
     /// The first [`DOTS`] agents' states, working first.
     pub dots: Vec<AgentStatus>,
+    /// Every agent, working first, for an expanded row.
+    pub agents: Vec<AgentLine>,
     /// Agent and workspace names, lowercased, for the search.
     names: Vec<String>,
     /// Where load samples come from; None for a cloud machine.
@@ -106,9 +119,27 @@ impl Device {
         // A device out of reach shows no agents rather than stale ones.
         let snapshot = live.snapshot.as_deref().filter(|_| link == Link::Online);
         let agents = snapshot.map_or(&[][..], |snapshot| &snapshot.agents[..]);
-        let mut dots: Vec<AgentStatus> = agents.iter().map(|agent| agent.agent_status).collect();
-        dots.sort_by_key(|status| order(*status));
-        dots.truncate(DOTS);
+        let mut lines: Vec<AgentLine> = agents
+            .iter()
+            .map(|agent| AgentLine {
+                pane_id: agent.pane_id.clone(),
+                name: crate::sidebar::agent_name(agent).to_owned(),
+                identity: agent.agent.clone(),
+                workspace: snapshot
+                    .and_then(|snapshot| {
+                        snapshot
+                            .workspaces
+                            .iter()
+                            .find(|workspace| workspace.workspace_id == agent.workspace_id)
+                    })
+                    .map(|workspace| workspace.label.clone())
+                    .unwrap_or_default(),
+                status: agent.agent_status,
+            })
+            .collect();
+        // Stable, so agents in one state keep the daemon's order.
+        lines.sort_by_key(|line| order(line.status));
+        let dots = lines.iter().take(DOTS).map(|line| line.status).collect();
         let mut names: Vec<String> = agents
             .iter()
             .map(|agent| crate::sidebar::agent_name(agent).to_lowercase())
@@ -129,6 +160,7 @@ impl Device {
             link,
             tally: Tally::of(agents.iter().map(|agent| agent.agent_status)),
             dots,
+            agents: lines,
             names,
             host: Host::of(&endpoint.connection.target),
         }
@@ -160,6 +192,7 @@ impl Device {
             link,
             tally: Tally::of(statuses.iter().copied()),
             dots,
+            agents: Vec::new(),
             names: vec!["claude".into(), "herdr-gpui".into()],
             host: None,
         }

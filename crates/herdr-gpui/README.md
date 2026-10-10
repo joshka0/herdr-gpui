@@ -1640,8 +1640,11 @@ kept. Code tabs read files up to 1 MiB and colour their first 20,000 lines.
 
 ## Devices Overview
 
-View > Devices Overview, the command palette's "Devices Overview", or a
-group's "…" menu opens a tab listing every device the window connects to. Like
+The activity card at the top of the device picker (the "All Devices" button
+at the foot of the sidebar), View > Devices Overview, or the command
+palette's "Devices Overview" opens a tab listing every device the window
+connects to. The card itself shows every device's agent activity for the
+last two hours and how many agents are working and blocked now. Like
 any tab, it can share a group with terminals, take a group of its own, or fill
 a window.
 
@@ -1654,7 +1657,9 @@ a window.
   and how many devices are online.
 - **Devices:** one row per device with a dot per agent, how many are working
   and blocked, CPU, memory, free space on the volume holding the home
-  directory, and uptime. Clicking a row shows that device in the window.
+  directory, and uptime. Clicking a row opens it on that device's agents,
+  working first, with each agent's workspace and state; clicking an agent
+  shows its pane.
 
 The search field narrows the lanes and the table to devices whose name,
 address, agents, or workspaces match every word typed.

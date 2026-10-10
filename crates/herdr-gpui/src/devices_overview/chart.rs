@@ -158,7 +158,7 @@ pub(super) fn activity(
         )
         .child(row(
             summary,
-            bars(padded(totals), peak, [working, blocked], theme),
+            bars(padded(totals), peak, [working, blocked], theme, BARS_HEIGHT),
             None,
         ))
         .when(lanes, |panel| {
@@ -203,6 +203,27 @@ pub(super) fn activity(
         ))
 }
 
+/// Every device's agents for the last two hours as a small chart, for the
+/// device picker's activity card.
+pub(crate) fn sparkline(history: &History, look: &Look, height: f32) -> AnyElement {
+    let totals = history.totals();
+    let peak = totals
+        .iter()
+        .map(|counts| counts.working + counts.blocked)
+        .max()
+        .unwrap_or(0);
+    bars(
+        padded(totals),
+        peak,
+        [
+            look.status(AgentStatus::Working),
+            look.status(AgentStatus::Blocked),
+        ],
+        look.theme,
+        height,
+    )
+}
+
 /// Working agents stacked under blocked ones, scaled to the busiest step.
 /// A faint baseline spans the whole two hours, so the axis reads as time
 /// even before the window has seen most of it.
@@ -211,6 +232,7 @@ fn bars(
     peak: u16,
     [working, blocked]: [u32; 2],
     theme: &crate::config::Theme,
+    height: f32,
 ) -> AnyElement {
     let count = steps.len();
     let (surface, baseline) = (theme.surface, theme.active);
@@ -262,7 +284,7 @@ fn bars(
         },
     )
     .w_full()
-    .h(px(BARS_HEIGHT))
+    .h(px(height))
     .into_any_element()
 }
 

@@ -1,14 +1,16 @@
 //! The device table: one row per device with its agents, CPU, memory, home
-//! disk and uptime. Clicking a row shows that device in the window.
+//! disk and uptime. Clicking a row opens it on a list of its agents, and
+//! clicking an agent shows its pane.
 
 use super::{Device, Link, view::Look};
 use crate::{
     HerdrWindow,
-    browser::Slot,
+    browser::{Slot, TabId},
     system_load::{self, CPU_WARN, DISK_WARN, MEMORY_WARN, SystemLoad},
 };
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
+use std::collections::HashSet;
 
 const DEVICE_MIN: f32 = 180.;
 /// Every column but the device's, which takes the rest.
@@ -21,6 +23,8 @@ const COLUMNS: [(&str, f32); 6] = [
     ("", 12.),
 ];
 const METER_WIDTH: f32 = 64.;
+/// Where an open row's agents start: under the device's name, past its dot.
+const AGENT_INDENT: f32 = 31.;
 
 /// A row's cells: the device, its agents, then the load columns as one
 /// group, so a narrow tab wraps that group onto a line of its own. The header
@@ -54,11 +58,14 @@ fn cells(
         )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn devices(
     look: &Look,
     shown: &[&Device],
     load: &SystemLoad,
     slot: Slot,
+    tab: TabId,
+    expanded: &HashSet<String>,
     cx: &mut Context<HerdrWindow>,
 ) -> Div {
     let theme = look.theme;
@@ -83,9 +90,10 @@ pub(super) fn devices(
             .and_then(|host| load.get(host));
         let sample = reading.and_then(system_load::Reading::latest);
         let disk = sample.and_then(|sample| sample.disk);
+        let open = expanded.contains(&device.id);
         let id = device.id.clone();
         let row_id = device.id.clone();
-        cells(
+        let row = cells(
             name(look, device),
             agents(look, device),
             [
@@ -113,7 +121,11 @@ pub(super) fn devices(
                 .into_any_element(),
                 svg()
                     .size(px(COLUMNS[5].1))
-                    .path("icons/chevron-right.svg")
+                    .path(if open {
+                        "icons/chevron-down.svg"
+                    } else {
+                        "icons/chevron-right.svg"
+                    })
                     .text_color(rgb(theme.muted))
                     .into_any_element(),
             ],
@@ -127,13 +139,22 @@ pub(super) fn devices(
         .py_2()
         .cursor_pointer()
         .hover(|style| style.bg(rgb(theme.active)))
-        .when(position > 0, |row| {
-            row.border_t_1().border_color(rgb(theme.active))
-        })
-        .on_click(cx.listener(move |this, _, window, cx| {
-            this.select_endpoint(&id, cx);
-            window.focus(&this.focus, cx);
-        }))
+        .on_click(cx.listener(move |this, _, _, cx| {
+            if let Some(page) = this.devices_overview.pages.get_mut(&tab) {
+                if !page.expanded.remove(&id) {
+                    page.expanded.insert(id.clone());
+                }
+                cx.notify();
+            }
+        }));
+        div()
+            .flex()
+            .flex_col()
+            .when(position > 0, |unit| {
+                unit.border_t_1().border_color(rgb(theme.active))
+            })
+            .child(row)
+            .when(open, |unit| unit.child(agent_list(look, device, slot, cx)))
     });
     look.panel()
         .debug_selector(move || slot.selector("devices-table"))
@@ -150,6 +171,84 @@ pub(super) fn devices(
                     .child("No device, agent or workspace matches the search."),
             )
         })
+}
+
+/// An open row's agents, working first; clicking one shows its pane.
+fn agent_list(look: &Look, device: &Device, slot: Slot, cx: &mut Context<HerdrWindow>) -> Div {
+    let theme = look.theme;
+    let list = div()
+        .debug_selector({
+            let id = device.id.clone();
+            move || slot.selector(&format!("devices-agents-{id}"))
+        })
+        .flex()
+        .flex_col()
+        .pb_2()
+        .bg(rgb(theme.surface));
+    if device.agents.is_empty() {
+        return list.child(
+            div()
+                .pl(px(AGENT_INDENT))
+                .pt_2()
+                .text_color(rgb(theme.muted))
+                .child(match device.link {
+                    Link::Online => "No agents on this device.",
+                    _ => "Not connected, so its agents are unknown.",
+                }),
+        );
+    }
+    list.children(device.agents.iter().map(|agent| {
+        let (endpoint, pane) = (device.id.clone(), agent.pane_id.clone());
+        div()
+            .id(SharedString::from(slot.selector(&format!(
+                "devices-agent-{}-{}",
+                device.id, agent.pane_id
+            ))))
+            .debug_selector({
+                let id = format!("devices-agent-{}-{}", device.id, agent.pane_id);
+                move || slot.selector(&id)
+            })
+            .flex()
+            .items_center()
+            .gap_2()
+            .pl(px(AGENT_INDENT))
+            .pr_3()
+            .py_1()
+            .cursor_pointer()
+            .hover(|style| style.bg(rgb(theme.active)))
+            .child(look.dot(agent.status))
+            .child(
+                svg()
+                    .flex_none()
+                    .size(px(13.))
+                    .path(crate::icons::AgentIcon::from_identity(agent.identity.as_deref()).path())
+                    .text_color(rgb(theme.foreground)),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .w(px(120.))
+                    .truncate()
+                    .child(agent.name.clone()),
+            )
+            .child(
+                look.mono(agent.workspace.clone())
+                    .flex_1()
+                    .min_w_0()
+                    .truncate(),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .text_size(look.small())
+                    .text_color(rgb(look.status(agent.status)))
+                    .child(crate::sidebar::status_text(agent.status)),
+            )
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.navigate_endpoint(&endpoint, crate::NavigationTarget::Pane(&pane), cx);
+                window.focus(&this.focus, cx);
+            }))
+    }))
 }
 
 fn name(look: &Look, device: &Device) -> Div {

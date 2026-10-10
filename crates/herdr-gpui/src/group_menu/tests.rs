@@ -107,7 +107,7 @@ fn a_lone_group_offers_no_close(cx: &mut TestAppContext) {
     };
     assert_eq!(
         actions(&view, cx, group),
-        [Action::NewBrowserTab, Action::Devices, Action::Split]
+        [Action::NewBrowserTab, Action::Split]
     );
 }
 
@@ -131,7 +131,6 @@ fn closing_in_a_group_never_closes_a_tab(cx: &mut TestAppContext) {
         actions(&view, cx, right),
         [
             Action::NewBrowserTab,
-            Action::Devices,
             Action::Close,
             Action::CloseOthers,
             Action::CloseAll,
