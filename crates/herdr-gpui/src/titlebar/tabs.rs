@@ -107,6 +107,10 @@ impl HerdrWindow {
         // anything else, so the window controls are never pushed out.
         let leading = div()
             .debug_selector(|| "strip-titlebar-leading".into())
+            // These controls belong to the window. Exclude the group's
+            // capture handler before it can switch connections and history;
+            // stopping propagation in a button's bubble handler is too late.
+            .block_mouse_except_scroll()
             .flex()
             .flex_shrink(NAVIGATION_SHRINK)
             .min_w_0()
