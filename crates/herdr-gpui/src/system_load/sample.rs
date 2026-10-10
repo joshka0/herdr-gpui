@@ -278,15 +278,27 @@ fn boot_seconds(rest: &str) -> Option<u64> {
 }
 
 /// One `df -Pk` row: `filesystem 1024-blocks used available capacity mount`.
-/// Read from the right, since a filesystem name may contain spaces; a mount
-/// point with spaces is not expected for a home directory's volume.
+/// Both the filesystem name and the mount point may contain spaces, so the
+/// row is read around its capacity: the first `NN%` word that follows three
+/// numbers, which are the size, the used space, and the available space.
 fn disk(rest: &str) -> Option<Disk> {
     let words: Vec<&str> = rest.split_whitespace().collect();
-    let column = |from_end: usize| -> Option<u64> {
-        words.get(words.len().checked_sub(from_end)?)?.parse().ok()
+    let capacity = |word: &str| {
+        word.strip_suffix('%')
+            .is_some_and(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
     };
-    let total = column(5)?.checked_mul(1024)?;
-    let available = column(3)?.checked_mul(1024)?;
+    let (total, available) = words.windows(4).find_map(|window| {
+        let [total, used, available, percent] = window else {
+            return None;
+        };
+        if !capacity(percent) {
+            return None;
+        }
+        used.parse::<u64>().ok()?;
+        Some((total.parse::<u64>().ok()?, available.parse::<u64>().ok()?))
+    })?;
+    let total = total.checked_mul(1024)?;
+    let available = available.checked_mul(1024)?;
     (total > 0).then_some(Disk {
         available: available.min(total),
         total,

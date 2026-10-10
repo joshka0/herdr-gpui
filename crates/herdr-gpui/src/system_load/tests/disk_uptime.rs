@@ -60,19 +60,20 @@ fn a_failed_df_or_clock_leaves_only_those_fields_unknown() {
 }
 
 #[test]
-fn a_filesystem_name_with_spaces_is_read_from_the_right() {
-    let answer = parse(
-        &format!("{LINUX}disk //nas/My Share 2048 1024 512 67% /\n"),
-        None,
-    )
-    .unwrap();
-    assert_eq!(
-        answer.sample.disk,
-        Some(Disk {
-            available: 512 * 1024,
-            total: 2048 * 1024,
-        })
-    );
+fn spaces_in_the_filesystem_or_the_mount_keep_the_reading() {
+    let expected = Some(Disk {
+        available: 512 * 1024,
+        total: 2048 * 1024,
+    });
+    for row in [
+        "//nas/My Share 2048 1024 512 67% /",
+        "/dev/disk4s1 2048 1024 512 67% /Volumes/My Drive",
+        // A number in the name is not taken for a column.
+        "//nas/Share 2 2048 1024 512 67% /Volumes/Backup 2024",
+    ] {
+        let answer = parse(&format!("{LINUX}disk {row}\n"), None).unwrap();
+        assert_eq!(answer.sample.disk, expected, "{row}");
+    }
 }
 
 #[test]
