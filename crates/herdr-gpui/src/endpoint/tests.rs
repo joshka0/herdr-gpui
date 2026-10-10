@@ -2,6 +2,8 @@
 use super::*;
 use herdr_client::{ClientEvent, SavedHost};
 
+mod local_peer_warning;
+
 #[test]
 fn saved_profile_ids_are_the_catalog_ids_behind_ssh_endpoints() {
     let id = "0123456789abcdef0123456789abcdef";

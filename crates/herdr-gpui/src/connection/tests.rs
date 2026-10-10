@@ -1,5 +1,7 @@
 use super::*;
 
+mod local_peer_warning;
+
 fn bridge() -> ConnectionBridge {
     ConnectionBridge::new(ConnectTarget::Socket("/unused-connection-test.sock".into()))
 }

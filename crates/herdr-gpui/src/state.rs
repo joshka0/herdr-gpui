@@ -80,6 +80,8 @@ pub struct LiveState {
     pub version_mismatch: Option<herdr_client::VersionMismatch>,
     /// Same-user peer at the owned standard socket, not executable attestation.
     pub(crate) local_daemon_peer: bool,
+    /// A one-shot local Git diagnosis, delivered only after the handshake.
+    pub(crate) local_peer_warning: Option<crate::daemon::LocalPeerWarning>,
     /// `pane.clear` arrived after Herdr 0.9.1; older daemons reject it.
     pub(crate) supports_pane_clear: bool,
     /// `tab.move` reorders a workspace's tabs; daemons that do not offer it
@@ -189,6 +191,7 @@ impl Default for LiveState {
             missing_installation: false,
             version_mismatch: None,
             local_daemon_peer: false,
+            local_peer_warning: None,
             supports_pane_clear: false,
             supports_tab_move: false,
             supports_link_resolve: false,
@@ -243,6 +246,7 @@ impl LiveState {
             missing_installation,
             version_mismatch,
             local_daemon_peer,
+            local_peer_warning,
             supports_pane_clear,
             supports_tab_move,
             supports_link_resolve,
@@ -295,6 +299,7 @@ impl LiveState {
             && *missing_installation == self.missing_installation
             && *version_mismatch == self.version_mismatch
             && *local_daemon_peer == self.local_daemon_peer
+            && local_peer_warning.is_none()
             && *supports_pane_clear == self.supports_pane_clear
             && *supports_tab_move == self.supports_tab_move
             && *supports_link_resolve == self.supports_link_resolve

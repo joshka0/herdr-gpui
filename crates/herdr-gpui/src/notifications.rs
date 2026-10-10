@@ -57,6 +57,12 @@ pub(crate) fn unsafe_char(c: char) -> bool {
 }
 
 impl Notice {
+    /// Local diagnostics carry recovery instructions that must not be clipped
+    /// to the daemon toast's short body preview.
+    pub(crate) fn is_local_feedback(&self) -> bool {
+        self.client_local
+    }
+
     pub fn preview(mut self) -> Self {
         self.client_local = true;
         self

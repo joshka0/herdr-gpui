@@ -171,7 +171,11 @@ impl ConnectionBridge {
                 })
                 .map(|(stream, local)| {
                     if let Ok(mut state) = startup_inbox.lock() {
-                        state.local_daemon_peer = local;
+                        state.local_daemon_peer = matches!(local, crate::daemon::LocalPeer::Trusted);
+                        state.local_peer_warning = match local {
+                            crate::daemon::LocalPeer::Rejected(warning) => Some(warning),
+                            _ => None,
+                        };
                         state.dirty = true;
                     }
                     stream
@@ -278,7 +282,15 @@ impl ConnectionBridge {
         let reload_sound = std::mem::take(&mut state.reload_sound);
         let clipboard_writes = std::mem::take(&mut state.clipboard_writes);
         let bells = std::mem::take(&mut state.bells);
+        // A trust warning belongs to this connection, but the terminal must
+        // finish connecting before it is shown. Drain it only once then.
+        let local_peer_warning = if state.status.is_connected() {
+            state.local_peer_warning.take()
+        } else {
+            None
+        };
         let mut update = state.clone();
+        update.local_peer_warning = local_peer_warning;
         update.settings_reload = false;
         update.notifications = notifications;
         update.notifications_lost = notifications_lost;

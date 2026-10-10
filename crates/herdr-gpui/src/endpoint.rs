@@ -181,6 +181,9 @@ impl Endpoint {
 
     /// Refreshes state derived from `live` after it is replaced.
     pub(crate) fn sync_live(&mut self) {
+        if let Some(warning) = self.live.local_peer_warning.take() {
+            self.toasts.receive([warning.notice(Instant::now())]);
+        }
         self.config_diagnostic.sync(
             self.live
                 .snapshot
