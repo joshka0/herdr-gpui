@@ -401,6 +401,7 @@ impl HerdrWindow {
                 | Command::ToggleSidebar
                 | Command::OpenCode
                 | Command::ToggleStatusBar
+                | Command::DevicesOverview
                 | Command::IncreaseFontSize
                 | Command::DecreaseFontSize
                 | Command::ResetFontSize
