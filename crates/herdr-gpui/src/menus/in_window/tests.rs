@@ -22,3 +22,5 @@ mod dragging;
 #[cfg(target_os = "linux")]
 mod linux;
 mod navigation;
+#[cfg(target_os = "linux")]
+mod resizing;

@@ -4,6 +4,12 @@ use super::*;
 use crate::fonts::StyledFont;
 use gpui::prelude::*;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BarLayer {
+    Base,
+    Overlay,
+}
+
 impl HerdrWindow {
     fn compact_application_bar(&self, window: &Window) -> bool {
         // Reserve space for all three window buttons and their padding before
@@ -18,6 +24,15 @@ impl HerdrWindow {
 
     pub(crate) fn render_application_bar(
         &self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        self.application_bar(BarLayer::Base, window, cx)
+    }
+
+    fn application_bar(
+        &self,
+        layer: BarLayer,
         window: &Window,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
@@ -37,9 +52,14 @@ impl HerdrWindow {
         };
         let geometry = self.menu.application_bar.bar.clone();
         let buttons = &self.menu.application_bar.buttons;
-        buttons
-            .borrow_mut()
-            .resize(entries.len(), Bounds::default());
+        // Only the in-flow bar owns anchor measurements. Its overlay copy
+        // must never replace those with geometry from a different frame.
+        let measure = layer == BarLayer::Base;
+        if measure {
+            buttons
+                .borrow_mut()
+                .resize(entries.len(), Bounds::default());
+        }
         let font = &self.config.ui;
         let theme = &self.theme;
         let height = if matches!(window.window_decorations(), Decorations::Client { .. }) {
@@ -65,11 +85,13 @@ impl HerdrWindow {
             .text_color(rgb(theme.foreground))
             .occlude()
             .on_click(|_, _, cx| cx.stop_propagation())
-            .child(
-                canvas(move |bounds, _, _| geometry.set(bounds), |_, _, _, _| {})
-                    .absolute()
-                    .inset_0(),
-            )
+            .when(measure, |bar| {
+                bar.child(
+                    canvas(move |bounds, _, _| geometry.set(bounds), |_, _, _, _| {})
+                        .absolute()
+                        .inset_0(),
+                )
+            })
             .children(
                 entries
                     .into_iter()
@@ -102,18 +124,21 @@ impl HerdrWindow {
                                 button.cursor_pointer().hover(|s| s.bg(rgb(theme.active)))
                             })
                             .child(name)
-                            .child(
-                                canvas(
-                                    move |bounds, _, _| {
-                                        if let Some(button) = buttons.borrow_mut().get_mut(slot) {
-                                            *button = bounds;
-                                        }
-                                    },
-                                    |_, _, _, _| {},
+                            .when(measure, |button| {
+                                button.child(
+                                    canvas(
+                                        move |bounds, _, _| {
+                                            if let Some(button) = buttons.borrow_mut().get_mut(slot)
+                                            {
+                                                *button = bounds;
+                                            }
+                                        },
+                                        |_, _, _, _| {},
+                                    )
+                                    .absolute()
+                                    .inset_0(),
                                 )
-                                .absolute()
-                                .inset_0(),
-                            )
+                            })
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 cx.stop_propagation();
                                 if disabled {
@@ -360,13 +385,10 @@ impl HerdrWindow {
             );
         // Repeat the bar above the occluding layer, so switching headings never
         // clicks through the dismissal layer into unrelated window controls.
-        overlay = overlay.child(
-            anchored().position(bar.origin).child(
-                div()
-                    .w(bar.size.width)
-                    .child(self.render_application_bar(window, cx)),
-            ),
-        );
+        // The overlay fills the same content root as the underlying bar. Lay out
+        // this copy there too: using cached bounds would feed its stale geometry
+        // back into the next frame after a resize or decoration inset change.
+        overlay = overlay.child(self.application_bar(BarLayer::Overlay, window, cx));
         overlay.child(
             anchored()
                 .position(point(
