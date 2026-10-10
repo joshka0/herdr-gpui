@@ -189,23 +189,43 @@ fn a_bottom_tab_bar_keeps_the_header(cx: &mut TestAppContext) {
     }
 }
 
-#[gpui::test]
-fn a_squeezed_strip_drops_back_and_forward_before_the_account(cx: &mut TestAppContext) {
-    let (view, cx) = window(cx);
+/// Collapses the sidebar entirely, so the leftmost strip leads with the
+/// clearance, the toggle, and Back and Forward on every platform.
+fn hide_sidebar(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) {
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
-            view.sidebar_width = Some(160.);
+            view.settings.shared = Some(
+                crate::herdr_settings::Settings::parse_text(
+                    "[ui]\nsidebar_collapsed_mode = 'hidden'",
+                )
+                .unwrap(),
+            );
+            view.toggle_sidebar();
             cx.notify();
         })
     });
-    // A sidebar this narrow hands Back and Forward to the strip, which is
-    // too narrow for them, its tabs, and the trailing controls.
+    draw(cx);
+}
+
+#[gpui::test]
+fn a_squeezed_strip_drops_back_and_forward_before_the_account(cx: &mut TestAppContext) {
+    let (view, cx) = window(cx);
+    hide_sidebar(&view, cx);
+    // The least row that holds everything but the tabs, which shrink away
+    // first: measured, since the clearance and controls differ by platform.
+    let leading = cx.debug_bounds("strip-titlebar-leading").unwrap();
+    let new_tab = cx.debug_bounds("new-tab").unwrap();
+    let room = cx.debug_bounds("strip-titlebar-room").unwrap();
+    let needed =
+        f32::from(leading.right() + (px(1200.) - new_tab.left()) - room.size.width) + DRAG_ROOM;
+    // Too narrow for Back and Forward, wide enough for the rest.
+    let width = needed - Style::NATIVE.width() / 2.;
     for _ in 0..2 {
-        cx.simulate_resize(size(px(360.), px(600.)));
+        cx.simulate_resize(size(px(width), px(600.)));
         draw(cx);
     }
     let avatar = cx.debug_bounds("titlebar-avatar").unwrap();
-    assert!(avatar.right() <= px(360.), "{avatar:?}");
+    assert!(avatar.right() <= px(width), "{avatar:?} in {width}");
     assert!(cx.debug_bounds("titlebar-back").is_none());
     assert!(!view.read_with(cx, |view, _| view.strip_navigation_fits));
     // Given the room back, they return, and stay put across frames.
@@ -224,7 +244,10 @@ fn a_squeezed_strip_drops_back_and_forward_before_the_account(cx: &mut TestAppCo
 #[gpui::test]
 fn a_narrow_sidebar_hands_back_and_forward_to_the_strip(cx: &mut TestAppContext) {
     let (view, cx) = window(cx);
-    for (width, in_sidebar) in [(None, true), (Some(160.), false)] {
+    // What the header needs differs by platform: the traffic lights'
+    // clearance and each style's buttons.
+    let needed = LEADING + SIDEBAR_TOGGLE + Style::NATIVE.width() + SIDEBAR_END;
+    for width in [None, Some(160.)] {
         cx.update(|_, cx| {
             view.update(cx, |view, cx| {
                 view.sidebar_width = width;
@@ -233,6 +256,7 @@ fn a_narrow_sidebar_hands_back_and_forward_to_the_strip(cx: &mut TestAppContext)
         });
         draw(cx);
         let header = cx.debug_bounds("sidebar-titlebar").unwrap();
+        let in_sidebar = f32::from(header.size.width) >= needed;
         let back = cx.debug_bounds("titlebar-back").unwrap();
         let forward = cx.debug_bounds("titlebar-forward").unwrap();
         assert_eq!(header.contains(&back.center()), in_sidebar, "{width:?}");
