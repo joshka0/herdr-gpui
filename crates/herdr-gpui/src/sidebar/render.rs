@@ -50,10 +50,10 @@ impl HerdrWindow {
         self.sidebar_search.input.update(cx, |input, cx| {
             input.set_appearance(self.config.ui.clone(), theme.clone(), cx);
         });
-        let search =
-            self.sidebar_search.query().is_some().then(|| {
-                self.sidebar_search_results(self.sidebar_search_hits(), indicators, look, cx)
-            });
+        // A hidden field keeps whatever it held, but never filters the list.
+        let searchable = self.config.show_sidebar_search;
+        let search = (searchable && self.sidebar_search.query().is_some())
+            .then(|| self.sidebar_search_results(self.sidebar_search_hits(), indicators, look, cx));
         let mut spaces = div()
             .id("spaces-scroll")
             .debug_selector(|| "spaces-scroll".into())
@@ -607,7 +607,9 @@ impl HerdrWindow {
                     .min_h_0()
                     .overflow_hidden()
                     .child(header("spaces", font, theme, look))
-                    .child(self.sidebar_search_field(look, cx))
+                    .when(searchable, |section| {
+                        section.child(self.sidebar_search_field(look, cx))
+                    })
                     // The wrapper clips the pinned header as the next host's
                     // pushes it up, so it never paints over the title above.
                     .child(
