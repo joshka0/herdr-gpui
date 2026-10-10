@@ -183,10 +183,20 @@ impl CodeView {
     /// The 1-based line the editor opens at: the marked one, or the top
     /// line in view.
     fn editor_line(&self) -> u32 {
-        self.marked.unwrap_or_else(|| {
-            u32::try_from(self.scroll.logical_scroll_top_index() + 1).unwrap_or(1)
-        })
+        self.marked
+            .unwrap_or_else(|| u32::try_from(top_line(&self.scroll) + 1).unwrap_or(1))
     }
+}
+
+/// The line at the top of the view, or the one a pending jump will put
+/// there. gpui only offers this as `logical_scroll_top_index` behind its
+/// `test-support` feature, which release builds do not enable.
+fn top_line(scroll: &UniformListScrollHandle) -> usize {
+    let state = scroll.0.borrow();
+    state.deferred_scroll_to_item.map_or_else(
+        || state.base_handle.logical_scroll_top().0,
+        |jump| jump.item_index,
+    )
 }
 
 impl HerdrWindow {
@@ -418,7 +428,7 @@ impl HerdrWindow {
             return false;
         };
         let count = view.text().map_or(0, |text| text.lines.len());
-        let top = view.scroll.logical_scroll_top_index();
+        let top = top_line(&view.scroll);
         let page = 20;
         let row = match (keystroke.key.as_str(), modifiers.shift) {
             ("j" | "down", false) => top + 1,
