@@ -128,6 +128,41 @@ impl HerdrWindow {
         self.show_flash(flash, cx);
     }
 
+    /// Delivers notes a control request sent, if this window shows the
+    /// caller's pane on its selected endpoint, the only one it types into.
+    /// `false` leaves them to another window.
+    #[cfg(unix)]
+    pub(crate) fn deliver_requested_notes(
+        &mut self,
+        target: &crate::control::Target<'_>,
+        text: &str,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(pane) = target.pane else {
+            return false;
+        };
+        let ours = target.daemon.is_none_or(|daemon| {
+            self.endpoints[self.selected_endpoint]
+                .connection
+                .target
+                .socket_path()
+                .ok()
+                .as_deref()
+                == Some(daemon)
+        });
+        let shown = self.live.snapshot.as_deref().is_some_and(|snapshot| {
+            snapshot
+                .panes
+                .iter()
+                .any(|candidate| candidate.pane_id == pane)
+        });
+        if !(ours && shown) {
+            return false;
+        }
+        self.deliver_notes(Some(pane.to_owned()), true, text.to_owned(), cx);
+        true
+    }
+
     /// Pastes held notes into agents that became idle. Runs every tick.
     pub(crate) fn poll_deliveries(&mut self, cx: &mut Context<Self>) {
         if self.deliveries.0.is_empty() {

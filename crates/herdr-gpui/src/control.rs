@@ -19,6 +19,10 @@ use crate::{
 };
 use gpui::App;
 pub use protocol::ErrorCode;
+#[cfg(any(unix, feature = "mockup"))]
+use protocol::NotesRequest;
+#[cfg(any(unix, feature = "mockup"))]
+pub(crate) use protocol::NotesTo;
 use protocol::{
     BrowserOpen, Caller, FeedbackRequest, MAX_WAIT_SECONDS, OpenedIn, Page, Request, Response,
 };
@@ -208,6 +212,57 @@ fn reload(caller: &Caller, cx: &mut App) -> Response {
     Response::Reloaded { tabs: tabs.len() }
 }
 
+/// Notes are pasted into an agent's prompt, so they keep their line breaks
+/// and lose every other control character: none can end the paste early.
+#[cfg(any(unix, test))]
+fn pastable(text: &str) -> String {
+    text.chars()
+        .filter(|c| matches!(c, '\n' | '\t') || !crate::notifications::unsafe_char(*c))
+        .collect()
+}
+
+/// Hands notes from outside a window to the agent in the caller's pane: the
+/// window showing that pane delivers them as it does page notes, and with
+/// none they are kept for `browser feedback`.
+#[cfg(unix)]
+fn notes(request: &NotesRequest, cx: &mut App) -> Response {
+    let caller = &request.caller;
+    let Some(pane) = caller.pane_id.as_deref().filter(|_| valid_caller(caller)) else {
+        return Response::error(
+            ErrorCode::InvalidRequest,
+            "Notes are sent from the Herdr pane of the agent they are for",
+        );
+    };
+    let text = pastable(&request.text);
+    if text.trim().is_empty() {
+        return Response::error(ErrorCode::InvalidRequest, "There are no notes to send");
+    }
+    let target = Target {
+        daemon: caller.daemon_socket.as_deref().map(Path::new),
+        workspace: None,
+        pane: Some(pane),
+    };
+    for handle in main_windows(cx) {
+        let taken = handle.update(cx, |view, _, cx| {
+            view.deliver_requested_notes(&target, &text, cx)
+        });
+        if matches!(taken, Ok(true)) {
+            return Response::NotesSent { to: NotesTo::Agent };
+        }
+    }
+    let feedback = cx.default_global::<Feedback>();
+    let to = if feedback.is_waiting(pane) {
+        NotesTo::Agent
+    } else {
+        NotesTo::Kept
+    };
+    feedback.keep(crate::browser::Batch {
+        pane_id: pane.to_owned(),
+        text,
+    });
+    Response::NotesSent { to }
+}
+
 /// An agent waiting in `browser feedback --wait`.
 #[cfg(unix)]
 struct Waiter {
@@ -328,6 +383,7 @@ pub(crate) fn install(cx: &mut App) {
                         Request::Feedback(request) => {
                             feedback(&request, incoming, &mut waiters, cx);
                         }
+                        Request::Notes(request) => incoming.respond(notes(&request, cx)),
                     }
                 }
                 serve_waiters(&mut waiters, cx);
@@ -376,6 +432,23 @@ fn rejected(response: Response) -> crate::Error {
     match response {
         Response::Error { code, message } => crate::Error::ControlRejected { code, message },
         _ => crate::Error::ControlNoResponse,
+    }
+}
+
+/// Sends the user's notes to the agent in this process's Herdr pane, through
+/// the running Herdr GPUI. Blocking: call it off the UI thread.
+#[cfg(feature = "mockup")]
+pub(crate) fn send_notes(text: String) -> crate::Result<NotesTo> {
+    let caller = caller(None)?;
+    if caller.pane_id.is_none() {
+        return Err(crate::Error::ControlRejected {
+            code: ErrorCode::InvalidRequest,
+            message: "Not running in a Herdr pane".into(),
+        });
+    }
+    match send(&Request::Notes(NotesRequest { caller, text }))? {
+        Response::NotesSent { to } => Ok(to),
+        response => Err(rejected(response)),
     }
 }
 
@@ -534,5 +607,13 @@ mod tests {
             assert!(!plain(invalid, 256), "{invalid:?}");
         }
         assert!(!plain(&"w".repeat(257), 256));
+    }
+
+    #[test]
+    fn pasted_notes_keep_line_breaks_and_lose_other_controls() {
+        assert_eq!(
+            pastable("Picked: B\n\t- note\u{1b}[201~ls\r\u{202e}x"),
+            "Picked: B\n\t- note[201~lsx"
+        );
     }
 }

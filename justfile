@@ -69,7 +69,8 @@ test-perf budget="30":
     HERDR_PERF_P95_MS="{{budget}}" target/release/herdr-gpui --performance-test
 
 # Compare UI variants written as GPUI code in `file` (the built-in demo when
-# empty) in a native window. "Send to agent" writes `feedback`; `capture` gets
+# empty) in a native window. "Send to agent" types the notes into the calling
+# Herdr pane through the running Herdr GPUI, else writes `feedback`; `capture` gets
 # a PNG of the window once it has drawn. Debug build, no daemon. The process
 # left running is the app itself, so its PID is the one to stop.
 # See .claude/skills/gpui-mockup.

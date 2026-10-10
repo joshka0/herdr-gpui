@@ -1,6 +1,11 @@
-//! What "Send to agent" hands back: the user's picks and notes as Markdown,
-//! written whole so a waiting agent never reads half a file.
-use std::{io::Write, path::Path};
+//! What "Send to agent" hands back: the user's picks and notes as Markdown.
+//! They go to the agent's pane through the running Herdr GPUI, as page notes
+//! do, or else to a file written whole so a waiting agent never reads half.
+use crate::control::NotesTo;
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 /// One variant as the user left it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -66,6 +71,61 @@ impl Report<'_> {
         }
         text
     }
+}
+
+/// Hands notes to the agent in this process's Herdr pane.
+pub(super) type SendNotes = fn(String) -> crate::Result<NotesTo>;
+
+/// Where "Send to agent" put the notes.
+#[derive(Debug)]
+pub(super) enum Sent {
+    /// To the agent, through the window showing its pane.
+    Agent,
+    /// Held by Herdr GPUI for `browser feedback`: no window shows the pane.
+    Kept,
+    /// Herdr GPUI could not take them, so they went to the file.
+    File {
+        path: PathBuf,
+        unreached: crate::Error,
+    },
+    /// Neither Herdr GPUI nor a file: only the terminal has them.
+    Printed { unreached: crate::Error },
+}
+
+impl Sent {
+    /// The window's status line.
+    pub(super) fn status(&self) -> String {
+        match self {
+            Self::Agent => "Sent to the agent".into(),
+            Self::Kept => "No window shows the agent's pane; kept for `browser feedback`".into(),
+            Self::File { path, unreached } => {
+                format!("Saved to {} ({unreached})", path.display())
+            }
+            Self::Printed { unreached } => format!("Printed to the terminal ({unreached})"),
+        }
+    }
+}
+
+/// Sends `text` with `send`, and writes it to `file` only when that fails,
+/// so an agent never receives the same notes twice. Blocking.
+pub(super) fn deliver(
+    text: String,
+    file: Option<&Path>,
+    send: impl FnOnce(String) -> crate::Result<NotesTo>,
+) -> crate::Result<Sent> {
+    let unreached = match send(text.clone()) {
+        Ok(NotesTo::Agent) => return Ok(Sent::Agent),
+        Ok(NotesTo::Kept) => return Ok(Sent::Kept),
+        Err(error) => error,
+    };
+    let Some(path) = file else {
+        return Ok(Sent::Printed { unreached });
+    };
+    write(path, text.as_bytes())?;
+    Ok(Sent::File {
+        path: path.to_owned(),
+        unreached,
+    })
 }
 
 /// Replaces `path` with `contents` in one rename, next to it on the same
@@ -151,6 +211,58 @@ mod tests {
         assert!(text.contains("Picked: none\n"));
         assert!(text.ends_with("- A (Pill)\n"));
         assert!(!text.contains("Overall"));
+    }
+
+    fn unreachable(_: String) -> crate::Result<NotesTo> {
+        Err(crate::Error::ControlNoResponse)
+    }
+
+    #[test]
+    fn notes_the_agent_takes_never_reach_the_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("feedback.md");
+        for (to, status) in [
+            (NotesTo::Agent, "Sent to the agent"),
+            (
+                NotesTo::Kept,
+                "No window shows the agent's pane; kept for `browser feedback`",
+            ),
+        ] {
+            let mut received = None;
+            let sent = deliver("Picked: B\n".into(), Some(&path), |text| {
+                received = Some(text);
+                Ok(to)
+            })
+            .unwrap();
+            assert_eq!(sent.status(), status);
+            assert_eq!(received.as_deref(), Some("Picked: B\n"));
+        }
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn notes_go_to_the_file_when_herdr_gpui_cannot_take_them() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("feedback.md");
+        let sent = deliver("Picked: B\n".into(), Some(&path), unreachable).unwrap();
+        let Sent::File {
+            path: written,
+            unreached,
+        } = &sent
+        else {
+            panic!("expected the file, got {sent:?}");
+        };
+        assert_eq!(written, &path);
+        assert!(matches!(unreached, crate::Error::ControlNoResponse));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "Picked: B\n");
+        assert!(sent.status().starts_with("Saved to "), "{}", sent.status());
+        let printed = deliver("x".into(), None, unreachable).unwrap();
+        assert!(matches!(printed, Sent::Printed { .. }));
+        let missing = directory.path().join("missing").join("feedback.md");
+        assert!(matches!(
+            deliver("x".into(), Some(&missing), unreachable),
+            Err(crate::Error::Path { .. })
+        ));
     }
 
     #[test]

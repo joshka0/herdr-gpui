@@ -18,6 +18,8 @@ pub(crate) enum Request {
     Reload(Caller),
     #[serde(rename = "browser.feedback")]
     Feedback(FeedbackRequest),
+    #[serde(rename = "notes.send")]
+    Notes(NotesRequest),
 }
 
 /// What a tab shows: a web address, or a local file by absolute path, which
@@ -65,6 +67,26 @@ pub(crate) struct FeedbackRequest {
     pub wait_seconds: u64,
 }
 
+/// Notes the user wrote outside a window, such as in a UI mockup, for the
+/// agent in the caller's pane. They go the way page notes do.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct NotesRequest {
+    pub caller: Caller,
+    pub text: String,
+}
+
+/// Where sent notes went.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum NotesTo {
+    /// To the agent: a window showing its pane types them in once it is
+    /// idle, or a waiting `browser feedback --wait` takes them.
+    Agent,
+    /// Kept for `browser feedback`, since no window shows the pane.
+    Kept,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum OpenedIn {
@@ -100,6 +122,9 @@ pub(crate) enum Response {
     /// Notes the user sent to the caller, or `None` when there are none.
     Feedback {
         text: Option<String>,
+    },
+    NotesSent {
+        to: NotesTo,
     },
     Error {
         code: ErrorCode,
@@ -162,6 +187,20 @@ mod tests {
                 wait_seconds: 30
             })
         );
+        let notes: Request = serde_json::from_str(
+            r#"{"method":"notes.send","caller":{"pane_id":"w_1:p1"},"text":"Picked: B"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            notes,
+            Request::Notes(NotesRequest {
+                caller: Caller {
+                    pane_id: Some("w_1:p1".into()),
+                    ..Caller::default()
+                },
+                text: "Picked: B".into(),
+            })
+        );
         let reload: Request =
             serde_json::from_str(r#"{"method":"browser.reload","pane_id":"w_1:p1"}"#).unwrap();
         assert!(matches!(
@@ -182,6 +221,8 @@ mod tests {
             r#"{"method":"browser.open","page":{"url":"https://a.test"},"caller":{"shell":"x"},"focus":true}"#,
             r#"{"method":"browser.open","focus":true}"#,
             r#"{"method":"browser.feedback","wait_seconds":1}"#,
+            r#"{"method":"notes.send","caller":{}}"#,
+            r#"{"method":"notes.send","caller":{},"text":"x","paste":true}"#,
             r#"["browser.open"]"#,
         ] {
             assert!(
@@ -204,6 +245,8 @@ mod tests {
                 text: Some("1. Note".into()),
             },
             Response::Feedback { text: None },
+            Response::NotesSent { to: NotesTo::Agent },
+            Response::NotesSent { to: NotesTo::Kept },
         ] {
             let text = serde_json::to_string(&response).unwrap();
             assert_eq!(serde_json::from_str::<Response>(&text).unwrap(), response);
