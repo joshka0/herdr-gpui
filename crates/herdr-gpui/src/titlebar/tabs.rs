@@ -1,14 +1,14 @@
 //! The title bar folded into the tab row, as Chrome and Conductor draw it.
 //! With Herdr's tab bar at the top the window keeps no header of its own: the
 //! sidebar's column starts with the traffic-light clearance and the sidebar
-//! toggle, the leftmost group's strip takes them when the sidebar is not
-//! expanded, and the rightmost one ends with the bar's git button, account,
+//! toggle, the leftmost group's strip takes them when the sidebar cannot
+//! fit them, and the rightmost one ends with the bar's git button, account,
 //! and window controls, with the header's usage text before them. Every
 //! strip keeps empty room that moves the window, however many tabs it holds;
 //! more tabs than fit still scroll.
 
-use super::{HEIGHT, LEADING, movable};
-use crate::{HerdrWindow, browser::GroupId, herdr_settings::TabBarPosition, sidebar::SidebarMode};
+use super::{HEIGHT, LEADING, SIDEBAR_TOGGLE_MARGIN, SIDEBAR_TOGGLE_SIZE, movable};
+use crate::{HerdrWindow, browser::GroupId, herdr_settings::TabBarPosition};
 use gpui::{prelude::*, *};
 
 /// Empty room a strip keeps after its tabs so the window can always be
@@ -40,10 +40,16 @@ impl HerdrWindow {
         self.tab_bar_position() == TabBarPosition::Top && !self.strip_hidden(first, cx)
     }
 
-    /// The sidebar column's first row, level with the strips beside it: the
-    /// traffic lights' clearance, then the toggle while the sidebar is
-    /// expanded. A collapsed rail is too narrow for both, so the leftmost
-    /// strip takes the toggle and what remains of the clearance.
+    /// Keep the toggle anchored in the sidebar whenever it fits. The rail has
+    /// room on Linux/Windows, but not beside macOS's traffic-light clearance.
+    fn sidebar_header_has_toggle(&self, window: &Window) -> bool {
+        self.sidebar_mode()
+            .width(self.sidebar_width, f32::from(window.viewport_size().width))
+            .is_some_and(|width| width >= LEADING + SIDEBAR_TOGGLE_SIZE + SIDEBAR_TOGGLE_MARGIN)
+    }
+
+    /// The sidebar column's first row, level with the strips beside it. When
+    /// too narrow, the leftmost strip takes the toggle and remaining clearance.
     pub(crate) fn sidebar_header(&self, window: &Window, cx: &mut Context<Self>) -> Div {
         let header = div()
             .debug_selector(|| "sidebar-titlebar".into())
@@ -55,7 +61,7 @@ impl HerdrWindow {
             .overflow_hidden()
             .bg(rgb(self.theme.sidebar_background()))
             .child(div().flex_none().w(px(LEADING)).h_full())
-            .when(self.sidebar_mode() == SidebarMode::Expanded, |header| {
+            .when(self.sidebar_header_has_toggle(window), |header| {
                 header.child(self.sidebar_toggle(cx))
             });
         movable(header, window)
@@ -95,11 +101,11 @@ impl HerdrWindow {
     /// leaves the traffic lights, and the toggle when the sidebar header does
     /// not show it.
     pub(crate) fn strip_leading(&self, window: &Window, cx: &mut Context<Self>) -> Option<Div> {
-        let mode = self.sidebar_mode();
-        if mode == SidebarMode::Expanded {
+        if self.sidebar_header_has_toggle(window) {
             return None;
         }
-        let column = mode
+        let column = self
+            .sidebar_mode()
             .width(self.sidebar_width, f32::from(window.viewport_size().width))
             .unwrap_or(0.);
         Some(
