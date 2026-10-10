@@ -1,9 +1,11 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
-use crate::titlebar::tests::header_window;
+use crate::{sidebar::SidebarMode, titlebar::tests::header_window};
 use core::prelude::v1::test;
 use gpui::{Bounds, TestAppContext, VisualTestContext, point, px, size};
 use herdr_client::protocol::ClientShellTabStatusSegment;
+
+mod toggle_position;
 
 fn draw(cx: &mut VisualTestContext) {
     cx.update(|window, cx| {
@@ -83,7 +85,7 @@ fn the_tab_row_stands_in_for_the_header(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn a_collapsed_sidebar_hands_the_toggle_to_the_leftmost_strip(cx: &mut TestAppContext) {
+fn a_collapsed_sidebar_keeps_the_toggle_in_the_header_when_it_fits(cx: &mut TestAppContext) {
     let (view, cx) = window(cx);
     cx.update(|_, cx| view.update(cx, |view, _| view.toggle_sidebar()));
     for (mode, expected) in [("compact", Some(SidebarMode::Rail)), ("hidden", None)] {
@@ -105,7 +107,13 @@ fn a_collapsed_sidebar_hands_the_toggle_to_the_leftmost_strip(cx: &mut TestAppCo
         draw(cx);
         let toggle = cx.debug_bounds("toggle-sidebar").unwrap();
         let leading = cx.debug_bounds("strip-titlebar-leading").unwrap();
-        assert!(leading.contains(&toggle.center()), "{mode}");
+        if expected.is_some() && !cfg!(target_os = "macos") {
+            let header = cx.debug_bounds("sidebar-titlebar").unwrap();
+            assert!(header.contains(&toggle.center()), "{mode}");
+            assert!(!leading.contains(&toggle.center()), "{mode}");
+        } else {
+            assert!(leading.contains(&toggle.center()), "{mode}");
+        }
         let back = cx.debug_bounds("titlebar-back").unwrap();
         assert!(leading.contains(&back.center()), "{mode}");
         assert!(back.left() >= toggle.right(), "{mode}");
@@ -146,7 +154,12 @@ fn a_split_puts_the_toggle_left_and_the_account_right(cx: &mut TestAppContext) {
     assert_eq!(slots.len(), 2);
     let left = cx.debug_bounds("group").unwrap();
     let right = cx.debug_bounds("g1-group").unwrap();
-    assert!(left.contains(&cx.debug_bounds("toggle-sidebar").unwrap().center()));
+    let toggle_host = if cfg!(target_os = "macos") {
+        left
+    } else {
+        cx.debug_bounds("sidebar-titlebar").unwrap()
+    };
+    assert!(toggle_host.contains(&cx.debug_bounds("toggle-sidebar").unwrap().center()));
     assert!(right.contains(&cx.debug_bounds("titlebar-avatar").unwrap().center()));
     assert!(cx.debug_bounds("titlebar").is_none());
 }

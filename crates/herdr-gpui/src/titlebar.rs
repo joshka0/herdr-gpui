@@ -16,6 +16,9 @@ use gpui::{prelude::*, *};
 /// comfortable size for the pointer.
 const AVATAR: f32 = 20.;
 
+const SIDEBAR_TOGGLE_SIZE: f32 = 28.;
+const SIDEBAR_TOGGLE_MARGIN: f32 = 4.;
+
 /// Native chrome the window draws above its body; popups must clear it.
 pub(super) const HEIGHT: f32 = 34.;
 
@@ -248,8 +251,8 @@ impl HerdrWindow {
             .debug_selector(|| "toggle-sidebar".into())
             .flex_none()
             .self_center()
-            .mr(px(4.))
-            .size(px(28.))
+            .mr(px(SIDEBAR_TOGGLE_MARGIN))
+            .size(px(SIDEBAR_TOGGLE_SIZE))
             .flex()
             .items_center()
             .justify_center()

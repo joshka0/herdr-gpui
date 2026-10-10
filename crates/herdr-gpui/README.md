@@ -700,8 +700,10 @@ already waiting in a connection inbox from the disabled period are discarded too
 Failed reloads preserve current settings. QA
 previews remain available regardless of delivery settings.
 
-The sidebar button at the left of the titlebar (the sidebar's top row, or the
-leftmost tab strip while the sidebar is collapsed) hides or shows the sidebar.
+The sidebar button at the left of the titlebar hides or shows the sidebar.
+On Linux and Windows it stays in the same position when the sidebar collapses
+to a rail. The leftmost tab strip takes the button when the sidebar is hidden
+or the rail cannot fit it beside macOS's traffic lights.
 It stays available when the sidebar is hidden; the existing View menu command and shortcut still work.
 In **Settings > General**, toggle **Show usage** to turn the bottom quota display on or off.
 The choice is saved to `config-gpui.local.toml` and follows the existing `[usage] show` setting.
