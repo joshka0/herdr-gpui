@@ -173,12 +173,16 @@ pub(super) fn find(text: &str, query: &str) -> Option<Range<usize>> {
         .find_map(|(start, _)| prefix_len(&text[start..], &needle).map(|len| start..start + len))
 }
 
-/// The length in bytes of the start of `text` whose lowercase form is `needle`.
+/// The length in bytes of the start of `text` whose lowercase form begins
+/// with `needle`. A character whose lowercase form is longer, such as `İ`
+/// (`i` and a combining dot), matches whole once the needle ends inside it.
 fn prefix_len(text: &str, needle: &[char]) -> Option<usize> {
     let mut pending = needle;
     for (offset, ch) in text.char_indices() {
         for lower in ch.to_lowercase() {
-            let (first, rest) = pending.split_first()?;
+            let Some((first, rest)) = pending.split_first() else {
+                break;
+            };
             if *first != lower {
                 return None;
             }

@@ -12,6 +12,11 @@ fn find_ignores_case_and_measures_the_original_bytes() {
     // Lowercasing changes neither the match nor where it lands.
     assert_eq!(find("Ünïcode box", "üNÏ"), Some(0..5));
     assert_eq!(find("café", "É"), Some(3..5));
+    // `İ` lowercases to `i` and a combining dot: a query ending inside that
+    // expansion still matches the whole character.
+    assert_eq!(find("İstanbul", "i"), Some(0..2));
+    assert_eq!(find("İstanbul", "i\u{307}s"), Some(0..3));
+    assert_eq!(find("İstanbul", "is"), None);
     assert_eq!(find("main", "mains"), None);
     assert_eq!(find("main", ""), None);
     assert_eq!(find("main", "   "), None);
