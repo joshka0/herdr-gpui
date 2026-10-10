@@ -111,6 +111,9 @@ pub(crate) struct HerdrWindow {
     pub(crate) sessions_anchor: std::rc::Rc<std::cell::Cell<Point<Pixels>>>,
     pub(crate) activation_deadline: Option<std::time::Instant>,
     pub(crate) pending_navigation: Option<OwnedNavigationTarget>,
+    /// Whether the leftmost strip gave Back and Forward their full width
+    /// when it was last laid out; see `HerdrWindow::strip_leading`.
+    pub(crate) strip_navigation_fits: bool,
     pub(crate) pending_toast: Option<u64>,
     pub(crate) toasts_hidden: bool,
     pub(crate) pending_releases: Vec<endpoint::Release>,
@@ -756,6 +759,7 @@ impl HerdrWindow {
             selection_epoch: 0,
             activation_deadline: None,
             pending_navigation: None,
+            strip_navigation_fits: true,
             pending_toast: None,
             toasts_hidden: false,
             pending_releases: Vec::new(),
