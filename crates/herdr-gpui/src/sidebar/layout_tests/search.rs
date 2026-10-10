@@ -1,5 +1,7 @@
 use super::*;
 
+mod scrolling;
+
 fn connected(window: &mut Window, cx: &mut Context<HerdrWindow>) -> HerdrWindow {
     crate::bind_keys(cx);
     let mut view = fixture_window(window, cx);

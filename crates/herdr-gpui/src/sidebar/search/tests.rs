@@ -3,6 +3,8 @@
 use super::*;
 use crate::sidebar::layout_tests::snapshot;
 
+mod labels;
+
 #[test]
 fn find_ignores_case_and_measures_the_original_bytes() {
     assert_eq!(find("Herdr-GPUI", "gpui"), Some(6..10));
@@ -104,4 +106,15 @@ fn results_are_bounded() {
     let [local, _] = devices(&snapshot);
     // "another workspace" names most of them, and their branch matches "o" too.
     assert_eq!(search("o", &[local]).len(), RESULT_LIMIT);
+}
+
+#[test]
+fn each_section_is_bounded_before_the_sections_join() {
+    let snapshot = snapshot(RESULT_LIMIT + 50);
+    let [local, _] = devices(&snapshot);
+    // "fix/sidebar-…" names most branches but no workspace label, so the
+    // branches section alone fills the results, in sidebar order.
+    let hits = search("fix/", &[local]);
+    assert_eq!(hits.len(), RESULT_LIMIT);
+    assert!(hits.iter().all(|hit| hit.kind == Kind::Branch));
 }

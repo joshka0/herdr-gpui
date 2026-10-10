@@ -3,18 +3,19 @@
 //! worktrees, then branches. Matching is a case-insensitive substring over
 //! the snapshots the sidebar already holds, so typing never asks a daemon.
 
-use super::workspace_label;
+use super::{workspace_label, workspaces::workspace_entries};
 use crate::{
     HerdrWindow, NavigationTarget,
     search_input::{Changed, SearchInput},
 };
-use gpui::{AppContext as _, Context, Entity, KeyDownEvent, Subscription, Window};
+use gpui::{AppContext as _, Context, Entity, KeyDownEvent, ScrollHandle, Subscription, Window};
 use herdr_client::protocol::{AgentStatus, ClientShellWorkspace};
 use std::ops::Range;
 
 mod results;
 
-/// Results kept per query: enough for any real sidebar, bounded for a huge one.
+/// Results kept per query, and per section while scanning: enough for any
+/// real sidebar, bounded for a huge one.
 const RESULT_LIMIT: usize = 200;
 
 pub(crate) struct SidebarSearch {
@@ -22,6 +23,7 @@ pub(crate) struct SidebarSearch {
     query: String,
     /// The highlighted result, which Enter opens.
     selected: usize,
+    scroll: ScrollHandle,
     _changed: Subscription,
 }
 
@@ -36,12 +38,15 @@ impl SidebarSearch {
             let search = &mut this.sidebar_search;
             search.query = input.read(cx).text().to_owned();
             search.selected = 0;
+            // The first child is the section heading; the second is the first hit.
+            search.scroll.scroll_to_item(1);
             cx.notify();
         });
         Self {
             input,
             query: String::new(),
             selected: 0,
+            scroll: ScrollHandle::new(),
             _changed: changed,
         }
     }
@@ -96,11 +101,16 @@ pub(super) fn search(query: &str, devices: &[Device<'_>]) -> Vec<Hit> {
         (true, true) => device.label.to_owned(),
         (false, _) => detail.to_owned(),
     };
-    let mut hits = Vec::new();
+    // A section stops matching once full, so a broad query over a huge
+    // snapshot builds no more than it can show.
+    let (mut found, mut worktrees, mut branches) = (Vec::new(), Vec::new(), Vec::new());
+    let room = |section: &Vec<Hit>| section.len() < RESULT_LIMIT;
     for device in devices {
-        if let Some(range) = find(device.label, query) {
+        if room(&found)
+            && let Some(range) = find(device.label, query)
+        {
             let count = device.workspaces.len();
-            hits.push(Hit {
+            found.push(Hit {
                 kind: Kind::Device,
                 target: Target::Device {
                     endpoint: device.id.to_owned(),
@@ -111,20 +121,19 @@ pub(super) fn search(query: &str, devices: &[Device<'_>]) -> Vec<Hit> {
                 status: None,
             });
         }
-        for workspace in device.workspaces {
-            // A linked worktree goes by the name its sidebar row shows.
-            let linked = workspace
-                .worktree
-                .as_ref()
-                .is_some_and(|worktree| worktree.is_linked_worktree);
-            let label = workspace_label(workspace, linked);
+        // Use sidebar grouping and labels, including children of collapsed groups.
+        for (index, child) in workspace_entries(device.workspaces) {
+            let workspace = &device.workspaces[index];
+            let label = workspace_label(workspace, child);
             let branch = workspace.branch.as_deref().unwrap_or_default();
             let target = || Target::Workspace {
                 endpoint: device.id.to_owned(),
                 workspace: workspace.workspace_id.clone(),
             };
-            if let Some(range) = find(label, query) {
-                hits.push(Hit {
+            if room(&worktrees)
+                && let Some(range) = find(label, query)
+            {
+                worktrees.push(Hit {
                     kind: Kind::Worktree,
                     target: target(),
                     text: label.to_owned(),
@@ -133,8 +142,10 @@ pub(super) fn search(query: &str, devices: &[Device<'_>]) -> Vec<Hit> {
                     status: Some(workspace.agent_status),
                 });
             }
-            if let Some(range) = find(branch, query) {
-                hits.push(Hit {
+            if room(&branches)
+                && let Some(range) = find(branch, query)
+            {
+                branches.push(Hit {
                     kind: Kind::Branch,
                     target: target(),
                     text: branch.to_owned(),
@@ -145,10 +156,10 @@ pub(super) fn search(query: &str, devices: &[Device<'_>]) -> Vec<Hit> {
             }
         }
     }
-    // Stable, so each section keeps the sidebar's own order.
-    hits.sort_by_key(|hit| hit.kind);
-    hits.truncate(RESULT_LIMIT);
-    hits
+    found.extend(worktrees);
+    found.extend(branches);
+    found.truncate(RESULT_LIMIT);
+    found
 }
 
 /// The bytes of `text` matching `query`, ignoring case: the first place where
@@ -263,10 +274,24 @@ impl HerdrWindow {
             .selected
             .min(hits.len().saturating_sub(1));
         match key {
-            "down" => {
-                self.sidebar_search.selected = (selected + 1).min(hits.len().saturating_sub(1))
+            "down" | "up" => {
+                let selected = if key == "down" {
+                    (selected + 1).min(hits.len().saturating_sub(1))
+                } else {
+                    selected.saturating_sub(1)
+                };
+                self.sidebar_search.selected = selected;
+                if !hits.is_empty() {
+                    // Headings are scroll children too, one before each section.
+                    let headings = 1 + hits[..=selected]
+                        .windows(2)
+                        .filter(|pair| pair[0].kind != pair[1].kind)
+                        .count();
+                    self.sidebar_search
+                        .scroll
+                        .scroll_to_item(selected + headings);
+                }
             }
-            "up" => self.sidebar_search.selected = selected.saturating_sub(1),
             "enter" => {
                 if let Some(hit) = hits.get(selected) {
                     self.open_search_hit(&hit.target, window, cx);

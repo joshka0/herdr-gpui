@@ -82,7 +82,8 @@ impl HerdrWindow {
             .flex_col()
             .flex_1()
             .min_h_0()
-            .overflow_y_scroll();
+            .overflow_y_scroll()
+            .track_scroll(&self.sidebar_search.scroll);
         if hits.is_empty() {
             return list.child(
                 div()
