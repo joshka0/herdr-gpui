@@ -88,7 +88,7 @@ impl HostFixture {
         fs::read_to_string(self.root.path().join("home/requests")).unwrap_or_default()
     }
 
-    fn without_json_parser(&mut self) {
+    fn with_json_parser(&mut self, parser: Option<&str>) {
         let Exec::Remote(shell) = &mut self.exec else {
             unreachable!();
         };
@@ -96,11 +96,16 @@ impl HostFixture {
         // missing utility cannot disguise an attempted cross-provider request.
         let output = shell
             .run(
-                r#"for tool in cat sed head tr; do
-    ln -s "$(command -v "$tool")" "$HOME/.local/bin/$tool" || exit 1
+                &format!(
+                    r#"for tool in cat sed head tr {parser}; do
+    [ -n "$tool" ] || continue
+    source=$(command -v "$tool") || exit 1
+    ln -s "$source" "$HOME/.local/bin/$tool" || exit 1
 done
 PATH="$HOME/.local/bin"
-! command -v python3 && ! command -v jq && command -v curl"#,
+command -v curl"#,
+                    parser = crate::usage::probe::quote(parser.unwrap_or_default()),
+                ),
                 Duration::from_secs(5),
             )
             .unwrap();
@@ -115,8 +120,14 @@ fn write(path: &Path, text: &str) {
 
 #[test]
 fn opencode_oauth_reads_plan_usage_on_the_selected_host() {
-    for custom_data in [false, true] {
+    for (parser, custom_data) in [
+        ("python3", false),
+        ("python3", true),
+        ("jq", false),
+        ("jq", true),
+    ] {
         let mut host = HostFixture::new(None, Some(OPENCODE), custom_data);
+        host.with_json_parser(Some(parser));
         let report = host.fetch().unwrap().unwrap();
         assert_eq!(report.provider, provider("codex"));
         assert_eq!(report.account.plan.as_deref(), Some("Plus"));
@@ -176,7 +187,7 @@ fn missing_or_unusable_codex_auth_falls_back_to_opencode() {
 
 #[test]
 fn missing_malformed_and_non_oauth_opencode_entries_make_no_request() {
-    for auth in [
+    let cases = [
         None,
         Some("not json"),
         Some("{}"),
@@ -186,11 +197,17 @@ fn missing_malformed_and_non_oauth_opencode_entries_make_no_request() {
         Some(r#"{"openai":{"type":"oauth","access":""}}"#),
         Some(r#"{"openai":{"type":"oauth","access":null}}"#),
         Some(r#"{"openai":{"type":"oauth","access":{}}}"#),
+        Some(r#"{"openai":{"type":"oauth","access":[]}}"#),
+        Some(r#"{"openai":{"type":"oauth","access":["not-a-token"]}}"#),
         Some(r#"{"anthropic":{"type":"oauth","access":"wrong-provider"}}"#),
-    ] {
-        let mut host = HostFixture::new(None, auth, false);
-        assert!(host.fetch().is_none());
-        assert!(host.requests().is_empty());
+    ];
+    for parser in ["python3", "jq"] {
+        for auth in cases {
+            let mut host = HostFixture::new(None, auth, false);
+            host.with_json_parser(Some(parser));
+            assert!(host.fetch().is_none(), "{parser}: {auth:?}");
+            assert!(host.requests().is_empty(), "{parser}: {auth:?}");
+        }
     }
 }
 
@@ -211,7 +228,7 @@ fn opencode_auth_without_a_json_parser_never_uses_another_providers_token() {
         // Anthropic's OAuth entry precedes (or replaces) the OpenAI entry.
         let auth = serde_json::to_string_pretty(&auth).unwrap();
         let mut host = HostFixture::new(None, Some(&auth), false);
-        host.without_json_parser();
+        host.with_json_parser(None);
         assert!(host.fetch().is_none());
         assert!(host.requests().is_empty());
     }

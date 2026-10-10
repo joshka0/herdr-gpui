@@ -35,11 +35,11 @@ if isinstance(v,bool): v=str(v).lower()
 if v is None or isinstance(v,(dict,list)): sys.exit(1)
 sys.stdout.write(str(v))' "$@" 2>/dev/null
     elif command -v jq >/dev/null 2>&1; then
-        herdr_path=
+        herdr_path=.
         for herdr_key in "$@"; do
             case "$herdr_key" in *[!0-9]*) herdr_path="$herdr_path[\"$herdr_key\"]";; *) herdr_path="$herdr_path[$herdr_key]";; esac
         done
-        jq -j "$herdr_path // empty" 2>/dev/null
+        jq -j "$herdr_path | select(type == \"string\" or type == \"number\" or type == \"boolean\")" 2>/dev/null
     else
         return 1
     fi
