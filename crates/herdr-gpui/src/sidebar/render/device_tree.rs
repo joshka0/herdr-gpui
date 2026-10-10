@@ -97,10 +97,16 @@ impl HerdrWindow {
         let mut count = 0;
         let mut focused = None;
         for agent in sorted_agents(snapshot, self.agent_sort) {
+            // Configured `[sidebar_layout.agents]` rows apply here as in the
+            // agents panel, gap included.
+            let Some(lines) = self.configured_agent_lines(agent, snapshot, row_cx.host) else {
+                continue;
+            };
             if selected && agent.focused {
                 focused = Some(count);
             }
-            list = list.child(self.agent_cell(index, agent, snapshot, &row_cx, Vec::new(), 0., cx));
+            let gap = self.agent_row_gap(count);
+            list = list.child(self.agent_cell(index, agent, snapshot, &row_cx, lines, gap, cx));
             count += 1;
         }
         if count == 0 {

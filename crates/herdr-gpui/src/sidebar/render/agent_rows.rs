@@ -30,8 +30,6 @@ impl HerdrWindow {
         let font = &self.config.sidebar;
         let theme = &self.theme;
         let multi = self.endpoints.len() > 1;
-        let custom = self.config.usage.inline
-            && self.config.sidebar_layout.agents != crate::config::AgentLayout::default();
         let mut count = 0;
         let mut focused = None;
         for (index, agent) in self.panel_agents() {
@@ -61,31 +59,47 @@ impl HerdrWindow {
                 host: (multi && endpoint.id != crate::endpoint::LOCAL)
                     .then_some(endpoint.label.as_str()),
             };
-            let lines = if custom {
-                let Some(lines) = tokens::agent_rows(
-                    &self.config.sidebar_layout.agents,
-                    agent,
-                    snapshot,
-                    row_cx.host,
-                ) else {
-                    continue;
-                };
-                lines
-            } else {
-                Vec::new()
+            let Some(lines) = self.configured_agent_lines(agent, snapshot, row_cx.host) else {
+                continue;
             };
             if selected && agent.focused {
                 focused = Some(count);
             }
-            let gap = if custom && count > 0 {
-                f32::from(self.config.sidebar_layout.agents.row_gap) * line_height(font)
-            } else {
-                0.
-            };
+            let gap = self.agent_row_gap(count);
             count += 1;
             list = list.child(self.agent_cell(index, agent, snapshot, &row_cx, lines, gap, cx));
         }
         (list, count, focused)
+    }
+
+    /// Whether the agents' rows follow a configured `[sidebar_layout.agents]`.
+    fn custom_agent_rows(&self) -> bool {
+        self.config.usage.inline
+            && self.config.sidebar_layout.agents != crate::config::AgentLayout::default()
+    }
+
+    /// The lines a configured agent row shows, empty for Herdr's own row, or
+    /// None when the configured rows leave this agent out.
+    pub(super) fn configured_agent_lines(
+        &self,
+        agent: &ClientShellAgent,
+        snapshot: &ClientShellSnapshot,
+        host: Option<&str>,
+    ) -> Option<Vec<Vec<tokens::ResolvedToken>>> {
+        if !self.custom_agent_rows() {
+            return Some(Vec::new());
+        }
+        tokens::agent_rows(&self.config.sidebar_layout.agents, agent, snapshot, host)
+    }
+
+    /// Space above the agent row painted `count`-th in its list: a
+    /// configured `row_gap` between configured rows, none otherwise.
+    pub(super) fn agent_row_gap(&self, count: usize) -> f32 {
+        if self.custom_agent_rows() && count > 0 {
+            f32::from(self.config.sidebar_layout.agents.row_gap) * line_height(&self.config.sidebar)
+        } else {
+            0.
+        }
     }
 
     /// One agent's row, for the agents list or under its device's header:

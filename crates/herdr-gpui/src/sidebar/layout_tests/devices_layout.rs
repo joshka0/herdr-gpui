@@ -97,3 +97,31 @@ fn other_layouts_drop_the_search(cx: &mut gpui::TestAppContext) {
     assert!(cx.debug_bounds("header-spaces").is_some());
     assert!(cx.debug_bounds("device-tree-search").is_none());
 }
+
+/// Configured `[sidebar_layout.agents]` rows reach the tree, as they reach
+/// the agents panel in every other layout.
+#[gpui::test]
+fn configured_agent_rows_apply_under_each_device(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = devices_window(cx);
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            view.config.sidebar_layout = toml::from_str(
+                r#"
+                [agents]
+                rows = [["state_icon", "workspace"], ["agent"], ["state_text"]]
+            "#,
+            )
+            .unwrap();
+            cx.notify();
+        })
+    });
+    cx.update(|window, cx| full_draw(window, cx).clear(cx));
+    let header = cx.debug_bounds("host-local").unwrap();
+    let row = cx.debug_bounds("agent-local-p0").unwrap();
+    let third = cx.debug_bounds("line-agent-p0-2").unwrap();
+    assert!(header.bottom() <= row.top());
+    assert!(
+        row.contains(&third.origin),
+        "the third configured line is drawn"
+    );
+}
