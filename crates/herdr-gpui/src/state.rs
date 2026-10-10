@@ -81,6 +81,7 @@ pub struct LiveState {
     /// Same-user peer at the owned standard socket, not executable attestation.
     pub(crate) local_daemon_peer: bool,
     /// A one-shot local Git diagnosis, delivered only after the handshake.
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     pub(crate) local_peer_warning: Option<crate::daemon::LocalPeerWarning>,
     /// `pane.clear` arrived after Herdr 0.9.1; older daemons reject it.
     pub(crate) supports_pane_clear: bool,
@@ -191,6 +192,7 @@ impl Default for LiveState {
             missing_installation: false,
             version_mismatch: None,
             local_daemon_peer: false,
+            #[cfg(any(target_os = "macos", target_os = "linux"))]
             local_peer_warning: None,
             supports_pane_clear: false,
             supports_tab_move: false,
@@ -246,6 +248,7 @@ impl LiveState {
             missing_installation,
             version_mismatch,
             local_daemon_peer,
+            #[cfg(any(target_os = "macos", target_os = "linux"))]
             local_peer_warning,
             supports_pane_clear,
             supports_tab_move,
@@ -273,6 +276,10 @@ impl LiveState {
             // Shapes the next key events, not anything drawn.
             keyboard_report_all: _,
         } = next;
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        if local_peer_warning.is_some() {
+            return false;
+        }
         let same_arc = |a: &Option<Arc<_>>, b: &Option<Arc<_>>| match (a, b) {
             (Some(a), Some(b)) => Arc::ptr_eq(a, b),
             (a, b) => a.is_none() && b.is_none(),
@@ -299,7 +306,6 @@ impl LiveState {
             && *missing_installation == self.missing_installation
             && *version_mismatch == self.version_mismatch
             && *local_daemon_peer == self.local_daemon_peer
-            && local_peer_warning.is_none()
             && *supports_pane_clear == self.supports_pane_clear
             && *supports_tab_move == self.supports_tab_move
             && *supports_link_resolve == self.supports_link_resolve

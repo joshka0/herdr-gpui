@@ -2,6 +2,9 @@ use super::*;
 use std::os::unix::net::UnixListener;
 use std::sync::atomic::AtomicUsize;
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod endpoint_classification;
+
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
 fn socket() -> PathBuf {

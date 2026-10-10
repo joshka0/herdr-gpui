@@ -2333,8 +2333,8 @@ records when reporting the failure.
   A local peer or permissions failure also produces an in-app toast once the
   terminal connects, explaining why Git/PR details are unavailable and how to
   restore them. It appears once per connection even when daemon notifications
-  are muted; permission failures include a quoted command for the affected
-  socket or directory and a reminder to reconnect the GUI. Intentionally
+  are muted; permission failures include a quoted command on its own line for
+  the affected socket or directory and a reminder to reconnect the GUI. Intentionally
   non-local sockets do not produce this toast.
   `DirectoryPermissions` means the session directory's ownership could not be
   verified or it is world-writable; check ownership, remove world-write access

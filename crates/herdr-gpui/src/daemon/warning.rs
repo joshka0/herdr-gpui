@@ -3,12 +3,6 @@
 use super::UntrustedEndpoint;
 use std::path::PathBuf;
 
-pub(crate) enum LocalPeer {
-    Trusted,
-    Unverified,
-    Rejected(LocalPeerWarning),
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct LocalPeerWarning {
     reason: UntrustedEndpoint,
@@ -22,7 +16,7 @@ impl LocalPeerWarning {
 
     pub(crate) fn notice(&self, now: std::time::Instant) -> crate::notifications::Notice {
         use herdr_client::protocol::{SemanticNotification, SemanticNotificationKind};
-        crate::notifications::Notice::local_feedback(
+        crate::notifications::Notice::local_feedback_multiline(
             SemanticNotification {
                 kind: SemanticNotificationKind::NeedsAttention,
                 title: "Local Git and PR details unavailable".into(),
@@ -60,7 +54,7 @@ impl LocalPeerWarning {
                     .filter(|quoted| quoted.len() <= 200);
                 match command {
                     Some(path) => format!(
-                        "Check ownership and remove {access} access: chmod {mode} -- {path}. Then reconnect the GUI."
+                        "Check ownership and remove {access} access, then reconnect the GUI.\nchmod {mode} -- {path}"
                     ),
                     None => format!(
                         "Make it owned by your user, remove {access} access, then reconnect the GUI."

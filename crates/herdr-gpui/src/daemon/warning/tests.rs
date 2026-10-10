@@ -1,5 +1,7 @@
 use super::*;
 
+mod repair_command;
+
 #[test]
 fn local_peer_warning_identifies_the_directory_and_quotes_the_remedy() {
     let warning = LocalPeerWarning::new(
@@ -11,7 +13,7 @@ fn local_peer_warning_identifies_the_directory_and_quotes_the_remedy() {
     assert_eq!(
         notice.body.as_deref(),
         Some(
-            "The daemon socket directory must be owned by your user and not world-writable. Check ownership and remove world-write access: chmod o-w -- '/home/test/it'\\''s herdr'. Then reconnect the GUI."
+            "The daemon socket directory must be owned by your user and not world-writable. Check ownership and remove world-write access, then reconnect the GUI.\nchmod o-w -- '/home/test/it'\\''s herdr'"
         )
     );
     assert!(notice.is_local_feedback());

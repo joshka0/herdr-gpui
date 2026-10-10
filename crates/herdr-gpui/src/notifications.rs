@@ -76,6 +76,29 @@ impl Notice {
         notice
     }
 
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    pub(crate) fn local_feedback_multiline(
+        mut notification: SemanticNotification,
+        now: Instant,
+    ) -> Self {
+        // Local recovery instructions may put a copyable command on its own
+        // line. Keep those line breaks, with the same scan bound and all other
+        // control/direction characters removed as for daemon notifications.
+        let body = notification
+            .body
+            .take()
+            .map(|body| {
+                body.chars()
+                    .take(512)
+                    .filter(|c| *c == '\n' || !unsafe_char(*c))
+                    .collect::<String>()
+            })
+            .filter(|body| !body.trim().is_empty());
+        let mut notice = Self::local_feedback(notification, now);
+        notice.body = body;
+        notice
+    }
+
     pub fn promote(&mut self, now: Instant) {
         self.ready = true;
         self.visible = true;
@@ -484,6 +507,9 @@ pub(crate) fn take_system(
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    mod local_feedback;
 
     pub fn notification(title: &str) -> SemanticNotification {
         SemanticNotification {
