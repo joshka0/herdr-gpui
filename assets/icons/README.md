@@ -13,7 +13,9 @@ Transparent margins keep the artwork aligned with other desktop icons.
 | <img src="herdr-ui-icon-clean.png" width="128" height="128" alt="Rounded Herdr icon"> | <img src="herdr-linux.svg" width="128" height="128" alt="Circular Herdr icon"> |
 
 `herdr-ui-icon-clean.svg` is the rounded tile source artwork;
-`herdr-icon-square-clean.svg` is the unused full-square variant.
+`herdr-icon-square-clean.svg` is the legacy full-square variant. It remains an
+input to `scripts/generate-icons.swift`, which regenerates its normal and red
+PNG exports; Linux packaging no longer installs those square assets.
 The rounded 1024x1024 PNG export serves the About box; Linux packages install
 `herdr-linux.svg`, a circular composition of the same ram, as the scalable icon.
 On macOS, install the SVG renderer with
