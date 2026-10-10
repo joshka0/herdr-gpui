@@ -209,6 +209,7 @@ fn agent_list(look: &Look, device: &Device, slot: Slot, cx: &mut Context<HerdrWi
     }
     list.children(device.agents.iter().map(|agent| {
         let (endpoint, pane) = (device.id.clone(), agent.pane_id.clone());
+        let (tab, workspace) = (agent.tab_id.clone(), agent.workspace_id.clone());
         div()
             .id(SharedString::from(slot.selector(&format!(
                 "devices-agent-{}-{}",
@@ -255,7 +256,18 @@ fn agent_list(look: &Look, device: &Device, slot: Slot, cx: &mut Context<HerdrWi
                     .child(crate::sidebar::status_text(agent.status)),
             )
             .on_click(cx.listener(move |this, _, window, cx| {
+                // Read before navigating, which may switch devices.
+                let on_screen = this.endpoints[this.selected_endpoint].id == endpoint
+                    && this
+                        .browser_key()
+                        .is_some_and(|(_, shown)| shown == workspace);
                 this.navigate_endpoint(&endpoint, crate::NavigationTarget::Pane(&pane), cx);
+                // The window leaves a page for its terminal when the daemon's
+                // focus moves to another tab or workspace. An agent in the
+                // tab already focused moves nothing, so show it here.
+                if on_screen {
+                    this.terminal_focus_moved(&tab, false, cx);
+                }
                 window.focus(&this.focus, cx);
             }))
     }))

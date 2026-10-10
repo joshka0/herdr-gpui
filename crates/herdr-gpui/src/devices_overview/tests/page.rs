@@ -158,3 +158,25 @@ fn clicking_a_device_row_opens_and_closes_its_agents(cx: &mut gpui::TestAppConte
     draw(cx);
     assert!(cx.debug_bounds("devices-agents-local").is_none());
 }
+
+/// An agent in the tab the daemon already focuses moves no focus, so the
+/// click itself must take the group back from the overview to the terminal.
+#[gpui::test]
+fn clicking_an_agent_in_the_focused_tab_shows_its_terminal(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = window(cx);
+    cx.simulate_resize(gpui::size(gpui::px(1400.), gpui::px(900.)));
+    open(&view, cx);
+    let row = cx.debug_bounds("devices-row-local").unwrap();
+    cx.simulate_click(row.center(), gpui::Modifiers::default());
+    draw(cx);
+    // `p0` sits in `t0`, the tab the fixture's daemon focuses.
+    let agent = cx.debug_bounds("devices-agent-local-p0").unwrap();
+    cx.simulate_click(agent.center(), gpui::Modifiers::default());
+    draw(cx);
+    assert!(
+        cx.debug_bounds("devices-tab").is_none(),
+        "the overview gave way"
+    );
+    assert!(cx.debug_bounds("terminal").is_some(), "its terminal shows");
+    assert_eq!(overview_tabs(&view, cx), 1, "the overview tab stays open");
+}

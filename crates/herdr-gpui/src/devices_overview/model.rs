@@ -83,6 +83,10 @@ pub(crate) enum Link {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct AgentLine {
     pub pane_id: String,
+    /// The Herdr tab and workspace holding the pane, so a click can show
+    /// that tab even when the daemon's focus does not move.
+    pub tab_id: String,
+    pub workspace_id: String,
     pub name: String,
     /// The agent's identity, for its icon.
     pub identity: Option<String>,
@@ -136,6 +140,8 @@ impl Device {
             .iter()
             .map(|agent| AgentLine {
                 pane_id: agent.pane_id.clone(),
+                tab_id: agent.tab_id.clone(),
+                workspace_id: agent.workspace_id.clone(),
                 name: crate::sidebar::agent_name(agent).to_owned(),
                 identity: agent.agent.clone(),
                 workspace: snapshot
