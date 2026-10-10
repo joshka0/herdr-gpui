@@ -13,7 +13,7 @@ fn local_peer_warning_identifies_the_directory_and_quotes_the_remedy() {
     assert_eq!(
         notice.body.as_deref(),
         Some(
-            "The daemon socket directory must be owned by your user and not world-writable. Check ownership and remove world-write access, then reconnect the GUI.\nchmod o-w -- '/home/test/it'\\''s herdr'"
+            "The daemon socket directory must be owned by your user and not world-writable. Check ownership and remove world-write access, then reconnect the GUI.\nchmod -- o-w '/home/test/it'\\''s herdr'"
         )
     );
     assert!(notice.is_local_feedback());
@@ -26,7 +26,7 @@ fn local_peer_warning_identifies_the_directory_and_quotes_the_remedy() {
     assert!(
         socket
             .body()
-            .contains("chmod go-w -- '/home/test/herdr/herdr-client.sock'")
+            .contains("chmod -- go-w '/home/test/herdr/herdr-client.sock'")
     );
 }
 
