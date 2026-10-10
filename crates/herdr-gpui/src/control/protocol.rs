@@ -62,6 +62,9 @@ pub(crate) struct BrowserOpen {
 #[serde(deny_unknown_fields)]
 pub(crate) struct FeedbackRequest {
     pub pane_id: String,
+    /// Absent in older clients; never treated as a wildcard for a daemon.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub daemon_socket: Option<String>,
     /// How long to wait for notes when none are waiting, at most
     /// `MAX_WAIT_SECONDS`.
     pub wait_seconds: u64,
@@ -183,6 +186,7 @@ mod tests {
         assert_eq!(
             feedback,
             Request::Feedback(FeedbackRequest {
+                daemon_socket: None,
                 pane_id: "w_1:p1".into(),
                 wait_seconds: 30
             })

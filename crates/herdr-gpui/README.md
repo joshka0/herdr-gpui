@@ -1754,6 +1754,11 @@ them to the agent that opened it, so it can change the page.
   running agent, since Enter there would run it in a shell, nor into an agent
   that is asking you a question; those notes wait for `browser feedback`, as
   do notes for a pane this window does not show.
+- Feedback is scoped to the caller's daemon socket and pane together, so two
+  local sessions with the same pane ID cannot take each other's notes. Use the
+  matching CLI build: older pane-only feedback requests are rejected rather
+  than guessed. The mockup receiver still watches its file fallback when an
+  older running app rejects scoped feedback.
 - Tabs you open yourself have no agent to send to; **Copy** is offered
   instead.
 

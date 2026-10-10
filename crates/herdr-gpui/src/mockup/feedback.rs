@@ -81,8 +81,10 @@ pub(super) type SendNotes = fn(String) -> crate::Result<NotesTo>;
 pub(super) enum Sent {
     /// To the agent, through the window showing its pane.
     Agent,
-    /// Held by Herdr GPUI for `browser feedback`: no window shows the pane.
+    /// Held by Herdr GPUI for `browser feedback` rather than queued to an agent.
     Kept,
+    /// The request may have reached the app; a file fallback could duplicate it.
+    Unconfirmed { source: crate::Error },
     /// Herdr GPUI could not take them, so they went to the file.
     File {
         path: PathBuf,
@@ -97,7 +99,10 @@ impl Sent {
     pub(super) fn status(&self) -> String {
         match self {
             Self::Agent => "Sent to the agent".into(),
-            Self::Kept => "No window shows the agent's pane; kept for `browser feedback`".into(),
+            Self::Kept => "Notes kept for `browser feedback`; not queued to an agent".into(),
+            Self::Unconfirmed { source } => format!(
+                "Delivery unconfirmed ({source}); check `browser feedback` before sending again"
+            ),
             Self::File { path, unreached } => {
                 format!("Saved to {} ({unreached})", path.display())
             }
@@ -106,8 +111,9 @@ impl Sent {
     }
 }
 
-/// Sends `text` with `send`, and writes it to `file` only when that fails,
-/// so an agent never receives the same notes twice. Blocking.
+/// Falls back only after a definite rejection or a failure to connect. A
+/// timeout or broken reply cannot prove the app did not take the notes.
+/// Blocking.
 pub(super) fn deliver(
     text: String,
     file: Option<&Path>,
@@ -118,6 +124,16 @@ pub(super) fn deliver(
         Ok(NotesTo::Kept) => return Ok(Sent::Kept),
         Err(error) => error,
     };
+    let rejected = match &unreached {
+        crate::Error::ControlUnavailable { .. }
+        | crate::Error::ControlUnsupported
+        | crate::Error::MissingStateRoot => true,
+        crate::Error::ControlRejected { code, .. } => *code != crate::control::ErrorCode::Timeout,
+        _ => false,
+    };
+    if !rejected {
+        return Ok(Sent::Unconfirmed { source: unreached });
+    }
     let Some(path) = file else {
         return Ok(Sent::Printed { unreached });
     };
@@ -147,6 +163,8 @@ pub(super) fn write(path: &Path, contents: &[u8]) -> crate::Result<()> {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    mod delivery_outcomes;
 
     fn report<'a>(choices: Vec<Choice<'a>>, overall: &'a str) -> Report<'a> {
         Report {
@@ -214,7 +232,7 @@ mod tests {
     }
 
     fn unreachable(_: String) -> crate::Result<NotesTo> {
-        Err(crate::Error::ControlNoResponse)
+        Err(crate::Error::ControlUnsupported)
     }
 
     #[test]
@@ -225,7 +243,7 @@ mod tests {
             (NotesTo::Agent, "Sent to the agent"),
             (
                 NotesTo::Kept,
-                "No window shows the agent's pane; kept for `browser feedback`",
+                "Notes kept for `browser feedback`; not queued to an agent",
             ),
         ] {
             let mut received = None;
@@ -253,7 +271,7 @@ mod tests {
             panic!("expected the file, got {sent:?}");
         };
         assert_eq!(written, &path);
-        assert!(matches!(unreached, crate::Error::ControlNoResponse));
+        assert!(matches!(unreached, crate::Error::ControlUnsupported));
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "Picked: B\n");
         assert!(sent.status().starts_with("Saved to "), "{}", sent.status());
         let printed = deliver("x".into(), None, unreachable).unwrap();

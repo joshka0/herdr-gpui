@@ -2,6 +2,14 @@ use super::*;
 use crate::control::{NotesTo, Target};
 
 mod outcomes;
+mod session_isolation;
+
+fn recipient(view: &Entity<HerdrWindow>, cx: &VisualTestContext) -> crate::browser::FeedbackKey {
+    view.read_with(cx, |view, _| crate::browser::FeedbackKey {
+        scope: scope(&view.endpoints[0]),
+        pane_id: "w0:p1".into(),
+    })
+}
 
 /// A snapshot where pane `w0:p1` runs an idle agent.
 fn with_idle_agent(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) {

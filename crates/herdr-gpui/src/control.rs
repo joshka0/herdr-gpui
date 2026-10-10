@@ -11,7 +11,7 @@ mod socket;
 #[cfg(unix)]
 use crate::{
     HerdrWindow,
-    browser::{Feedback, Location},
+    browser::{Feedback, FeedbackKey, Location, Scope},
 };
 use crate::{
     browser::{LocalFile, WebUrl},
@@ -232,6 +232,16 @@ fn notes(request: &NotesRequest, cx: &mut App) -> Response {
             "Notes are sent from the Herdr pane of the agent they are for",
         );
     };
+    let Some(daemon) = caller.daemon_socket.as_deref() else {
+        return Response::error(
+            ErrorCode::InvalidRequest,
+            "Notes require the caller's daemon socket",
+        );
+    };
+    let recipient = FeedbackKey {
+        scope: Scope::local(Path::new(daemon)),
+        pane_id: pane.to_owned(),
+    };
     let text = pastable(&request.text);
     if text.trim().is_empty() {
         return Response::error(ErrorCode::InvalidRequest, "There are no notes to send");
@@ -250,13 +260,13 @@ fn notes(request: &NotesRequest, cx: &mut App) -> Response {
         }
     }
     let feedback = cx.default_global::<Feedback>();
-    let to = if feedback.is_waiting(pane) {
+    let to = if feedback.is_waiting(&recipient) {
         NotesTo::Agent
     } else {
         NotesTo::Kept
     };
     feedback.keep(crate::browser::Batch {
-        pane_id: pane.to_owned(),
+        target: recipient,
         text,
     });
     Response::NotesSent { to }
@@ -265,7 +275,7 @@ fn notes(request: &NotesRequest, cx: &mut App) -> Response {
 /// An agent waiting in `browser feedback --wait`.
 #[cfg(unix)]
 struct Waiter {
-    pane_id: String,
+    target: FeedbackKey,
     until: std::time::Instant,
     incoming: socket::Incoming,
 }
@@ -285,7 +295,22 @@ fn feedback(
         incoming.respond(Response::error(ErrorCode::InvalidRequest, "Invalid pane"));
         return;
     }
-    let kept = cx.default_global::<Feedback>().take(&request.pane_id);
+    let Some(daemon) = request
+        .daemon_socket
+        .as_deref()
+        .filter(|path| plain(path, 4096))
+    else {
+        incoming.respond(Response::error(
+            ErrorCode::InvalidRequest,
+            "Feedback requires the caller's daemon socket",
+        ));
+        return;
+    };
+    let target = FeedbackKey {
+        scope: Scope::local(Path::new(daemon)),
+        pane_id: request.pane_id.clone(),
+    };
+    let kept = cx.default_global::<Feedback>().take(&target);
     if kept.is_some() || request.wait_seconds == 0 {
         incoming.respond(Response::Feedback { text: kept });
         return;
@@ -298,17 +323,14 @@ fn feedback(
         return;
     }
     // A newer wait from the same pane replaces the older one.
-    if let Some(index) = waiters
-        .iter()
-        .position(|waiter| waiter.pane_id == request.pane_id)
-    {
+    if let Some(index) = waiters.iter().position(|waiter| waiter.target == target) {
         waiters
             .remove(index)
             .incoming
             .respond(Response::Feedback { text: None });
     }
     waiters.push(Waiter {
-        pane_id: request.pane_id.clone(),
+        target,
         until: std::time::Instant::now()
             + std::time::Duration::from_secs(request.wait_seconds.min(MAX_WAIT_SECONDS)),
         incoming,
@@ -324,9 +346,9 @@ fn serve_waiters(waiters: &mut Vec<Waiter>, cx: &mut App) {
     for waiter in waiters.drain(..) {
         let has = cx
             .try_global::<Feedback>()
-            .is_some_and(|feedback| feedback.has(&waiter.pane_id));
+            .is_some_and(|feedback| feedback.has(&waiter.target));
         if has {
-            let text = cx.default_global::<Feedback>().take(&waiter.pane_id);
+            let text = cx.default_global::<Feedback>().take(&waiter.target);
             waiter.incoming.respond(Response::Feedback { text });
         } else if now >= waiter.until {
             waiter.incoming.respond(Response::Feedback { text: None });
@@ -335,10 +357,7 @@ fn serve_waiters(waiters: &mut Vec<Waiter>, cx: &mut App) {
         }
     }
     *waiters = still;
-    let panes: Vec<String> = waiters
-        .iter()
-        .map(|waiter| waiter.pane_id.clone())
-        .collect();
+    let panes: Vec<FeedbackKey> = waiters.iter().map(|waiter| waiter.target.clone()).collect();
     let current = cx.try_global::<Feedback>().map(Feedback::waiting);
     if current.is_none_or(|current| current != panes.as_slice()) {
         cx.default_global::<Feedback>().set_waiting(panes);
@@ -404,6 +423,17 @@ fn caller_daemon() -> crate::Result<Option<String>> {
     Ok(path.to_str().map(str::to_owned))
 }
 
+/// Notes must never fall back to pane-only routing, even in the default session.
+fn notes_daemon() -> crate::Result<String> {
+    let path = herdr_client::ConnectTarget::Local.socket_path()?;
+    path.into_os_string()
+        .into_string()
+        .map_err(|_| crate::Error::ControlRejected {
+            code: ErrorCode::InvalidRequest,
+            message: "The daemon socket must be UTF-8 for control requests".into(),
+        })
+}
+
 fn env_id(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|id| !id.is_empty())
 }
@@ -438,13 +468,14 @@ fn rejected(response: Response) -> crate::Error {
 /// the running Herdr GPUI. Blocking: call it off the UI thread.
 #[cfg(feature = "mockup")]
 pub(crate) fn send_notes(text: String) -> crate::Result<NotesTo> {
-    let caller = caller(None)?;
+    let mut caller = caller(None)?;
     if caller.pane_id.is_none() {
         return Err(crate::Error::ControlRejected {
             code: ErrorCode::InvalidRequest,
             message: "Not running in a Herdr pane".into(),
         });
     }
+    caller.daemon_socket = Some(notes_daemon()?);
     match send(&Request::Notes(NotesRequest { caller, text }))? {
         Response::NotesSent { to } => Ok(to),
         response => Err(rejected(response)),
@@ -512,6 +543,7 @@ fn browser_feedback(wait: u64) -> crate::Result<Option<String>> {
     })?;
     let request = Request::Feedback(FeedbackRequest {
         pane_id,
+        daemon_socket: Some(notes_daemon()?),
         wait_seconds: wait.min(MAX_WAIT_SECONDS),
     });
     match send(&request)? {
@@ -598,6 +630,9 @@ pub(crate) fn run(command: BrowserCommand) -> ExitCode {
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
+
+    #[cfg(unix)]
+    mod scoped_notes;
 
     #[test]
     fn echoed_identifiers_are_short_and_printable() {

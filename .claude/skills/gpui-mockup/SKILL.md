@@ -68,6 +68,9 @@ style details.
    and reports that. If the app cannot accept the send (including an older
    app), the mockup writes `$dir/feedback.md`. The window's status line and a
    `mockup: sent: ...` line in `$dir/run.log` say which happened.
+   A timeout or lost reply says **Delivery unconfirmed** and creates no file
+   copy: the app may still deliver those notes. Check `browser feedback`
+   before sending them again.
 
    So either end your turn: inside Herdr the notes arrive by themselves;
    outside it, ask the user to say when they have sent. Or, when they expect

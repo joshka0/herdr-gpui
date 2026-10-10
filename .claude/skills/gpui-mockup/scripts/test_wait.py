@@ -75,9 +75,11 @@ class WaitTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 4, result.stderr)
                 self.assertEqual(result.stdout, "")
 
-    def test_refusal_is_reported(self):
+    def test_refusal_is_reported_without_hiding_file_feedback(self):
+        self.feedback.write_text("Legacy app fallback\n")
         result = self.run_wait(mode="refused")
-        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "Legacy app fallback\n")
         self.assertEqual(result.stderr, "Request refused\n")
 
     def test_file_only_wait_consumes_once(self):

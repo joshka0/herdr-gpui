@@ -129,7 +129,7 @@ impl Server {
     }
 
     #[cfg(test)]
-    fn next(&self) -> Option<Incoming> {
+    pub(super) fn next(&self) -> Option<Incoming> {
         self.requests.recv_timeout(Duration::from_secs(5)).ok()
     }
 }
@@ -311,6 +311,7 @@ mod tests {
                     &path,
                     &Request::Feedback(FeedbackRequest {
                         pane_id: "w_1:p1".into(),
+                        daemon_socket: Some("/tmp/daemon.sock".into()),
                         wait_seconds: 30,
                     }),
                 )
@@ -343,6 +344,7 @@ mod tests {
         let wait = |wait_seconds| {
             answer_timeout(&Request::Feedback(FeedbackRequest {
                 pane_id: "p".into(),
+                daemon_socket: Some("/tmp/daemon.sock".into()),
                 wait_seconds,
             }))
         };

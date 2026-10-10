@@ -46,6 +46,9 @@ finish_feedback() {
         0) cat "$output/notes"; exit 0 ;;
         # Not running, or no socket feedback: the file may still arrive.
         3 | 4) ;;
+        # Older apps reject daemon-scoped feedback. Preserve the diagnostic,
+        # but keep watching the file their rejected notes.send will produce.
+        1) cat "$output/error" >&2 ;;
         *) cat "$output/error" >&2; exit "$status" ;;
     esac
 }
