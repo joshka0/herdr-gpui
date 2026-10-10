@@ -31,10 +31,21 @@ pub(crate) struct History {
 impl History {
     /// Records the snapshot's focus. A snapshot without one, such as the
     /// empty state between connections, leaves the trail alone.
-    pub(crate) fn observe(&mut self, snapshot: Option<&ClientShellSnapshot>) {
-        let Some(snapshot) = snapshot else {
-            return;
-        };
+    ///
+    /// `navigating` says whether a focus request is still in flight. A
+    /// travel lives only that long: once the daemon has answered, failed, or
+    /// the connection carrying it is gone, whatever focus arrived is the
+    /// outcome, and later steps start from where the user really is.
+    pub(crate) fn observe(&mut self, snapshot: Option<&ClientShellSnapshot>, navigating: bool) {
+        if let Some(snapshot) = snapshot {
+            self.record(snapshot);
+        }
+        if !navigating {
+            self.travel = None;
+        }
+    }
+
+    fn record(&mut self, snapshot: &ClientShellSnapshot) {
         if snapshot.boot_id != self.boot {
             *self = Self {
                 boot: snapshot.boot_id.clone(),
@@ -67,16 +78,19 @@ impl History {
         self.target(step, snapshot).is_some()
     }
 
-    /// The pane `step` goes to, remembered as the travel in flight. The
-    /// caller asks the daemon to focus it, and cancels when that fails.
-    pub(crate) fn travel(&mut self, step: Step, snapshot: &ClientShellSnapshot) -> Option<&str> {
+    /// The entry `step` would go to and its pane, without going. The caller
+    /// asks the daemon to focus the pane and calls [`Self::begin`] only once
+    /// the request is queued, so a press that cannot be sent changes nothing.
+    pub(crate) fn peek(&self, step: Step, snapshot: &ClientShellSnapshot) -> Option<(usize, &str)> {
         let index = self.target(step, snapshot)?;
-        self.travel = Some(index);
-        self.entry(index)
+        Some((index, self.entry(index)?))
     }
 
-    pub(crate) fn cancel_travel(&mut self) {
-        self.travel = None;
+    /// Marks `index` as the travel in flight.
+    pub(crate) fn begin(&mut self, index: usize) {
+        if index < self.panes.len() {
+            self.travel = Some(index);
+        }
     }
 
     /// The nearest entry in `step`'s direction whose pane still exists and is

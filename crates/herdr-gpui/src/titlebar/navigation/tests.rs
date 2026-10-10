@@ -17,7 +17,10 @@ fn window(cx: &mut TestAppContext) -> (Entity<HerdrWindow>, &mut VisualTestConte
     (view, cx)
 }
 
-/// The selected endpoint's daemon focuses each of `panes` in turn.
+const PANES: &[&str] = &["a", "b", "c"];
+
+/// The selected endpoint's daemon, with `PANES` open, focuses each of
+/// `panes` in turn.
 fn visit(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext, panes: &[&str]) {
     let fixture: ClientShellSnapshot = serde_json::from_str(include_str!(
         "../../../../herdr-protocol/tests/fixtures/endpoint-snapshot-v1.json"
@@ -26,7 +29,7 @@ fn visit(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext, panes: &[&str])
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
             let mut snapshot = (**view.live.snapshot.as_ref().unwrap()).clone();
-            snapshot.panes = panes
+            snapshot.panes = PANES
                 .iter()
                 .map(|id| {
                     let mut pane = fixture.panes[0].clone();
@@ -114,4 +117,23 @@ fn each_platform_draws_its_own_buttons() {
     for style in [Style::Segmented, Style::Fluent, Style::Adwaita] {
         assert!(style.button().0.height <= px(28.));
     }
+}
+
+#[gpui::test]
+fn a_press_that_cannot_be_sent_leaves_the_landing_step_alone(cx: &mut TestAppContext) {
+    let (view, cx) = window(cx);
+    visit(&view, cx, PANES);
+    // A first Back to "b" was queued and is still landing.
+    cx.update(|_, cx| {
+        view.update(cx, |view, _| {
+            let selected = view.selected_endpoint;
+            view.endpoints[selected].history.begin(1);
+        })
+    });
+    // A second press the window cannot send (no connection here) must not
+    // replace or cancel it.
+    cx.update(|_, cx| view.update(cx, |view, cx| view.travel(Step::Back, cx)));
+    visit(&view, cx, &["b"]);
+    // "b" landed as a step back, so Forward still returns to "c".
+    assert_eq!(can(&view, cx), (true, true));
 }

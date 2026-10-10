@@ -185,7 +185,12 @@ impl Endpoint {
 
     /// Refreshes state derived from `live` after it is replaced.
     pub(crate) fn sync_live(&mut self) {
-        self.history.observe(self.live.snapshot.as_deref());
+        // Without surface support there is no navigation fence to watch, so
+        // a travel waits for the next focus change instead.
+        let navigating = self.live.snapshot.is_some()
+            && (self.live.activation_pending() || !self.live.supports_surface);
+        self.history
+            .observe(self.live.snapshot.as_deref(), navigating);
         self.config_diagnostic.sync(
             self.live
                 .snapshot
