@@ -494,8 +494,8 @@ clipboard copied notification, plus all six clipboard positions. Notifications
 provides a native in-app switch, a bounded delay stepper (0-3600 seconds), and
 four corner choices. Each notification and clipboard field has a **Follow shared**
 action that removes only its local override; effective values are shown after
-reload. Appearance provides switches for **Show agents** and **High contrast**,
-and a sidebar-gap stepper (0-64 logical pixels). Sound enablement uses a switch;
+reload. Appearance provides switches for **Show agents**, **Show search**, and
+**High contrast**, and a sidebar-gap stepper (0-64 logical pixels). Sound enablement uses a switch;
 custom sound paths and per-agent sound policies remain shared-file settings, not
 read-only preference rows in this window. Configuration paths and installation
 status are diagnostic facts rather than editable preference values.
@@ -605,6 +605,12 @@ The pane dialog's **Do not ask again** checkbox (click it or press Space) saves
 `confirm_close_pane = false` to `config-gpui.local.toml` once the close is sent. Saved edits apply automatically. The
 **Show agents** control in **Settings > Appearance > Sidebar layout** saves
 `show_agents` immediately, independently of the layout draft saved on close.
+
+A search field at the top of the sidebar finds devices, worktrees, and
+branches by name; while it holds text, results grouped by kind replace the
+spaces list. Up and Down move through them, Enter opens one, and Escape
+clears the search. Set top-level `show_sidebar_search = false`, or turn off
+**Show search** in **Settings > Appearance > Sidebar layout**, to hide it.
 
 `[usage]` provides independent switches in `config-gpui.local.toml`:
 
