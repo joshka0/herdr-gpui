@@ -989,8 +989,8 @@ audio deduplication. Native playback and device-switch/unplug behavior require m
 With Herdr's tab bar at the top (`ui.tab_bar_position = "top"`, the default),
 the tab row is the title bar, as in Chrome or Conductor, and the window draws
 no separate header. Strips along the top grow to the header's 34px. The
-sidebar column starts with a row holding the traffic-light clearance and the
-sidebar toggle; with the sidebar collapsed to its rail or hidden, the leftmost
+sidebar column starts with a row holding the traffic-light clearance, the
+sidebar toggle, and Back and Forward; with the sidebar collapsed to its rail or hidden, the leftmost
 group's strip leads with whatever clearance the column leaves and the toggle.
 The rightmost group's strip ends with the header's status text, Git button,
 account, and window controls. Every strip keeps at least 40px of empty room
@@ -1001,8 +1001,9 @@ the full-width header described below, and so does a window with no strips.
 The worktree banner moves to the window's foot in this layout so it never sits
 under the traffic lights.
 
-Back and Forward follow the sidebar toggle in the header, or open the leftmost
-strip beside an expanded sidebar. They walk the panes this connection has
+Back and Forward follow the sidebar toggle, in the header or in the expanded
+sidebar's first row; a sidebar dragged too narrow for them, or collapsed,
+hands them to the leftmost strip with the toggle. They walk the panes this connection has
 focused, across tabs and workspaces, the way a browser walks its pages: going
 somewhere new drops what was ahead, closed panes are stepped over, and the
 trail (at most 100 panes) starts over when the daemon restarts. `back`

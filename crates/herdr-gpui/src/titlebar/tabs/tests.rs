@@ -60,11 +60,13 @@ fn the_tab_row_stands_in_for_the_header(cx: &mut TestAppContext) {
     let toggle = cx.debug_bounds("toggle-sidebar").unwrap();
     assert_eq!(toggle.left(), px(LEADING));
     assert!(header.contains(&toggle.center()));
-    // Back and Forward open the strip beside the sidebar, ahead of the tabs.
-    let leading = cx.debug_bounds("strip-titlebar-leading").unwrap();
+    // Back and Forward follow the toggle in the sidebar's header, so the
+    // strip leads with its tabs.
     let navigation = cx.debug_bounds("titlebar-navigation").unwrap();
-    assert!(leading.left() >= sidebar.right());
-    assert!(leading.contains(&navigation.center()));
+    assert!(header.contains(&navigation.center()));
+    assert!(navigation.left() >= toggle.right());
+    assert!(navigation.right() <= header.right());
+    assert!(cx.debug_bounds("strip-titlebar-leading").is_none());
     // The strip ends with the account at the window's right edge.
     let new_tab = cx.debug_bounds("new-tab").unwrap();
     assert_eq!(new_tab.top(), px(0.));
@@ -192,24 +194,53 @@ fn a_squeezed_strip_drops_back_and_forward_before_the_account(cx: &mut TestAppCo
     let (view, cx) = window(cx);
     cx.update(|_, cx| {
         view.update(cx, |view, cx| {
-            view.sidebar_width = Some(340.);
+            view.sidebar_width = Some(160.);
             cx.notify();
         })
     });
-    // Too narrow for the tabs, Back and Forward, and the trailing controls
-    // beside a wide sidebar.
+    // A sidebar this narrow hands Back and Forward to the strip, which is
+    // too narrow for them, its tabs, and the trailing controls.
     for _ in 0..2 {
-        cx.simulate_resize(size(px(480.), px(600.)));
+        cx.simulate_resize(size(px(360.), px(600.)));
         draw(cx);
     }
     let avatar = cx.debug_bounds("titlebar-avatar").unwrap();
-    assert!(avatar.right() <= px(480.), "{avatar:?}");
+    assert!(avatar.right() <= px(360.), "{avatar:?}");
     assert!(cx.debug_bounds("titlebar-back").is_none());
     assert!(!view.read_with(cx, |view, _| view.strip_navigation_fits));
     // Given the room back, they return, and stay put across frames.
     for _ in 0..3 {
         cx.simulate_resize(size(px(1200.), px(600.)));
         draw(cx);
-        assert!(cx.debug_bounds("titlebar-back").is_some());
+        let back = cx.debug_bounds("titlebar-back").unwrap();
+        assert!(
+            cx.debug_bounds("strip-titlebar-leading")
+                .unwrap()
+                .contains(&back.center())
+        );
+    }
+}
+
+#[gpui::test]
+fn a_narrow_sidebar_hands_back_and_forward_to_the_strip(cx: &mut TestAppContext) {
+    let (view, cx) = window(cx);
+    for (width, in_sidebar) in [(None, true), (Some(160.), false)] {
+        cx.update(|_, cx| {
+            view.update(cx, |view, cx| {
+                view.sidebar_width = width;
+                cx.notify();
+            })
+        });
+        draw(cx);
+        let header = cx.debug_bounds("sidebar-titlebar").unwrap();
+        let back = cx.debug_bounds("titlebar-back").unwrap();
+        let forward = cx.debug_bounds("titlebar-forward").unwrap();
+        assert_eq!(header.contains(&back.center()), in_sidebar, "{width:?}");
+        assert_eq!(
+            cx.debug_bounds("strip-titlebar-leading").is_some(),
+            !in_sidebar
+        );
+        // Never cut off by the sidebar's edge.
+        assert!(!in_sidebar || forward.right() <= header.right());
     }
 }
